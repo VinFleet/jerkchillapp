@@ -1,23 +1,33 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Stepper } from "@/components/ui/Stepper";
 import { useSession } from "@/lib/auth/RoleContext";
-import { canEditStockSection } from "@/lib/auth/permissions";
+import { canEditStockSection, canSeeCostMargin } from "@/lib/auth/permissions";
 import {
   getStockItems,
   getOrCreateEntry,
   updateEntry,
   getWasteStreak,
+  logWaste,
+  getWasteForDate,
+  wasteTotalVnd,
 } from "@/lib/repo/stock";
 import { suggestQuantity } from "@/lib/repo/planner";
+import { getSettings } from "@/lib/repo/settings";
 import { todayIso, addDaysIso } from "@/lib/storage";
-import type { StockDayEntry, StockItem, StockSection, PrepCategory } from "@/lib/types";
+import { WASTE_REASON_LABEL, WASTE_REASON_ORDER } from "@/lib/wasteLabels";
+import type { StockDayEntry, StockItem, StockSection, PrepCategory, WasteLogEntry, WasteReason } from "@/lib/types";
+
+function vnd(n: number): string {
+  return `${n.toLocaleString("vi-VN")}₫`;
+}
 
 const PREP_CATEGORY_LABEL: Record<PrepCategory, { en: string; vi: string }> = {
   main: { en: "Mains", vi: "Món chính" },
@@ -47,18 +57,112 @@ function DateNav({ date, onChange }: { date: string; onChange: (d: string) => vo
   );
 }
 
+function WasteButton({
+  item,
+  date,
+  loggedBy,
+  canEdit,
+  showCost,
+  onLogged,
+}: {
+  item: StockItem;
+  date: string;
+  loggedBy: string;
+  canEdit: boolean;
+  showCost: boolean;
+  onLogged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [qty, setQty] = useState(1);
+  const [reason, setReason] = useState<WasteReason>("over_prepped");
+  const [entries, setEntries] = useState<WasteLogEntry[]>([]);
+
+  const refresh = () => setEntries(getWasteForDate(date).filter((w) => w.itemId === item.id));
+  useEffect(refresh, [item.id, date]);
+
+  const totalQty = entries.reduce((sum, w) => sum + w.qty, 0);
+  const totalCost = wasteTotalVnd(entries);
+
+  const summary = totalQty > 0 && (
+    <p className="text-xs text-danger">
+      {totalQty} {item.unit} wasted today · Hao hụt hôm nay
+      {showCost && totalCost > 0 ? ` · ${vnd(totalCost)}` : ""}
+    </p>
+  );
+
+  if (!canEdit) {
+    return summary ? <div className="mt-3 pt-3 border-t border-border">{summary}</div> : null;
+  }
+
+  if (open) {
+    return (
+      <div className="mt-3 pt-3 border-t border-border">
+        <p className="text-xs font-semibold text-muted mb-2">Log waste · Ghi nhận hao hụt</p>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-muted">Qty · Số lượng</span>
+          <Stepper value={qty} onChange={setQty} min={1} size="sm" />
+        </div>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {WASTE_REASON_ORDER.map((r) => (
+            <button
+              key={r}
+              onClick={() => setReason(r)}
+              className={`px-2.5 py-1.5 rounded-full text-xs font-semibold border-2 ${
+                reason === r ? "bg-danger/10 text-danger border-danger" : "border-border text-muted"
+              }`}
+            >
+              {WASTE_REASON_LABEL[r].en}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" className="flex-1 min-h-10 text-sm" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            className="flex-1 min-h-10 text-sm"
+            onClick={() => {
+              logWaste(item.id, date, qty, reason, loggedBy);
+              setQty(1);
+              setReason("over_prepped");
+              setOpen(false);
+              refresh();
+              onLogged();
+            }}
+          >
+            Save · Lưu
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-2">
+      <div>{summary}</div>
+      <button onClick={() => setOpen(true)} className="flex items-center gap-1 text-xs font-semibold text-danger shrink-0">
+        <Trash2 size={12} /> Log waste · Ghi hao hụt
+      </button>
+    </div>
+  );
+}
+
 function LogRow({
   item,
   date,
   enteredBy,
   canEdit,
+  showCost,
   producedLabel,
+  onWasteLogged,
 }: {
   item: StockItem;
   date: string;
   enteredBy: string;
   canEdit: boolean;
+  showCost: boolean;
   producedLabel: { en: string; vi: string };
+  onWasteLogged: () => void;
 }) {
   const [entry, setEntry] = useState<StockDayEntry | null>(null);
   const [wasteStreak, setWasteStreak] = useState(0);
@@ -110,6 +214,7 @@ function LogRow({
           size="sm"
         />
       </div>
+      <WasteButton item={item} date={date} loggedBy={enteredBy} canEdit={canEdit} showCost={showCost} onLogged={onWasteLogged} />
     </Card>
   );
 }
@@ -195,12 +300,37 @@ function ParTracker({ items, date }: { items: StockItem[]; date: string }) {
   );
 }
 
+function WasteSummary({ items, date, showCost }: { items: StockItem[]; date: string; showCost: boolean }) {
+  const [entries, setEntries] = useState<WasteLogEntry[]>([]);
+
+  useEffect(() => {
+    const ids = new Set(items.map((i) => i.id));
+    setEntries(getWasteForDate(date).filter((w) => ids.has(w.itemId)));
+  }, [items, date]);
+
+  if (entries.length === 0) return null;
+  const totalCost = wasteTotalVnd(entries);
+
+  return (
+    <Card className="mb-4 border-danger/30 bg-danger/5">
+      <p className="font-semibold text-sm text-danger flex items-center gap-2 mb-1">
+        <Trash2 size={16} /> Waste logged today · Hao hụt đã ghi hôm nay
+      </p>
+      <p className="text-sm">
+        {entries.length} {entries.length === 1 ? "entry" : "entries"}
+        {showCost && totalCost > 0 ? ` · ${vnd(totalCost)}` : ""}
+      </p>
+    </Card>
+  );
+}
+
 function StockPageContent() {
   const { session } = useSession();
   const [items, setItems] = useState<StockItem[]>([]);
   const [date, setDate] = useState(todayIso());
   const [section, setSection] = useState<StockSection>("kitchen");
   const [view, setView] = useState<"log" | "secondary">("log");
+  const [wasteRefreshKey, setWasteRefreshKey] = useState(0);
 
   useEffect(() => {
     setItems(getStockItems());
@@ -223,6 +353,7 @@ function StockPageContent() {
 
   const sectionItems = items.filter((i) => i.section === section);
   const canEdit = canEditStockSection(session.role, section);
+  const showCost = canSeeCostMargin(session.role, getSettings());
   const secondaryLabel =
     section === "kitchen" ? { en: "Prep View", vi: "Xem chuẩn bị" } : { en: "Par Tracker", vi: "Theo dõi định mức" };
 
@@ -270,6 +401,7 @@ function StockPageContent() {
       {view === "log" && <DateNav date={date} onChange={setDate} />}
 
       <div className="px-4 md:px-8 mt-4 space-y-3">
+        {view === "log" && <WasteSummary key={wasteRefreshKey} items={sectionItems} date={date} showCost={showCost} />}
         {view === "log" &&
           sectionItems.map((item) => (
             <LogRow
@@ -278,7 +410,9 @@ function StockPageContent() {
               date={date}
               enteredBy={session.name}
               canEdit={canEdit}
+              showCost={showCost}
               producedLabel={section === "kitchen" ? { en: "Produced", vi: "Đã làm" } : { en: "Received", vi: "Nhập thêm" }}
+              onWasteLogged={() => setWasteRefreshKey((k) => k + 1)}
             />
           ))}
 

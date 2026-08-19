@@ -1,6 +1,7 @@
-import type { StockItem, StockDayEntry, StockSection } from "@/lib/types";
+import type { StockItem, StockDayEntry, StockSection, WasteLogEntry, WasteReason } from "@/lib/types";
 import { readList, writeList, isSeeded, markSeeded, newId, todayIso } from "@/lib/storage";
 import { SEED_STOCK_ITEMS } from "@/lib/seed/stock";
+import { getRecipe } from "@/lib/repo/recipes";
 
 // v2: corrected the K Blanc -> 1664 beer name to match the real menu.
 // Bumping the key forces a fresh reseed of item definitions for browsers
@@ -101,4 +102,55 @@ export function getBarOnHand(itemId: string, date = todayIso()): number {
   const entry = getEntry(itemId, date) ?? getRecentEntries(itemId, date, 1)[0];
   if (!entry) return 0;
   return entry.closing ?? entry.opening + entry.produced;
+}
+
+// ---------- Waste Log ----------
+// Explicit "this got thrown away" records, separate from the leftover-streak
+// inference above — captures why, and cost in VND when the item has cost
+// data on file.
+
+const WASTE_KEY = "stock_waste_log";
+
+function costPerUnitFor(item: StockItem): number | null {
+  if (item.costPerUnitVnd != null) return item.costPerUnitVnd;
+  if (item.recipeId) return getRecipe(item.recipeId)?.costPerPortionVnd ?? null;
+  return null;
+}
+
+export function logWaste(itemId: string, date: string, qty: number, reason: WasteReason, loggedBy: string, note?: string): WasteLogEntry {
+  const item = getStockItem(itemId);
+  const perUnit = item ? costPerUnitFor(item) : null;
+  const entry: WasteLogEntry = {
+    id: newId("waste"),
+    itemId,
+    date,
+    qty,
+    reason,
+    note: note?.trim() || undefined,
+    costVnd: perUnit != null ? Math.round(perUnit * qty) : null,
+    loggedBy,
+    loggedAt: new Date().toISOString(),
+  };
+  const all = readList<WasteLogEntry>(WASTE_KEY);
+  all.push(entry);
+  writeList(WASTE_KEY, all);
+  return entry;
+}
+
+export function getWasteLog(limit = 200): WasteLogEntry[] {
+  return readList<WasteLogEntry>(WASTE_KEY)
+    .sort((a, b) => (a.loggedAt < b.loggedAt ? 1 : -1))
+    .slice(0, limit);
+}
+
+export function getWasteForDate(date: string): WasteLogEntry[] {
+  return readList<WasteLogEntry>(WASTE_KEY).filter((w) => w.date === date);
+}
+
+export function getWasteInRange(fromDate: string, toDate: string): WasteLogEntry[] {
+  return readList<WasteLogEntry>(WASTE_KEY).filter((w) => w.date >= fromDate && w.date <= toDate);
+}
+
+export function wasteTotalVnd(entries: WasteLogEntry[]): number {
+  return entries.reduce((sum, w) => sum + (w.costVnd ?? 0), 0);
 }

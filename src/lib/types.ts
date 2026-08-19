@@ -76,6 +76,27 @@ export type StockDayEntry = {
   updatedAt: string;
 };
 
+/**
+ * Explicit "this got thrown away" record — distinct from the leftover-streak
+ * flag (which infers overproduction from unused Closing stock). Captures
+ * the qty, why, and cost in VND so waste is visible in money, not just
+ * portions, per the spec's "cost tracker to show waste in VND" requirement.
+ */
+export type WasteReason = "spoiled" | "over_prepped" | "prep_error" | "other";
+
+export type WasteLogEntry = {
+  id: string;
+  itemId: string;
+  date: string;
+  qty: number;
+  reason: WasteReason;
+  note?: string;
+  /** null when the item has no cost data on file yet — never guessed. */
+  costVnd: number | null;
+  loggedBy: string;
+  loggedAt: string;
+};
+
 // ---------- Checklists ----------
 
 export type ChecklistArea = "foh" | "kitchen";
