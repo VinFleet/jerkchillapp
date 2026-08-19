@@ -1,4 +1,4 @@
-import type { BookingStatus } from "@/lib/bookings/types";
+import type { BookingStatus, TableShape } from "@/lib/bookings/types";
 
 export const STATUS_LABEL: Record<BookingStatus, { en: string; vi: string }> = {
   confirmed: { en: "Confirmed", vi: "Đã xác nhận" },
@@ -17,3 +17,9 @@ export const STATUS_TONE: Record<BookingStatus, "success" | "warning" | "danger"
 };
 
 export const STATUS_ORDER: BookingStatus[] = ["confirmed", "seated", "completed", "no_show", "cancelled"];
+
+export const SHAPE_LABEL: Record<TableShape, { en: string; vi: string }> = {
+  square: { en: "Square", vi: "Vuông" },
+  round: { en: "Round", vi: "Tròn" },
+  rect: { en: "Long", vi: "Dài" },
+};

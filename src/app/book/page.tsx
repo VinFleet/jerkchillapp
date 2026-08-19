@@ -28,7 +28,11 @@ function toMinutes(hhmm: string): number {
 function NotConfigured() {
   return (
     <div className="min-h-dvh flex items-center justify-center px-6 text-center">
-      <p className="text-muted">Booking isn&apos;t set up yet. Please call the restaurant directly.</p>
+      <p className="text-muted">
+        Booking isn&apos;t set up yet. Please call the restaurant directly.
+        <br />
+        <span className="opacity-80">Đặt bàn online chưa sẵn sàng. Vui lòng gọi trực tiếp cho nhà hàng.</span>
+      </p>
     </div>
   );
 }
@@ -86,7 +90,13 @@ export default function PublicBookingPage() {
       });
       setDone(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong — please call us instead.");
+      // Never surface the raw Supabase/Postgres error to a guest — it's
+      // English-only, technical, and can leak schema detail. Guests get one
+      // fixed bilingual message; the real error stays in the console for us.
+      console.error("Public booking failed:", e);
+      setError(
+        "Sorry, we couldn't send that. Please call us instead · Xin lỗi, không gửi được. Vui lòng gọi cho chúng tôi"
+      );
     } finally {
       setSubmitting(false);
     }
@@ -180,7 +190,7 @@ export default function PublicBookingPage() {
 
             {likelyAvailable === null ? (
               <Button variant="secondary" className="w-full" disabled={checking} onClick={checkAvailability}>
-                {checking ? "Checking…" : "Check availability · Kiểm tra chỗ trống"}
+                {checking ? "Checking… · Đang kiểm tra…" : "Check availability · Kiểm tra chỗ trống"}
               </Button>
             ) : likelyAvailable ? (
               <p className="text-sm text-success font-semibold text-center">
@@ -222,7 +232,7 @@ export default function PublicBookingPage() {
             {error && <p className="text-danger text-sm">{error}</p>}
 
             <Button className="w-full" disabled={!name.trim() || !phone.trim() || submitting} onClick={submit}>
-              {submitting ? "Sending…" : "Request booking · Gửi yêu cầu đặt bàn"}
+              {submitting ? "Sending… · Đang gửi…" : "Request booking · Gửi yêu cầu đặt bàn"}
             </Button>
           </div>
         </div>

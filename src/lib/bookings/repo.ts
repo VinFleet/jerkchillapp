@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
-import { TENANT_ID } from "@/lib/bookings/types";
+import { TENANT_ID, POS_MIN, POS_MAX } from "@/lib/bookings/types";
 import type { RestaurantTable, Booking, BookingStatus, TableShape } from "@/lib/bookings/types";
 
 function requireClient() {
@@ -38,6 +38,47 @@ export async function updateTable(id: string, patch: Partial<Pick<RestaurantTabl
 export async function removeTable(id: string) {
   const { error } = await requireClient().from("restaurant_tables").update({ active: false }).eq("id", id);
   if (error) throw error;
+}
+
+function clampPos(n: number): number {
+  if (!Number.isFinite(n)) return 0.5;
+  return Math.min(POS_MAX, Math.max(POS_MIN, n));
+}
+
+/** Persist a dragged table. Clamping lives here so every caller stays inside the canvas. */
+export async function moveTable(id: string, posX: number, posY: number) {
+  await updateTable(id, { pos_x: clampPos(posX), pos_y: clampPos(posY) });
+}
+
+type StarterTable = Pick<RestaurantTable, "table_number" | "seats" | "pos_x" | "pos_y" | "shape">;
+
+/**
+ * A plausible 26-seat starting layout — 4 × 2-top + 3 × 4-top + 1 × 6-top.
+ * Offered as a one-tap action when the floor plan is empty, never created
+ * silently: the real room layout is the owner's call, and until at least one
+ * table exists the public booking form tells every guest "we may be full."
+ */
+export const STARTER_FLOOR_PLAN: StarterTable[] = [
+  { table_number: "1", seats: 2, pos_x: 0.14, pos_y: 0.16, shape: "round" },
+  { table_number: "2", seats: 2, pos_x: 0.14, pos_y: 0.39, shape: "round" },
+  { table_number: "3", seats: 2, pos_x: 0.14, pos_y: 0.62, shape: "round" },
+  { table_number: "4", seats: 2, pos_x: 0.14, pos_y: 0.85, shape: "round" },
+  { table_number: "5", seats: 4, pos_x: 0.47, pos_y: 0.22, shape: "square" },
+  { table_number: "6", seats: 4, pos_x: 0.47, pos_y: 0.5, shape: "square" },
+  { table_number: "7", seats: 4, pos_x: 0.47, pos_y: 0.78, shape: "square" },
+  { table_number: "8", seats: 6, pos_x: 0.81, pos_y: 0.36, shape: "rect" },
+];
+
+/** Creates the starter layout. No-ops if any table already exists — never overwrites a real floor plan. */
+export async function createStarterFloorPlan(): Promise<RestaurantTable[]> {
+  const existing = await getTables();
+  if (existing.length > 0) return existing;
+  const { data, error } = await requireClient()
+    .from("restaurant_tables")
+    .insert(STARTER_FLOOR_PLAN.map((t) => ({ ...t, tenant_id: TENANT_ID })))
+    .select();
+  if (error) throw error;
+  return data as RestaurantTable[];
 }
 
 // ---------- Bookings (staff — full data, requires authenticated session) ----------

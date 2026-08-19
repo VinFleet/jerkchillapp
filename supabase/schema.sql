@@ -97,6 +97,134 @@ drop policy if exists "Staff can delete bookings" on bookings;
 create policy "Staff can delete bookings" on bookings
   for delete using (auth.role() = 'authenticated');
 
+-- ============================================================================
+-- KNOWN LIMITATION — floor-plan and booking editing is NOT enforced in the database
+-- ============================================================================
+--
+-- What the app does today:
+--   The "Arrange tables" controls on the Bookings screen are gated by
+--   canEditFloorPlan() in src/lib/auth/permissions.ts, which allows Owner and
+--   Manager only. That is a UI guard and nothing more.
+--
+-- What the database actually allows today:
+--   The "Staff can manage tables" policy above grants INSERT/UPDATE/DELETE on
+--   restaurant_tables to ANY authenticated session, and the "Staff can ..."
+--   booking policies do the same for bookings. The restaurant signs in through
+--   ONE shared staff login: the role (owner/manager/chef/bartender) is picked
+--   on the device and stored in the browser's own localStorage under
+--   `jc_session` (see src/lib/auth/RoleContext.tsx). Postgres never sees it.
+--   So the database genuinely cannot tell a bartender from a manager — every
+--   one of them arrives as the same Supabase user with
+--   auth.role() = 'authenticated'.
+--
+-- The concrete gap:
+--   Anyone who can sign in to the staff app — or who has the shared password,
+--   or who simply edits `jc_session` in their own browser devtools — can
+--   create, rename, move or deactivate tables, and read/edit every booking.
+--   The public anon key is NOT affected: it can still only read
+--   restaurant_tables and insert bookings with source = 'online'.
+--
+-- Why it isn't fixed here:
+--   Closing it properly requires one Supabase auth user per person. That is an
+--   operational change (every staff member gets their own login and password),
+--   not a schema tweak, so it can't be done from this file alone. Until then,
+--   treat "Owner/Manager only" on the floor plan as a convention that keeps
+--   honest people from tapping the wrong thing — not as a security boundary.
+--
+-- The migration path is scaffolded below and is deliberately inert today.
+-- ============================================================================
+
+-- ---------- staff_roles — scaffold for per-person logins ----------
+-- Created for real, but empty and unread: no policy below consults it yet.
+-- Creating it now means the switch to per-person logins is a data + policy
+-- change, not a schema migration.
+
+create table if not exists staff_roles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  tenant_id text not null default 'jerk-and-chill-thao-dien',
+  role text not null check (role in ('owner', 'manager', 'chef', 'bartender')),
+  full_name text,
+  created_at timestamptz not null default now()
+);
+
+alter table staff_roles enable row level security;
+
+-- A signed-in person may read their own row and nobody else's. There is
+-- deliberately no insert/update/delete policy: roles are assigned by hand in
+-- the Supabase dashboard, so a compromised app session cannot promote itself.
+drop policy if exists "Staff can read own role" on staff_roles;
+create policy "Staff can read own role" on staff_roles
+  for select using (auth.uid() = user_id);
+
+-- Reads the caller's role past staff_roles' own RLS. Returns null for the
+-- shared login (it has no staff_roles row), which is exactly why the policies
+-- below must stay commented out until every person has their own account.
+create or replace function current_staff_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select role from staff_roles where user_id = auth.uid();
+$$;
+
+-- ---------- HOW TO ACTUALLY ENFORCE ROLES (do not run yet) ----------
+--
+-- Prerequisites, in this order — skipping any of them locks staff out:
+--   1. Create a Supabase auth user for every member of staff
+--      (Dashboard -> Authentication -> Users -> Add user).
+--   2. Insert a staff_roles row for each one, e.g.
+--        insert into staff_roles (user_id, role, full_name)
+--        values ('<uuid-from-step-1>', 'manager', 'Tên Nhân Viên');
+--      Verify with: select * from staff_roles;  -- every active person listed
+--   3. Change the app to sign each person in with their own email/password
+--      instead of the shared staff login, and to take the role from
+--      current_staff_role() rather than from localStorage `jc_session`.
+--   4. Only once 1–3 are live and verified, uncomment the block below and run
+--      it. It replaces the permissive policies with role-aware ones.
+--   5. Re-test on a real device per role BEFORE the next service, and keep the
+--      rollback below to hand.
+--
+-- ---- BEGIN role-aware policies (commented out) ----
+--
+-- -- Floor plan: only Owner/Manager may change it; everyone signed in can read it.
+-- drop policy if exists "Staff can manage tables" on restaurant_tables;
+-- create policy "Managers can manage tables" on restaurant_tables
+--   for all
+--   using (current_staff_role() in ('owner', 'manager'))
+--   with check (current_staff_role() in ('owner', 'manager'));
+--
+-- -- Bookings: any signed-in staff member may read and take bookings...
+-- drop policy if exists "Staff can view all bookings" on bookings;
+-- create policy "Staff can view all bookings" on bookings
+--   for select using (current_staff_role() is not null);
+--
+-- drop policy if exists "Staff can create bookings" on bookings;
+-- create policy "Staff can create bookings" on bookings
+--   for insert with check (current_staff_role() is not null);
+--
+-- drop policy if exists "Staff can update bookings" on bookings;
+-- create policy "Staff can update bookings" on bookings
+--   for update using (current_staff_role() is not null);
+--
+-- -- ...but deleting a booking stays with Owner/Manager (the app only ever
+-- -- cancels, so this should almost never fire).
+-- drop policy if exists "Staff can delete bookings" on bookings;
+-- create policy "Managers can delete bookings" on bookings
+--   for delete using (current_staff_role() in ('owner', 'manager'));
+--
+-- ---- END role-aware policies ----
+--
+-- ROLLBACK (restores today's behaviour if the above locks anyone out):
+--   drop policy if exists "Managers can manage tables" on restaurant_tables;
+--   create policy "Staff can manage tables" on restaurant_tables
+--     for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+--   drop policy if exists "Managers can delete bookings" on bookings;
+--   create policy "Staff can delete bookings" on bookings
+--     for delete using (auth.role() = 'authenticated');
+--   -- then re-run the three "Staff can ..." booking policies from the section above.
+
 -- ---------- Public availability view ----------
 -- The website needs to know which slots are free, but must never see WHO
 -- booked them. This view exposes only the columns needed to render
