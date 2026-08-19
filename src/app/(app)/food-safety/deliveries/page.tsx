@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { Plus, CheckCircle2, XCircle, AlertTriangle, Trash2 } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { FoodSafetyLogGate } from "@/components/FoodSafetyLogGate";
 import { BackLink } from "@/components/BackLink";
@@ -10,25 +10,99 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { BigCheckbox } from "@/components/ui/BigCheckbox";
+import { PhotoField } from "@/components/ui/PhotoField";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
 import { getDeliveryLogs, logDelivery } from "@/lib/repo/foodSafety";
 import { getSuppliers, getRejections, logRejection } from "@/lib/repo/suppliers";
+import { getSupplyItems } from "@/lib/repo/shopping";
 import { todayIso } from "@/lib/storage";
-import type { DeliveryLog, Supplier } from "@/lib/types";
+import type { DeliveryLog, DeliveryLogItem, Supplier, SupplyItem } from "@/lib/types";
+
+const CUSTOM_ITEM = "__custom__";
+
+function ItemPicker({ items, onAdd }: { items: SupplyItem[]; onAdd: (item: DeliveryLogItem) => void }) {
+  const [selected, setSelected] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [qty, setQty] = useState("");
+
+  const isCustom = selected === CUSTOM_ITEM;
+  const supplyItem = items.find((i) => i.id === selected);
+  const unit = isCustom ? "" : supplyItem?.unit ?? "";
+
+  const add = () => {
+    const q = Number(qty);
+    if (!q || q <= 0) return;
+    if (isCustom) {
+      if (!customName.trim()) return;
+      onAdd({ name: customName.trim(), qty: q, unit: "" });
+    } else if (supplyItem) {
+      onAdd({ supplyItemId: supplyItem.id, name: `${supplyItem.name.en} · ${supplyItem.name.vi}`, qty: q, unit: supplyItem.unit });
+    } else {
+      return;
+    }
+    setSelected("");
+    setCustomName("");
+    setQty("");
+  };
+
+  return (
+    <div className="mb-3 p-3 rounded-xl bg-black/5 dark:bg-white/5">
+      <select
+        value={selected}
+        onChange={(e) => setSelected(e.target.value)}
+        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand bg-surface"
+      >
+        <option value="">Select item · Chọn mặt hàng</option>
+        {items.map((i) => (
+          <option key={i.id} value={i.id}>
+            {i.name.en} · {i.name.vi}
+          </option>
+        ))}
+        <option value={CUSTOM_ITEM}>Other (type item) · Khác (nhập tên)</option>
+      </select>
+      {isCustom && (
+        <input
+          value={customName}
+          onChange={(e) => setCustomName(e.target.value)}
+          placeholder="Item name · Tên mặt hàng"
+          className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
+        />
+      )}
+      <div className="flex gap-2">
+        <input
+          type="number"
+          inputMode="decimal"
+          value={qty}
+          onChange={(e) => setQty(e.target.value)}
+          placeholder={`Qty${unit ? ` (${unit})` : ""} · Số lượng`}
+          className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
+        />
+        <Button type="button" variant="secondary" className="min-h-11 px-4" disabled={!selected || (isCustom && !customName.trim()) || !qty} onClick={add}>
+          <Plus size={16} /> Add
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staffName: string; suppliers: Supplier[] }) {
   const [open, setOpen] = useState(false);
   const [supplierId, setSupplierId] = useState("");
-  const [itemsDescription, setItemsDescription] = useState("");
-  const [qty, setQty] = useState("");
+  const [items, setItems] = useState<DeliveryLogItem[]>([]);
   const [tempC, setTempC] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [tempOk, setTempOk] = useState(false);
   const [packagingOk, setPackagingOk] = useState(false);
   const [useByOk, setUseByOk] = useState(false);
   const [reason, setReason] = useState("");
-  const [invoiceNote, setInvoiceNote] = useState("");
+  const [invoicePhoto, setInvoicePhoto] = useState<string[]>([]);
+  const [productPhotos, setProductPhotos] = useState<string[]>([]);
+  const [allSupplyItems, setAllSupplyItems] = useState<SupplyItem[]>([]);
+
+  useEffect(() => {
+    if (open) setAllSupplyItems(getSupplyItems());
+  }, [open]);
 
   if (!open) {
     return (
@@ -41,18 +115,19 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
     );
   }
 
+  const pickerItems = supplierId ? allSupplyItems.filter((i) => !i.supplierId || i.supplierId === supplierId) : allSupplyItems;
   const accepted = tempOk && packagingOk && useByOk;
   const reset = () => {
     setSupplierId("");
-    setItemsDescription("");
-    setQty("");
+    setItems([]);
     setTempC("");
     setInvoiceNumber("");
     setTempOk(false);
     setPackagingOk(false);
     setUseByOk(false);
     setReason("");
-    setInvoiceNote("");
+    setInvoicePhoto([]);
+    setProductPhotos([]);
     setOpen(false);
   };
 
@@ -62,7 +137,7 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
       <select
         value={supplierId}
         onChange={(e) => setSupplierId(e.target.value)}
-        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand bg-surface"
+        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-3 text-sm focus:outline-none focus:border-brand bg-surface"
       >
         <option value="">Select supplier · Chọn nhà cung cấp</option>
         {suppliers.map((s) => (
@@ -71,19 +146,37 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
           </option>
         ))}
       </select>
-      <input
-        value={itemsDescription}
-        onChange={(e) => setItemsDescription(e.target.value)}
-        placeholder="Items · Mặt hàng"
-        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
+
+      <p className="text-xs font-semibold text-muted mb-1.5">Items received · Mặt hàng nhận</p>
+      <ItemPicker items={pickerItems} onAdd={(item) => setItems((prev) => [...prev, item])} />
+      {items.length > 0 && (
+        <div className="space-y-1.5 mb-3">
+          {items.map((it, i) => (
+            <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-surface border border-border text-sm">
+              <span className="flex-1">
+                {it.name} — {it.qty} {it.unit}
+              </span>
+              <button type="button" onClick={() => setItems((prev) => prev.filter((_, idx) => idx !== i))} className="text-danger">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <PhotoField
+        label={{ en: "Photo of invoice / delivery note", vi: "Ảnh hóa đơn / phiếu giao hàng" }}
+        photos={invoicePhoto}
+        onChange={setInvoicePhoto}
+        max={1}
       />
+      <PhotoField
+        label={{ en: "Photos of products received", vi: "Ảnh sản phẩm nhận được" }}
+        photos={productPhotos}
+        onChange={setProductPhotos}
+      />
+
       <div className="flex gap-2 mb-2">
-        <input
-          value={qty}
-          onChange={(e) => setQty(e.target.value)}
-          placeholder="Qty · Số lượng"
-          className="flex-1 min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
-        />
         <input
           type="number"
           inputMode="decimal"
@@ -91,15 +184,15 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
           value={tempC}
           onChange={(e) => setTempC(e.target.value)}
           placeholder="Temp °C"
-          className="w-28 min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
+          className="flex-1 min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
+        />
+        <input
+          value={invoiceNumber}
+          onChange={(e) => setInvoiceNumber(e.target.value)}
+          placeholder="Invoice # · Số hóa đơn"
+          className="flex-1 min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
         />
       </div>
-      <input
-        value={invoiceNumber}
-        onChange={(e) => setInvoiceNumber(e.target.value)}
-        placeholder="Invoice # · Số hóa đơn"
-        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-3 text-sm focus:outline-none focus:border-brand"
-      />
       <div className="space-y-2 mb-3">
         <BigCheckbox
           label={{ en: "Temperature OK", vi: "Nhiệt độ đạt" }}
@@ -122,28 +215,21 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="Rejection reason · Lý do từ chối"
-          className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
+          className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-3 text-sm focus:outline-none focus:border-brand"
         />
       )}
-      <input
-        value={invoiceNote}
-        onChange={(e) => setInvoiceNote(e.target.value)}
-        placeholder="Photo note (delivery + invoice) · Ghi chú ảnh"
-        className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-3 text-sm focus:outline-none focus:border-brand"
-      />
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
           Cancel
         </Button>
         <Button
           className="flex-1"
-          disabled={!supplierId || !itemsDescription.trim() || !qty.trim()}
+          disabled={!supplierId || items.length === 0}
           onClick={() => {
             logDelivery({
               supplierId,
               date: todayIso(),
-              itemsDescription: itemsDescription.trim(),
-              qty: qty.trim(),
+              items,
               tempC: tempC.trim() === "" ? undefined : Number(tempC),
               invoiceNumber: invoiceNumber.trim() || undefined,
               tempOk,
@@ -152,7 +238,8 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
               accepted,
               rejectionReason: accepted ? undefined : reason.trim() || undefined,
               supplierNotified: accepted ? undefined : false,
-              invoiceNote: invoiceNote.trim() || undefined,
+              invoicePhoto: invoicePhoto[0],
+              productPhotos: productPhotos.length > 0 ? productPhotos : undefined,
               loggedBy: staffName,
             });
             reset();
@@ -272,16 +359,41 @@ function DeliveriesContent() {
               </div>
               <p className="text-xs text-muted">
                 {log.date} · {log.loggedBy}
-              </p>
-              <p className="text-sm mt-1">
-                {log.itemsDescription} · {log.qty}
                 {log.tempC !== undefined && ` · ${log.tempC}°C`}
               </p>
-              {log.invoiceNumber && <p className="text-xs text-muted">Invoice #{log.invoiceNumber}</p>}
+              {log.items && log.items.length > 0 ? (
+                <ul className="text-sm mt-1 space-y-0.5">
+                  {log.items.map((it, i) => (
+                    <li key={i}>
+                      {it.name} — {it.qty} {it.unit}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                log.itemsDescription && (
+                  <p className="text-sm mt-1">
+                    {log.itemsDescription}
+                    {log.qty && ` · ${log.qty}`}
+                  </p>
+                )
+              )}
+              {log.invoiceNumber && <p className="text-xs text-muted mt-1">Invoice #{log.invoiceNumber}</p>}
               {!log.accepted && log.rejectionReason && (
                 <p className="text-sm text-danger mt-2">{log.rejectionReason}</p>
               )}
               {log.invoiceNote && <p className="text-sm text-muted mt-2">{log.invoiceNote}</p>}
+              {(log.invoicePhoto || (log.productPhotos && log.productPhotos.length > 0)) && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {log.invoicePhoto && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={log.invoicePhoto} alt="Invoice" className="w-16 h-16 rounded-lg object-cover border border-border" />
+                  )}
+                  {log.productPhotos?.map((src, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={i} src={src} alt="Product" className="w-16 h-16 rounded-lg object-cover border border-border" />
+                  ))}
+                </div>
+              )}
               {!log.accepted && canEnter && <RejectionNudge log={log} staffName={session.name} onLogged={refresh} />}
             </Card>
           ))}

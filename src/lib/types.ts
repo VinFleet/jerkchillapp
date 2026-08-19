@@ -205,17 +205,31 @@ export type CookTempLog = {
   correctionOfId?: string;
 };
 
+export type DeliveryLogItem = {
+  supplyItemId?: string;
+  name: string;
+  qty: number;
+  unit: string;
+};
+
 export type DeliveryLog = {
   id: string;
   supplierId: string;
   date: string;
-  itemsDescription: string;
-  qty: string;
+  /** Dropdown-selected items (current form). */
+  items?: DeliveryLogItem[];
+  /** Legacy free-text fields — kept so older logged records still render. */
+  itemsDescription?: string;
+  qty?: string;
   invoiceNumber?: string;
   tempC?: number;
   tempOk: boolean;
   packagingOk: boolean;
   useByOk: boolean;
+  /** Photo of the invoice / delivery note. */
+  invoicePhoto?: string;
+  /** Photos of the delivered products (proof-of-delivery style). */
+  productPhotos?: string[];
   invoiceNote?: string;
   photoNote?: string;
   accepted: boolean;

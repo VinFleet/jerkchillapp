@@ -96,12 +96,13 @@ function ExportTable({ type, from, to }: { type: FoodSafetyLogType; from: string
     return (
       <table className="w-full border-collapse">
         <thead>
-          <tr><Th>Date</Th><Th>Supplier</Th><Th>Items</Th><Th>Qty</Th><Th>Temp °C</Th><Th>Invoice #</Th><Th>Packaging</Th><Th>Use-by</Th><Th>Result</Th><Th>Reason</Th><Th>Notified</Th><Th>Logged by</Th></tr>
+          <tr><Th>Date</Th><Th>Supplier</Th><Th>Items</Th><Th>Temp °C</Th><Th>Invoice #</Th><Th>Packaging</Th><Th>Use-by</Th><Th>Result</Th><Th>Reason</Th><Th>Notified</Th><Th>Logged by</Th></tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
-              <Td>{r.date}</Td><Td>{supplierName(r.supplierId)}</Td><Td>{r.itemsDescription}</Td><Td>{r.qty}</Td>
+              <Td>{r.date}</Td><Td>{supplierName(r.supplierId)}</Td>
+              <Td>{r.items && r.items.length > 0 ? r.items.map((it) => `${it.name} (${it.qty} ${it.unit})`).join(", ") : `${r.itemsDescription ?? ""}${r.qty ? ` · ${r.qty}` : ""}`}</Td>
               <Td>{r.tempC ?? "—"}</Td><Td>{r.invoiceNumber ?? "—"}</Td>
               <Td>{r.packagingOk ? "OK" : "FAIL"}</Td><Td>{r.useByOk ? "OK" : "FAIL"}</Td>
               <Td>{r.accepted ? "Accepted" : "REJECTED"}</Td><Td>{r.rejectionReason ?? "—"}</Td>
