@@ -11,6 +11,36 @@ export type ChangelogEntry = {
 // changed without having to ask.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.15",
+    date: "2026-08-20",
+    changes: [
+      {
+        en: "Delivery log gained a signature pad — sign to confirm a delivery check, right on the form.",
+        vi: "Sổ nhận hàng có thêm ô ký tên — ký xác nhận ngay khi kiểm tra hàng trên form.",
+      },
+    ],
+  },
+  {
+    version: "1.14",
+    date: "2026-08-20",
+    changes: [
+      {
+        en: "Suppliers — Chef and Manager can now add a new supplier (a compliance paperwork checklist is attached automatically) and log price quotes per item, with a new Prices tab that compares every supplier's quote for the same item side by side.",
+        vi: "Nhà cung cấp — Bếp trưởng và Quản lý giờ có thể thêm nhà cung cấp mới (tự động đính kèm danh mục giấy tờ tuân thủ) và ghi báo giá theo từng mặt hàng, với tab Giá mới so sánh báo giá của mọi nhà cung cấp cho cùng một mặt hàng.",
+      },
+    ],
+  },
+  {
+    version: "1.13",
+    date: "2026-08-20",
+    changes: [
+      {
+        en: "Reconciled Checklists and the Shopping List against the real Chef's Recipe Book — Chef/FOH Opening & Closing checklists replaced with the real, much more detailed versions (with deep-links into Stock, Planner, Sales, and Bookings), the Shopping List's Ingredient Ordering Checklist expanded from 7 to the real ~75 items with real supplier SKUs and pack costs, and 7 items added to the Daily Stock list. Also corrected the third beer's name back to K Blanc — an earlier pass had wrongly renamed it to \"1664\", which the Recipe Book confirms was never a real product on the menu.",
+        vi: "Đối chiếu Danh Sách Công Việc và Danh Sách Đặt Hàng với Sổ Công Thức Bếp thật — thay Danh sách Mở/Đóng cửa Bếp/Phục vụ bằng phiên bản thật chi tiết hơn nhiều (có liên kết đến Tồn kho, Kế hoạch, Doanh thu, Đặt bàn), mở rộng Danh Sách Đặt Hàng Nguyên Liệu từ 7 lên khoảng 75 mặt hàng thật kèm mã hàng và giá thật từ nhà cung cấp, thêm 7 món vào Danh Sách Tồn Kho Hàng Ngày. Đồng thời sửa lại tên bia thứ ba về K Blanc — một lần sửa trước đó đã nhầm đổi thành \"1664\", trong khi Sổ Công Thức xác nhận đây chưa từng là sản phẩm thật trên thực đơn.",
+      },
+    ],
+  },
+  {
     version: "1.12",
     date: "2026-08-19",
     changes: [

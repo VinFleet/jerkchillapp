@@ -3,12 +3,15 @@ import { readList, writeList, isSeeded, markSeeded, newId, todayIso } from "@/li
 import { SEED_STOCK_ITEMS } from "@/lib/seed/stock";
 import { getRecipe } from "@/lib/repo/recipes";
 
-// v2: corrected the K Blanc -> 1664 beer name to match the real menu.
-// Bumping the key forces a fresh reseed of item definitions for browsers
-// that already loaded the old name — day entries live under a separate
-// key (ENTRIES_KEY) and are unaffected, and item names/pars aren't
-// user-editable anywhere, so nothing real gets lost.
-const ITEMS_KEY = "stock_items_v2";
+// v2: corrected the K Blanc -> 1664 beer name (this rename turned out to be
+// backwards — see v3). v3: reverted back to K Blanc — the Chef's Recipe
+// Book's own change log confirms "1664" was never a real product on this
+// menu and K Blanc is the actual third beer. Bumping the key forces a fresh
+// reseed of item definitions for browsers that already loaded either wrong
+// name — day entries live under a separate key (ENTRIES_KEY) and are
+// unaffected, and item names/pars aren't user-editable anywhere, so nothing
+// real gets lost.
+const ITEMS_KEY = "stock_items_v3";
 const ENTRIES_KEY = "stock_entries";
 
 export function ensureStockSeeded() {

@@ -6,11 +6,40 @@ import { getSuppliers } from "@/lib/repo/suppliers";
 
 const META_KEY = "ordering_meta";
 const SUPPLY_KEY = "supply_items";
+const RECONCILE_KEY = "supply_items_reconcile_v1";
 
 export function ensureShoppingSeeded() {
-  if (isSeeded(SUPPLY_KEY)) return;
-  writeList(SUPPLY_KEY, SEED_SUPPLY_ITEMS);
-  markSeeded(SUPPLY_KEY);
+  if (!isSeeded(SUPPLY_KEY)) {
+    writeList(SUPPLY_KEY, SEED_SUPPLY_ITEMS);
+    markSeeded(SUPPLY_KEY);
+    markSeeded(RECONCILE_KEY);
+    return;
+  }
+  // One-time reconciliation against the real Ingredient Ordering Checklist
+  // (Chef's Recipe Book) — the original seed here was a 7-item placeholder
+  // list. Adds every real ingredient that wasn't already present, and fixes
+  // descriptive fields (name/packSize/unit/supplier) on items that already
+  // existed — but never overwrites onHand, par, lastOrderedAt, or a
+  // packCostVnd someone already confirmed from a real invoice.
+  if (!isSeeded(RECONCILE_KEY)) {
+    const all = readList<SupplyItem>(SUPPLY_KEY);
+    const existingIds = new Set(all.map((i) => i.id));
+    const newItems = SEED_SUPPLY_ITEMS.filter((i) => !existingIds.has(i.id));
+    const merged = all.map((item) => {
+      const real = SEED_SUPPLY_ITEMS.find((s) => s.id === item.id);
+      if (!real) return item;
+      return {
+        ...item,
+        name: real.name,
+        packSize: real.packSize,
+        unit: real.unit,
+        supplierId: real.supplierId ?? item.supplierId,
+        packCostVnd: item.packCostVnd === null ? real.packCostVnd : item.packCostVnd,
+      };
+    });
+    writeList(SUPPLY_KEY, [...merged, ...newItems]);
+    markSeeded(RECONCILE_KEY);
+  }
 }
 
 // ---------- Ordering metadata overlay for bar StockItems ----------

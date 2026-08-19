@@ -28,7 +28,7 @@ export const SEED_MENU_ITEMS: MenuItem[] = [
   { id: "mi_mocktail", name: { en: "Mocktail", vi: "Mocktail" }, category: "beverage", pricesVnd: { dine_in: 85000, delivery: 85000, lunch_box: null }, active: true, updatedAt },
   { id: "mi_beer_huda", name: { en: "Beer — Huda", vi: "Bia Huda" }, category: "beverage", pricesVnd: { dine_in: 25000, delivery: 25000, lunch_box: null }, active: true, updatedAt },
   { id: "mi_beer_tuborg", name: { en: "Beer — Tuborg Ice", vi: "Bia Tuborg Ice" }, category: "beverage", pricesVnd: { dine_in: 35000, delivery: 35000, lunch_box: null }, active: true, updatedAt },
-  { id: "mi_beer_1664", name: { en: "Beer — 1664", vi: "Bia 1664" }, category: "beverage", pricesVnd: { dine_in: 45000, delivery: 45000, lunch_box: null }, active: true, updatedAt },
+  { id: "mi_beer_1664", name: { en: "Beer — K Blanc", vi: "Bia K Blanc" }, category: "beverage", pricesVnd: { dine_in: 45000, delivery: 45000, lunch_box: null }, active: true, updatedAt },
   { id: "mi_soft_drinks", name: { en: "Soft Drinks (Coke / Sprite / Fanta)", vi: "Nước Ngọt (Coke / Sprite / Fanta)" }, category: "beverage", pricesVnd: { dine_in: 25000, delivery: 25000, lunch_box: null }, active: true, updatedAt },
   { id: "mi_water", name: { en: "Water", vi: "Nước Suối" }, category: "beverage", pricesVnd: { dine_in: 15000, delivery: 15000, lunch_box: null }, active: true, updatedAt },
 ];

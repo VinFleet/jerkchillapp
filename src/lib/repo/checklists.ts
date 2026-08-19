@@ -4,11 +4,26 @@ import { SEED_CHECKLIST_ITEMS } from "@/lib/seed/checklists";
 
 const ITEMS_KEY = "checklist_items";
 const TICKS_KEY = "checklist_ticks";
+const RECONCILE_KEY = "checklist_items_reconcile_v1";
 
 export function ensureChecklistsSeeded() {
-  if (isSeeded(ITEMS_KEY)) return;
-  writeList(ITEMS_KEY, SEED_CHECKLIST_ITEMS);
-  markSeeded(ITEMS_KEY);
+  if (!isSeeded(ITEMS_KEY)) {
+    writeList(ITEMS_KEY, SEED_CHECKLIST_ITEMS);
+    markSeeded(ITEMS_KEY);
+    markSeeded(RECONCILE_KEY);
+    return;
+  }
+  // One-time reconciliation against the real Chef/FOH checklists (Chef's
+  // Recipe Book) — the original seed here was a short placeholder list.
+  // Replaces the old seed-origin items with the real, much longer ones,
+  // while keeping any custom item a manager added via "Add item" (those get
+  // ids from newId("cli"), distinct from the seed's "cl_..." ids).
+  if (!isSeeded(RECONCILE_KEY)) {
+    const all = readList<ChecklistItem>(ITEMS_KEY);
+    const customItems = all.filter((i) => i.id.startsWith("cli_"));
+    writeList(ITEMS_KEY, [...SEED_CHECKLIST_ITEMS, ...customItems]);
+    markSeeded(RECONCILE_KEY);
+  }
 }
 
 export function getChecklistItems(area?: ChecklistArea, shift?: ChecklistShift): ChecklistItem[] {

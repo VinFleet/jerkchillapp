@@ -6,6 +6,7 @@ const MENU_KEY = "menu_items";
 const REPRINT_FLAG_KEY = "menu_needs_reprint";
 const MATERIALS_KEY = "printed_materials";
 const COCKTAIL_RECIPE_LINK_KEY = "menu_cocktail_recipe_link_v1";
+const KBLANC_NAME_FIX_KEY = "menu_kblanc_name_fix_v1";
 
 export function ensureMenuSeeded() {
   if (!isSeeded(MENU_KEY)) {
@@ -32,6 +33,19 @@ export function ensureMenuSeeded() {
     }
     if (changed) writeList(MENU_KEY, all);
     markSeeded(COCKTAIL_RECIPE_LINK_KEY);
+  }
+  // One-time migration: fix the third beer's name — it was briefly and
+  // wrongly renamed to "1664" in an earlier pass; the Chef's Recipe Book's
+  // own change log confirms "1664" was never a real product and the real
+  // third beer is K Blanc. Only touches the name, never the price.
+  if (!isSeeded(KBLANC_NAME_FIX_KEY)) {
+    const all = readList<MenuItem>(MENU_KEY);
+    const idx = all.findIndex((m) => m.id === "mi_beer_1664");
+    if (idx >= 0 && all[idx].name.en !== "Beer — K Blanc") {
+      all[idx] = { ...all[idx], name: { en: "Beer — K Blanc", vi: "Bia K Blanc" } };
+      writeList(MENU_KEY, all);
+    }
+    markSeeded(KBLANC_NAME_FIX_KEY);
   }
 }
 
