@@ -1,0 +1,199 @@
+# Jerk & Chill — Restaurant Operations Web App
+
+## What this is
+
+A restaurant management web app for Jerk & Chill, a 26-seat Caribbean restaurant in Thảo Điền, District 2, Ho Chi Minh City. It replaces a full stack of standalone documents — Chef Recipe Book, Kitchen Food Safety Book, Daily Operations Book, Management Book, a marketing strategy and KOC outreach list, delivery-platform research — plus group chats for anything that doesn't fit a document. The goal is one system the whole team actually uses: kitchen, front of house, and the owner, not just the person who built the spreadsheets.
+
+This is the complete spec. Build Phase 1 first (see "Build Order" near the end), but everything below is the full picture so later phases don't need re-briefing.
+
+---
+
+## Platform
+
+**This is a responsive web app, not a native app.** Accessible through any browser — phone, tablet, laptop, desktop. No app store install required.
+
+- Build as a PWA (installable to home screen, works offline where practical) so it *feels* like an app without app-store distribution.
+- Mobile-first responsive design — most real usage is on a phone or tablet, standing up, mid-shift.
+- Desktop/laptop view matters too, mainly for the Owner/Manager doing admin work (menu pricing, licensing calendar, reports).
+
+## Brand
+
+- **Primary color: `#003295`** — extracted directly from the real logo file (`logo.png`). This is the correct brand blue.
+- **Logo:** `logo.png` — "JERK & CHILL" wordmark with a winking, sunglasses-wearing drumstick mascot. Use as the primary header/nav logo.
+- **Pattern:** `pattern.png` — repeating drumstick-mascot tile, same blue, transparent background. Good for login screens, empty states, loading screens, or a subtle section background — not for busy working screens.
+- No second brand color is confirmed. For status states (success/warning/error) use a neutral functional palette (green/amber/red) rather than inventing a brand color.
+- Typography unspecified — pick a clean, highly-legible sans-serif (system font stack is fine) since this is a working tool, not a marketing site.
+
+## Design Principles (non-negotiable)
+
+- Big, obvious tap targets — used one-handed, standing up, mid-shift.
+- Tap/select over typing wherever possible — checklists, stock counts, and logs should be mostly taps, not paragraphs.
+- Bilingual English/Vietnamese, always on — not a settings toggle. Every label, button, and question needs both languages, equal visual weight.
+- One question per screen: "what do I need to do right now?" — not a dashboard someone has to interpret.
+- A new hire should be able to use the checklist and stock screens correctly on day one, without training. If it needs an explanation, it's too complicated.
+
+## Foundation
+
+| Requirement | Detail |
+|---|---|
+| Multi-tenant | Must support multiple restaurants, each fully isolated (own recipes, menu, cocktails, cost data, staff, contacts). A second Jerk & Chill location auto-populates from a shared template; a different-concept restaurant starts blank. Ingredient pricing can vary by location even on a shared recipe. |
+| Currency | Vietnamese Dong (VND) as primary; design so other currencies aren't a rewrite later. |
+| Compliance record-keeping | All food-safety logs must be timestamped, tamper-evident (edits logged, not silently overwritten), and exportable to PDF for a real inspection — legal requirement (QĐ 1246/QĐ-BYT, Circular 30/2012/TT-BYT), not optional. |
+
+## User Roles & Permissions
+
+Four fixed roles, enforced everywhere — not just hidden in the UI.
+
+| Role | Sees | Doesn't see |
+|---|---|---|
+| **Owner** | Everything — recipes, all checklists, all food-safety logs, stock, production planner, cost & margin, EPOS data (once connected), notice board, wages, hiring, licensing calendar, marketing calendar. | Nothing. |
+| **Manager** (incl. manager-in-training) | Recipe book, checklists, food-safety logs, stock, production planner, notice board, supplier management, contacts, menu/pricing, licensing calendar, hiring, marketing calendar. Can edit checklist items. | Cost & margin data and staff wages — default hidden until explicitly enabled. |
+| **Chef / Kitchen** | Recipe book (view + scale), kitchen checklists, kitchen food-safety logs (enter data), stock (enter counts), production planner (view), notice board. | Cost data, pricing, EPOS data, wages, hiring, licensing, marketing. Can flag a recipe for manager review instead of editing directly. |
+| **Bartender / FOH** | Bartender reference, cocktail recipes, FOH checklists, bar/FOH stock, customer complaint log (enter), notice board. | Kitchen costing, full recipe edit access, EPOS data, wages, hiring, licensing, marketing. |
+
+**Open question:** should Manager eventually see cost/margin data once trust is built, or stay Owner-only indefinitely? Build the toggle, default it off.
+
+---
+
+## Full Module Spec — 16 modules across 4 phases
+
+### Phase 1 — Core Daily Operations (build and prove this first)
+
+**1. Digital Recipe Book**
+- Every recipe, searchable by name.
+- Tap to scale a recipe to any portion count, not just fixed tiers — auto-converts every ingredient.
+- Method steps shown as a checklist chefs can tick through while cooking.
+- Chefs can flag a recipe ("this needs updating") which notifies the manager instead of editing directly.
+
+**2. Daily Stock & Production Log — digital**
+- Opening Stock / Produced Today / Closing Stock columns, entered on tablet or phone.
+- Auto-carries yesterday's Closing Stock into today's Opening Stock — no re-entry.
+- Flags items with high leftover trends over time (e.g. "Mac and Cheese wasted 3 nights running").
+- Par-level tracking for bar/drinks stock specifically (spirits, cocktail ingredients, beer, garnish) — On Hand vs. Par vs. To Order.
+- Kitchen Prep & Production view — Mains/Sides/Desserts with Ready Now, Par (Tomorrow), and To Prep.
+- Ties into cost tracker to show waste in VND, not just portions.
+
+**3. Opening/Closing Checklists — digital**
+- Tap-to-check items, same as paper, for both FOH and Kitchen.
+- Manager sees in real time whether the checklist is done before service starts.
+- New checklist items added by the manager instantly appear on every device — no reprinting.
+
+**4. Production Planner**
+- Pulls from the Stock Log to suggest what to produce today, based on recent Closing Stock trends.
+- Chef confirms or overrides the suggested quantity before starting prep.
+- Par-driven ordering suggestions — flags when Shopping List items are due for reorder.
+
+**5. Centralised Notice Board**
+- Replaces the group chat for anything operational — "we're out of X," "new supplier price," "table 4 special request."
+- Manager posts to all devices at once; staff mark as read/acknowledged.
+
+### Phase 2 — Food Safety, Compliance & Suppliers
+
+**6. Food Safety Compliance Suite**
+- Fridge & Freezer Temperature Log — every unit, checked twice daily, out-of-range readings flagged immediately.
+- Cooking / Core Temperature Log — probe reading logged per batch, target ≥75°C/30 sec, flagged if under target.
+- Delivery / Receiving Log — temperature, packaging, and use-by date checked and logged on arrival, plus a photo of the delivery and invoice; rejected deliveries logged with reason and supplier notified.
+- Cleaning Schedule — area/item, frequency, signed off per day.
+- Three-Step Food Inspection — before/during/before-serving checks logged every service (legally required, QĐ 1246/QĐ-BYT).
+- Food Sample Retention — every dish served logged with quantity, time, storage location; weekly check confirms samples past the 24-hour minimum are discarded.
+- Pest Control Log — sightings, location, action taken, reported status.
+- Customer Complaint / Incident Log — especially allergy-related, tied to guest contact and investigation outcome.
+- Every log here should be exportable as an inspector-ready record.
+
+**7. Supplier Management**
+- Approved Supplier List — registration on file, food-safety cert + expiry, other certs, last reviewed date, linked to Contacts Directory.
+- Goods Rejection / Defect Record — logged against the relevant delivery, with photo, action taken, whether supplier was notified.
+- Supplier Periodic Evaluation — annual quality/on-time/documentation review per supplier, feeding a continue/review/replace decision.
+- Feeds the Shopping List — a supplier flagged for replacement surfaces there too.
+
+**8. Contacts Directory**
+- Centralised, categorised — Suppliers, Staff, Emergency Services, Building Management, and other categories as needed.
+- Replaces scattered numbers in personal phones and group chats.
+- Supplier entries link through to Supplier Management and the Shopping List.
+
+**9. Licensing & Compliance Calendar**
+- Every licence/certificate with a renewal date — Certificate of Eligibility for Food Safety (3-year), business registration, PCCC fire safety, annual water quality test (if applicable), pest control contract.
+- Automatic reminders ahead of expiry.
+- Owner/Manager only.
+
+### Phase 3 — Money, People & Growth
+
+**10. Daily Sales Entry**
+- End-of-day sales entry, split by channel: Eat In, Takeaway, Shopee, Grab.
+- Once EPOS integration exists (see Future Ideas), this could pull automatically instead of manual entry.
+- Cash reconciliation against the POS Z-report, float tracking, bank-drop logging.
+- Feeds the cost tracker so margin can be checked against real revenue.
+
+**11. Staff — Wages, Scheduling, Certifications & Hiring**
+- Staff rota — shift schedule per staff member, working hours logged, wages tracked against hours worked.
+- Managers can email the rota directly to staff from the app — a real sendable schedule, not just an in-app view.
+- Wage/hourly-rate data visible to Owner only by default.
+- Digital staff induction checklist — contract signed, uniform issued, food-safety training logged, health certificate on file, POS access created.
+- Code of Conduct acknowledgement — staff tick to confirm they've read it, timestamped.
+- Disciplinary log — verbal/written/final warning steps recorded with date and detail, Owner/Manager only.
+- Staff Training Record and Staff Health Certificate Tracker — per-person training topics and annual health-cert renewal dates, with reminders.
+- Hiring & Recruitment — candidate tracker (CV storage, role applied for, status), a reusable question bank per role that can be tailored per candidate, and a bilingual scorecard template per interview.
+
+**12. Menu & Pricing**
+- Single live source of truth for every menu item and price — dine-in, delivery-app, and Lunch Rice Box pricing all pull from here instead of drifting out of sync across the printed menu, delivery listings, and internal documents.
+- Menu & Printed Materials Stock — Par, On Hand, Reorder Point, To Reprint, plus printer/source and lead time.
+- A price change here should trigger a flag that a menu reprint is needed.
+
+**13. Marketing & Content Calendar**
+- Weekly content rhythm — process/sensory, interior/vibe, Roast Sunday (framed as scarcity, e.g. "3 spots left"), Lunch Box — scheduled with reminders.
+- KOC/Influencer Outreach Tracker — handle, platform, tier, contact status, comped-meal cost, whether content went live.
+- Platform Campaign Tracker — entry windows for things like Grab's Top Restaurant Tournament or ShopeeFood's mega-sale placements.
+- Performance tracking — saves/shares per post, tagged by pillar, so the team can see which pillar is actually working.
+
+### Phase 4 — Ordering & Advanced (build once Phases 1–3 are proven in daily use)
+
+**14. Weekly Shopping List / Ordering**
+- Auto-generates from Stock Log par levels vs. on-hand counts, rather than a manually rebuilt list each week.
+- Carries real supplier data per item — pack size, pack cost, and which supplier it's actually ordered from (never just one supplier: main grocery supplier for produce/dairy/dry goods/spices, a separate beer supplier, a separate liquor supplier, a local market for some produce, a separate ice supplier).
+- Flags items still on unconfirmed placeholder pricing so they get chased to a real invoice price over time, and flags items that haven't been ordered in a long time as candidates for cleanup.
+
+**15. Delivery Platform Performance**
+- Tracks delivery platform stats — rating, cancellation rate, order-confirmation speed, % of menu items with photos — against each platform's free-placement badge criteria.
+- Commission comparison across platforms in one place.
+- Flags exactly what's blocking Preferred/Favorite status as a checklist, not an abstract goal.
+
+**16. Theoretical vs. Actual Usage Reporting**
+- Variance report: theoretical ingredient usage (Recipe Book cost/qty × units sold, from Daily Sales Entry) compared against actual usage (Stock Log Opening/Closing/Produced figures).
+- Surfaces real waste and shrinkage, not just estimates.
+- Phase 4 modules are modelled on established restaurant platforms (MarketMan, Restaurant365, MarginEdge, Toast/xtraCHEF, 7shifts, Deputy) — real, proven feature patterns, not guesses. Each depends on Phase 1–3 data already existing and being trustworthy.
+
+---
+
+## Devices & Access
+
+- Dedicated tablet in the kitchen — main input station for stock counts, checklists, food-safety logs, production log.
+- Staff's own phones — view-only or light input access (recipes, checklists), not tied to the tablet.
+- Manager/owner access — full view across all modules, plus the cost/margin, wage, and licensing data others don't need to see.
+
+## Open Questions (resolve as you go, don't block on these)
+
+- Do staff need individual logins, or is one shared kitchen login enough for now?
+- Offline support — kitchen wifi may not be reliable, and legally-required food-safety logs depend on it. This one matters more than the others; consider it early in the architecture even if full offline support comes later.
+- Manager cost/margin and wage visibility — view-only once trusted, or Owner-only indefinitely?
+- Hiring/candidate data sensitivity — who can see CVs, interview scores, salary negotiations? Default to Owner + Manager only.
+- Who acts on Licensing Calendar reminders if the Owner's unavailable — does Manager also get alerted?
+- Who owns the Marketing Calendar day to day — Manager task, or stays with Owner?
+
+## Future Ideas (not in scope yet, don't build, just don't architect against them)
+
+- EPOS integration — the restaurant's EPOS system may expose an API. If so, sales and order data could feed straight into the app instead of manual entry, letting the Stock Log and Production Planner compare what was actually sold against what was produced (real waste %), and giving the cost tracker real revenue numbers.
+
+---
+
+## Build Order
+
+Don't build all 16 modules at once — build shallow-and-wide and nothing will actually work. Build in this order, and get each phase genuinely used in daily service before starting the next:
+
+1. **Phase 1** (Modules 1–5) — core daily operations. This is the whole first build.
+2. **Phase 2** (Modules 6–9) — food safety, compliance, suppliers.
+3. **Phase 3** (Modules 10–13) — money, people, growth.
+4. **Phase 4** (Modules 14–16) — ordering and advanced reporting.
+
+## First message to send Claude Code
+
+> Read CLAUDE.md in this folder for full context — it's the complete spec, but only build Phase 1 first (Modules 1–5: Digital Recipe Book, Daily Stock & Production Log, Opening/Closing Checklists, Production Planner, Notice Board). Set up a new React/Next.js project with Tailwind, configured as a PWA. Use `#003295` as the primary brand color and `logo.png` as the header logo. Every screen needs bilingual English/Vietnamese labels, mobile-first responsive layout, and big tap targets — this will be used one-handed on a phone mid-shift by staff with no training on the app. Build the role-permission system (Owner/Manager/Chef/Bartender) from the start, even if only Owner exists as a real login for now.

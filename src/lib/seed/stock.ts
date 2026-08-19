@@ -1,0 +1,27 @@
+import type { StockItem } from "@/lib/types";
+
+export const SEED_STOCK_ITEMS: StockItem[] = [
+  // Kitchen — mains & sides, produced fresh daily
+  { id: "st_jerk_chicken", name: { en: "Jerk Chicken (portions)", vi: "Gà Jerk (khẩu phần)" }, section: "kitchen", unit: "portion", prepCategory: "main", recipeId: "rc_jerk_chicken" },
+  { id: "st_rice_peas", name: { en: "Rice and Peas", vi: "Cơm Đậu" }, section: "kitchen", unit: "portion", prepCategory: "side", recipeId: "rc_rice_peas" },
+  { id: "st_steamed_veg", name: { en: "Steamed Veg", vi: "Rau Củ Hấp" }, section: "kitchen", unit: "portion", prepCategory: "side", recipeId: "rc_steamed_veg" },
+  { id: "st_plantain", name: { en: "Plantain", vi: "Chuối Chiên" }, section: "kitchen", unit: "portion", prepCategory: "side", recipeId: "rc_plantain" },
+  { id: "st_fried_dumplings", name: { en: "Fried Dumplings", vi: "Bánh Bột Chiên" }, section: "kitchen", unit: "portion", prepCategory: "side", recipeId: "rc_fried_dumplings" },
+  { id: "st_mac_cheese", name: { en: "Mac and Cheese", vi: "Mì Ống Phô Mai" }, section: "kitchen", unit: "portion", prepCategory: "side", recipeId: "rc_mac_cheese" },
+  { id: "st_house_salad", name: { en: "House Salad", vi: "Gỏi Bắp Cải" }, section: "kitchen", unit: "portion", prepCategory: "side", recipeId: "rc_house_salad" },
+  { id: "st_apple_crumble", name: { en: "Apple Crumble", vi: "Bánh Táo Nướng Giòn" }, section: "kitchen", unit: "portion", prepCategory: "dessert", recipeId: "rc_apple_crumble" },
+  { id: "st_custard", name: { en: "Custard", vi: "Sốt Custard" }, section: "kitchen", unit: "portion", prepCategory: "dessert", recipeId: "rc_custard" },
+
+  // Bar — par-tracked
+  { id: "st_white_rum", name: { en: "White Rum (Bacardi)", vi: "Rum Trắng (Bacardi)" }, section: "bar", unit: "bottle (700ml)", par: 4, costPerUnitVnd: 500000 },
+  { id: "st_dark_rum", name: { en: "Dark Rum", vi: "Rum Đen" }, section: "bar", unit: "bottle (700ml)", par: 2 },
+  { id: "st_spiced_rum", name: { en: "Spiced Rum", vi: "Rum Gia Vị" }, section: "bar", unit: "bottle (700ml)", par: 2 },
+  { id: "st_beer_huda", name: { en: "Beer — Huda", vi: "Bia Huda" }, section: "bar", unit: "can", par: 48, costPerUnitVnd: 25000 },
+  { id: "st_beer_tuborg", name: { en: "Beer — Tuborg Ice", vi: "Bia Tuborg Ice" }, section: "bar", unit: "can", par: 48, costPerUnitVnd: 35000 },
+  { id: "st_beer_kblanc", name: { en: "Beer — K Blanc", vi: "Bia K Blanc" }, section: "bar", unit: "can", par: 24, costPerUnitVnd: 45000 },
+  { id: "st_soft_drinks", name: { en: "Soft Drinks (Coke/Sprite/Fanta)", vi: "Nước Ngọt (Coke/Sprite/Fanta)" }, section: "bar", unit: "can", par: 60, costPerUnitVnd: 25000 },
+  { id: "st_water", name: { en: "Bottled Water", vi: "Nước Suối" }, section: "bar", unit: "bottle", par: 48, costPerUnitVnd: 15000 },
+  { id: "st_lime", name: { en: "Lime (garnish)", vi: "Chanh (trang trí)" }, section: "bar", unit: "kg", par: 2 },
+  { id: "st_mint", name: { en: "Mint (garnish)", vi: "Bạc Hà (trang trí)" }, section: "bar", unit: "bunch", par: 3 },
+  { id: "st_ginger_beer", name: { en: "Ginger Beer", vi: "Bia Gừng" }, section: "bar", unit: "bottle", par: 12 },
+];

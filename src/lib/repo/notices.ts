@@ -1,0 +1,51 @@
+import type { Notice, NoticeAck, Role, NoticePriority } from "@/lib/types";
+import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
+import { SEED_NOTICES } from "@/lib/seed/notices";
+
+const NOTICES_KEY = "notices";
+const ACKS_KEY = "notice_acks";
+
+export function ensureNoticesSeeded() {
+  if (isSeeded(NOTICES_KEY)) return;
+  writeList(NOTICES_KEY, SEED_NOTICES);
+  markSeeded(NOTICES_KEY);
+}
+
+export function getNotices(): Notice[] {
+  return readList<Notice>(NOTICES_KEY).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export function postNotice(
+  title: { en: string; vi: string },
+  body: { en: string; vi: string },
+  postedBy: string,
+  role: Role,
+  priority: NoticePriority
+) {
+  const all = readList<Notice>(NOTICES_KEY);
+  all.push({
+    id: newId("notice"),
+    title,
+    body,
+    postedBy,
+    role,
+    priority,
+    createdAt: new Date().toISOString(),
+  });
+  writeList(NOTICES_KEY, all);
+}
+
+export function getAcks(noticeId: string): NoticeAck[] {
+  return readList<NoticeAck>(ACKS_KEY).filter((a) => a.noticeId === noticeId);
+}
+
+export function isAckedBy(noticeId: string, staffName: string): boolean {
+  return getAcks(noticeId).some((a) => a.staffName === staffName);
+}
+
+export function ackNotice(noticeId: string, staffName: string) {
+  if (isAckedBy(noticeId, staffName)) return;
+  const all = readList<NoticeAck>(ACKS_KEY);
+  all.push({ noticeId, staffName, ackedAt: new Date().toISOString() });
+  writeList(ACKS_KEY, all);
+}
