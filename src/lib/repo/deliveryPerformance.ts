@@ -43,6 +43,16 @@ export function updatePlatformStats(platform: DeliveryPlatformId, patch: Partial
   writeList(STATS_KEY, all);
 }
 
+/**
+ * Seeded rows carry the epoch as a "never entered" marker, so a 1970 timestamp
+ * is not a real reading — these stats are hand-entered, and a stale number
+ * looks identical to a fresh one unless the date is shown next to it.
+ */
+export function getStatsUpdatedAt(stats: PlatformStats): string | null {
+  const t = new Date(stats.updatedAt).getTime();
+  return Number.isFinite(t) && t > 0 ? stats.updatedAt : null;
+}
+
 export function getBadgeRequirements(platform: DeliveryPlatformId): BadgeRequirement[] {
   return readList<BadgeRequirement>(BADGES_KEY).filter((b) => b.platform === platform);
 }

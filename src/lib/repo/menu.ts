@@ -1,4 +1,4 @@
-import type { MenuItem, MenuChannel, PrintedMaterial } from "@/lib/types";
+import type { MenuItem, MenuChannel, PrintedMaterial, Bi } from "@/lib/types";
 import { readList, writeList, readValue, writeValue, isSeeded, markSeeded, newId } from "@/lib/storage";
 import { SEED_MENU_ITEMS, SEED_PRINTED_MATERIALS } from "@/lib/seed/menu";
 
@@ -54,11 +54,13 @@ export function getMenuItems(activeOnly = true): MenuItem[] {
   return activeOnly ? all.filter((m) => m.active) : all;
 }
 
-export function addMenuItem(name: string, category: MenuItem["category"]): MenuItem {
+/** `recipeId` is what makes cost and margin work, so it's collected up front — an item added without it can be linked later with updateMenuItem. */
+export function addMenuItem(name: Bi, category: MenuItem["category"], recipeId?: string): MenuItem {
   const entry: MenuItem = {
     id: newId("menu"),
-    name: { en: name, vi: name },
+    name,
     category,
+    recipeId,
     pricesVnd: { dine_in: null, delivery: null, lunch_box: null },
     active: true,
     updatedAt: new Date().toISOString(),
@@ -67,6 +69,33 @@ export function addMenuItem(name: string, category: MenuItem["category"]): MenuI
   all.push(entry);
   writeList(MENU_KEY, all);
   return entry;
+}
+
+/**
+ * Edits everything about an item except its prices (those go through
+ * updateMenuItemPrice). A name or category change means the printed menu no
+ * longer matches, so it flags a reprint the same way a dine-in price change does.
+ */
+export function updateMenuItem(id: string, patch: { name?: Bi; category?: MenuItem["category"]; recipeId?: string }) {
+  const all = readList<MenuItem>(MENU_KEY);
+  const idx = all.findIndex((m) => m.id === id);
+  if (idx < 0) return;
+  const prev = all[idx];
+  all[idx] = { ...prev, ...patch, updatedAt: new Date().toISOString() };
+  writeList(MENU_KEY, all);
+  const nameChanged = patch.name !== undefined && (patch.name.en !== prev.name.en || patch.name.vi !== prev.name.vi);
+  const categoryChanged = patch.category !== undefined && patch.category !== prev.category;
+  if (nameChanged || categoryChanged) setReprintFlag(true);
+}
+
+/** Discontinued items are hidden, never deleted — old prices stay on record. Taking an item off the menu also means a reprint is due. */
+export function setMenuItemActive(id: string, active: boolean) {
+  const all = readList<MenuItem>(MENU_KEY);
+  const idx = all.findIndex((m) => m.id === id);
+  if (idx < 0 || all[idx].active === active) return;
+  all[idx] = { ...all[idx], active, updatedAt: new Date().toISOString() };
+  writeList(MENU_KEY, all);
+  setReprintFlag(true);
 }
 
 /** Editing a price flags a reprint is needed — cleared once the reprint is done. */

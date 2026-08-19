@@ -1,5 +1,6 @@
 import type { ContentPost, ContentPillar, KocOutreach, KocPlatform, KocTier, PlatformCampaign, CampaignPlatform } from "@/lib/types";
-import { readList, writeList, newId } from "@/lib/storage";
+import type { CampaignWindowState } from "@/lib/marketingLabels";
+import { readList, writeList, newId, todayIso, addDaysIso } from "@/lib/storage";
 
 const POSTS_KEY = "content_posts";
 const KOC_KEY = "koc_outreach";
@@ -49,8 +50,14 @@ export function getKocOutreach(): KocOutreach[] {
   return readList<KocOutreach>(KOC_KEY);
 }
 
-export function addKocOutreach(handle: string, platform: KocPlatform, tier: KocTier): KocOutreach {
-  const entry: KocOutreach = { id: newId("koc"), handle, platform, tier, status: "identified", wentLive: false };
+export function addKocOutreach(
+  handle: string,
+  platform: KocPlatform,
+  tier: KocTier,
+  compedMealCostVnd?: number,
+  notes?: string,
+): KocOutreach {
+  const entry: KocOutreach = { id: newId("koc"), handle, platform, tier, status: "identified", wentLive: false, compedMealCostVnd, notes };
   const all = readList<KocOutreach>(KOC_KEY);
   all.push(entry);
   writeList(KOC_KEY, all);
@@ -71,8 +78,14 @@ export function getPlatformCampaigns(): PlatformCampaign[] {
   return readList<PlatformCampaign>(CAMPAIGNS_KEY);
 }
 
-export function addPlatformCampaign(platform: CampaignPlatform, name: string): PlatformCampaign {
-  const entry: PlatformCampaign = { id: newId("camp"), platform, name, status: "upcoming" };
+export function addPlatformCampaign(
+  platform: CampaignPlatform,
+  name: string,
+  entryWindowStart?: string,
+  entryWindowEnd?: string,
+  notes?: string,
+): PlatformCampaign {
+  const entry: PlatformCampaign = { id: newId("camp"), platform, name, entryWindowStart, entryWindowEnd, notes, status: "upcoming" };
   const all = readList<PlatformCampaign>(CAMPAIGNS_KEY);
   all.push(entry);
   writeList(CAMPAIGNS_KEY, all);
@@ -85,4 +98,18 @@ export function updatePlatformCampaign(id: string, patch: Partial<Omit<PlatformC
   if (idx < 0) return;
   all[idx] = { ...all[idx], ...patch };
   writeList(CAMPAIGNS_KEY, all);
+}
+
+/** How many days out a window counts as "closing soon" — enough notice to still enter. */
+const WINDOW_CLOSING_SOON_DAYS = 3;
+
+/** Where today sits in a campaign's entry window. ISO dates compare correctly as strings, so no Date arithmetic is needed beyond addDaysIso. */
+export function getCampaignWindowState(campaign: PlatformCampaign, today: string = todayIso()): CampaignWindowState {
+  const start = campaign.entryWindowStart;
+  const end = campaign.entryWindowEnd;
+  if (!start && !end) return "none";
+  if (start && today < start) return "upcoming";
+  if (end && today > end) return "closed";
+  if (end && addDaysIso(today, WINDOW_CLOSING_SOON_DAYS) >= end) return "closing_soon";
+  return "open";
 }

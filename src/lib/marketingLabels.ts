@@ -9,11 +9,12 @@ export const PILLAR_LABEL: Record<ContentPillar, Bi> = {
 
 export const PILLAR_ORDER: ContentPillar[] = ["process_sensory", "interior_vibe", "roast_sunday", "lunch_box"];
 
+/** Platform names are brand names, so they read the same in both languages — only the catch-all needs a Vietnamese half. */
 export const KOC_PLATFORM_LABEL: Record<KocPlatform, string> = {
   instagram: "Instagram",
   tiktok: "TikTok",
   facebook: "Facebook",
-  other: "Other",
+  other: "Other · Khác",
 };
 
 export const KOC_TIER_LABEL: Record<KocTier, Bi> = {
@@ -35,7 +36,7 @@ export const KOC_STATUS_ORDER: KocContactStatus[] = ["identified", "contacted", 
 export const CAMPAIGN_PLATFORM_LABEL: Record<CampaignPlatform, string> = {
   grab: "Grab",
   shopeefood: "ShopeeFood",
-  other: "Other",
+  other: "Other · Khác",
 };
 
 export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, Bi> = {
@@ -46,3 +47,14 @@ export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, Bi> = {
 };
 
 export const CAMPAIGN_STATUS_ORDER: CampaignStatus[] = ["upcoming", "entered", "missed", "completed"];
+
+/** Where today sits relative to a campaign's entry window — a window that quietly closes is a missed campaign. */
+export type CampaignWindowState = "none" | "upcoming" | "open" | "closing_soon" | "closed";
+
+export const CAMPAIGN_WINDOW_LABEL: Record<CampaignWindowState, Bi> = {
+  none: { en: "No entry window set", vi: "Chưa đặt cửa sổ đăng ký" },
+  upcoming: { en: "Window not open yet", vi: "Chưa mở đăng ký" },
+  open: { en: "Window open", vi: "Đang mở đăng ký" },
+  closing_soon: { en: "Window closing soon", vi: "Sắp hết hạn đăng ký" },
+  closed: { en: "Window closed", vi: "Đã hết hạn đăng ký" },
+};
