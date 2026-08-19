@@ -11,6 +11,17 @@ export type ChangelogEntry = {
 // changed without having to ask.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.8",
+    date: "2026-08-19",
+    changes: [
+      {
+        en: "Fixed a bug where every \"previous/next day\" and weekly navigation button (Sales, Bookings, Stock, Usage Variance, Checklists history, Staff rota, Cleaning grid, Sample checks) could skip a day or fail to advance.",
+        vi: "Sửa lỗi các nút chuyển ngày/tuần (Doanh thu, Đặt bàn, Tồn kho, Chênh lệch sử dụng, Lịch sử danh sách công việc, Lịch làm nhân viên, Bảng vệ sinh, Kiểm tra mẫu lưu) có thể bị nhảy ngày hoặc không chuyển được.",
+      },
+      { en: "Added a What's New page (this one) showing version history.", vi: "Thêm trang Có Gì Mới (trang này) hiển thị lịch sử phiên bản." },
+    ],
+  },
+  {
     version: "1.7",
     date: "2026-08-19",
     changes: [
