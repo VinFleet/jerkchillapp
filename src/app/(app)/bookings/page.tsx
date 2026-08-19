@@ -362,7 +362,7 @@ function BookingRow({ booking, tables, onEdit, onStatus }: { booking: Booking; t
             </span>
           )}
         </button>
-        <Badge tone={STATUS_TONE[booking.status]}>{STATUS_LABEL[booking.status].en}</Badge>
+        <Badge tone={STATUS_TONE[booking.status]}>{STATUS_LABEL[booking.status].en} · {STATUS_LABEL[booking.status].vi}</Badge>
       </div>
       <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-border">
         {STATUS_ORDER.map((s) => (
@@ -373,7 +373,7 @@ function BookingRow({ booking, tables, onEdit, onStatus }: { booking: Booking; t
               booking.status === s ? "bg-brand text-white border-brand" : "border-border text-muted"
             }`}
           >
-            <span>{STATUS_LABEL[s].en}</span>
+            <span>{STATUS_LABEL[s].en} · {STATUS_LABEL[s].vi}</span>
             <span className="opacity-80 text-[10px]">{STATUS_LABEL[s].vi}</span>
           </button>
         ))}

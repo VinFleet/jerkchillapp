@@ -80,7 +80,7 @@ function ItemPicker({ items, onAdd }: { items: SupplyItem[]; onAdd: (item: Deliv
           className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
         />
         <Button type="button" variant="secondary" className="min-h-11 px-4" disabled={!selected || (isCustom && !customName.trim()) || !qty} onClick={add}>
-          <Plus size={16} /> Add
+          <Plus size={16} /> Add · Thêm
         </Button>
       </div>
     </div>
@@ -228,7 +228,7 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
       />
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"

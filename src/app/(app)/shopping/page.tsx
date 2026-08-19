@@ -237,7 +237,7 @@ function AddSupplyForm({ onAdded }: { onAdded: () => void }) {
       </div>
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={() => setOpen(false)}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"

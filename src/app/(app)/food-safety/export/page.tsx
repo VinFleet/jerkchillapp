@@ -287,7 +287,7 @@ function ExportContent() {
                 type === t ? "bg-brand text-white border-brand" : "border-border text-muted"
               }`}
             >
-              {FOOD_SAFETY_LOG_LABEL[t].en}
+              {FOOD_SAFETY_LOG_LABEL[t].en} · {FOOD_SAFETY_LOG_LABEL[t].vi}
             </button>
           ))}
         </div>

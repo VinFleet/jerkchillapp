@@ -103,7 +103,7 @@ export default function HomePage() {
                 <p className="font-bold text-sm text-danger">
                   {urgentUnread.length} urgent notice{urgentUnread.length > 1 ? "s" : ""} · thông báo khẩn
                 </p>
-                <p className="text-sm truncate text-danger/80">{urgentUnread[0].title.en}</p>
+                <p className="text-sm truncate text-danger/80">{urgentUnread[0].title.en} · {urgentUnread[0].title.vi}</p>
               </div>
               <ChevronRight size={18} className="text-danger shrink-0" />
             </Card>

@@ -23,7 +23,7 @@ import {
   addQuote,
   deleteQuote,
 } from "@/lib/repo/suppliers";
-import { SUPPLIER_CATEGORY_LABEL, SUPPLIER_STATUS_LABEL, SUPPLIER_STATUS_TONE } from "@/lib/supplierLabels";
+import { SUPPLIER_CATEGORY_LABEL, SUPPLIER_STATUS_LABEL, SUPPLIER_STATUS_TONE, EVALUATION_DECISION_LABEL } from "@/lib/supplierLabels";
 import { todayIso } from "@/lib/storage";
 import type { Supplier, RejectionRecord, SupplierEvaluation, SupplierCategory, EvaluationDecision, SupplierQuote } from "@/lib/types";
 
@@ -505,11 +505,11 @@ function AddEvaluationForm({ suppliers, onAdded, staffName }: { suppliers: Suppl
           <button
             key={d}
             onClick={() => setDecision(d)}
-            className={`flex-1 min-h-10 rounded-full text-xs font-semibold border-2 capitalize ${
+            className={`flex-1 min-h-11 rounded-full text-xs font-semibold border-2 ${
               decision === d ? "bg-brand text-white border-brand" : "border-border text-muted"
             }`}
           >
-            {d}
+            {EVALUATION_DECISION_LABEL[d].en} · {EVALUATION_DECISION_LABEL[d].vi}
           </button>
         ))}
       </div>
@@ -557,7 +557,7 @@ function EvaluationsTab({ suppliers, canEdit, staffName }: { suppliers: Supplier
               <p className="font-semibold text-sm">
                 {supplierName(e.supplierId)} · {e.period}
               </p>
-              <Badge tone={e.decision === "continue" ? "success" : e.decision === "review" ? "warning" : "danger"}>{e.decision}</Badge>
+              <Badge tone={e.decision === "continue" ? "success" : e.decision === "review" ? "warning" : "danger"}>{EVALUATION_DECISION_LABEL[e.decision].en} · {EVALUATION_DECISION_LABEL[e.decision].vi}</Badge>
             </div>
             <p className="text-xs text-muted">
               Quality {e.qualityScore}/5 · On-time {e.onTimeScore}/5 · Docs {e.docsOk ? "OK" : "Not OK"}

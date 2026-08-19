@@ -1,4 +1,4 @@
-import type { SupplierCategory, SupplierStatus, Bi } from "@/lib/types";
+import type { SupplierCategory, SupplierStatus, EvaluationDecision, Bi } from "@/lib/types";
 
 export const SUPPLIER_CATEGORY_LABEL: Record<SupplierCategory, Bi> = {
   grocery: { en: "Grocery & dry goods", vi: "Tạp hóa & hàng khô" },
@@ -19,4 +19,11 @@ export const SUPPLIER_STATUS_TONE: Record<SupplierStatus, "success" | "warning" 
   approved: "success",
   review: "warning",
   replace: "danger",
+};
+
+/** Periodic-evaluation outcome. Rendered raw as "continue"/"review"/"replace" before this — English only, and lowercase enum values at that. */
+export const EVALUATION_DECISION_LABEL: Record<EvaluationDecision, Bi> = {
+  continue: { en: "Continue", vi: "Tiếp tục" },
+  review: { en: "Review", vi: "Xem xét" },
+  replace: { en: "Replace", vi: "Thay thế" },
 };

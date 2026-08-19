@@ -28,6 +28,12 @@ const SEVERITY_TONE: Record<ComplaintSeverity, "success" | "warning" | "danger">
   high: "danger",
 };
 
+const SEVERITY_LABEL: Record<ComplaintSeverity, { en: string; vi: string }> = {
+  low: { en: "Low", vi: "Nhẹ" },
+  medium: { en: "Medium", vi: "Trung bình" },
+  high: { en: "High", vi: "Nghiêm trọng" },
+};
+
 function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: string }) {
   const [open, setOpen] = useState(false);
   const [guestName, setGuestName] = useState("");
@@ -91,11 +97,11 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
           <button
             key={s}
             onClick={() => setSeverity(s)}
-            className={`flex-1 min-h-10 rounded-full text-xs font-semibold border-2 capitalize ${
+            className={`flex-1 min-h-11 rounded-full text-xs font-semibold border-2 ${
               severity === s ? "bg-brand text-white border-brand" : "border-border text-muted"
             }`}
           >
-            {s}
+            {SEVERITY_LABEL[s].en} · {SEVERITY_LABEL[s].vi}
           </button>
         ))}
       </div>
@@ -116,7 +122,7 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
       </button>
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"
@@ -258,7 +264,7 @@ function ComplaintsContent() {
                 </div>
               </div>
               <p className="text-xs text-muted mb-1">
-                {c.date} · {c.loggedBy} · {CATEGORY_LABEL[c.category].en}
+                {c.date} · {c.loggedBy} · {CATEGORY_LABEL[c.category].en} · {CATEGORY_LABEL[c.category].vi}
               </p>
               <p className="text-sm">{c.description}</p>
               {c.reportedToAuthority && (

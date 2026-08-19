@@ -12,7 +12,7 @@ import { useSession } from "@/lib/auth/RoleContext";
 import { canManageSuppliers } from "@/lib/auth/permissions";
 import { getSupplier, updateSupplier, getRejections, getEvaluations, toggleSupplierDocItem } from "@/lib/repo/suppliers";
 import { getContactForSupplier, addContact, updateContact } from "@/lib/repo/contacts";
-import { SUPPLIER_CATEGORY_LABEL, SUPPLIER_STATUS_LABEL, SUPPLIER_STATUS_TONE } from "@/lib/supplierLabels";
+import { SUPPLIER_CATEGORY_LABEL, SUPPLIER_STATUS_LABEL, SUPPLIER_STATUS_TONE, EVALUATION_DECISION_LABEL } from "@/lib/supplierLabels";
 import type { Supplier, Contact, RejectionRecord, SupplierEvaluation } from "@/lib/types";
 
 function ContactSection({ supplier, canEdit, onChanged }: { supplier: Supplier; canEdit: boolean; onChanged: () => void }) {
@@ -105,7 +105,7 @@ function ContactSection({ supplier, canEdit, onChanged }: { supplier: Supplier; 
         <div className="space-y-2">
           {contact?.phone && (
             <a href={`tel:${contact.phone}`} className="flex items-center gap-3 text-sm">
-              <span className="w-9 h-9 rounded-xl bg-brand-light text-brand flex items-center justify-center shrink-0">
+              <span className="w-11 h-11 rounded-xl bg-brand-light text-brand flex items-center justify-center shrink-0">
                 <Phone size={16} />
               </span>
               {contact.phone}
@@ -113,7 +113,7 @@ function ContactSection({ supplier, canEdit, onChanged }: { supplier: Supplier; 
           )}
           {contact?.email && (
             <a href={`mailto:${contact.email}`} className="flex items-center gap-3 text-sm">
-              <span className="w-9 h-9 rounded-xl bg-brand-light text-brand flex items-center justify-center shrink-0">
+              <span className="w-11 h-11 rounded-xl bg-brand-light text-brand flex items-center justify-center shrink-0">
                 <Mail size={16} />
               </span>
               {contact.email}
@@ -126,7 +126,7 @@ function ContactSection({ supplier, canEdit, onChanged }: { supplier: Supplier; 
               rel="noopener noreferrer"
               className="flex items-center gap-3 text-sm"
             >
-              <span className="w-9 h-9 rounded-xl bg-brand-light text-brand flex items-center justify-center shrink-0">
+              <span className="w-11 h-11 rounded-xl bg-brand-light text-brand flex items-center justify-center shrink-0">
                 <Globe size={16} />
               </span>
               {contact.website}
@@ -293,7 +293,7 @@ function HistorySection({ supplierId }: { supplierId: string }) {
               <div key={e.id} className="pb-2 border-b border-border last:border-0 last:pb-0">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold">{e.period}</p>
-                  <Badge tone={e.decision === "continue" ? "success" : e.decision === "review" ? "warning" : "danger"}>{e.decision}</Badge>
+                  <Badge tone={e.decision === "continue" ? "success" : e.decision === "review" ? "warning" : "danger"}>{EVALUATION_DECISION_LABEL[e.decision].en} · {EVALUATION_DECISION_LABEL[e.decision].vi}</Badge>
                 </div>
                 <p className="text-xs text-muted">
                   Quality {e.qualityScore}/5 · On-time {e.onTimeScore}/5 · Docs {e.docsOk ? "OK" : "Not OK"}

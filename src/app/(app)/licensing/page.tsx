@@ -268,7 +268,7 @@ function LicenseCard({
       <div className="flex items-start justify-between gap-2 mb-1">
         <Bi value={license.name} className="font-semibold text-sm" />
         <Badge tone={meta.tone}>
-          <Icon size={12} /> {meta.label.en}
+          <Icon size={12} /> {meta.label.en} · {meta.label.vi}
         </Badge>
       </div>
       {license.notes && <Bi value={license.notes} className="text-xs text-muted" mode="inline" />}
