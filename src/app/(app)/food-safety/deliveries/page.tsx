@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { BigCheckbox } from "@/components/ui/BigCheckbox";
 import { PhotoField } from "@/components/ui/PhotoField";
+import { SignaturePad } from "@/components/ui/SignaturePad";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
 import { getDeliveryLogs, logDelivery } from "@/lib/repo/foodSafety";
@@ -98,6 +99,7 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
   const [reason, setReason] = useState("");
   const [invoicePhoto, setInvoicePhoto] = useState<string[]>([]);
   const [productPhotos, setProductPhotos] = useState<string[]>([]);
+  const [signature, setSignature] = useState("");
   const [allSupplyItems, setAllSupplyItems] = useState<SupplyItem[]>([]);
 
   useEffect(() => {
@@ -128,6 +130,7 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
     setReason("");
     setInvoicePhoto([]);
     setProductPhotos([]);
+    setSignature("");
     setOpen(false);
   };
 
@@ -218,13 +221,18 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
           className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-3 text-sm focus:outline-none focus:border-brand"
         />
       )}
+      <SignaturePad
+        label={{ en: `Sign to confirm the check — ${staffName}`, vi: `Ký xác nhận đã kiểm tra — ${staffName}` }}
+        value={signature}
+        onChange={setSignature}
+      />
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
           Cancel
         </Button>
         <Button
           className="flex-1"
-          disabled={!supplierId || items.length === 0}
+          disabled={!supplierId || items.length === 0 || !signature}
           onClick={() => {
             logDelivery({
               supplierId,
@@ -240,6 +248,7 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
               supplierNotified: accepted ? undefined : false,
               invoicePhoto: invoicePhoto[0],
               productPhotos: productPhotos.length > 0 ? productPhotos : undefined,
+              signature,
               loggedBy: staffName,
             });
             reset();
@@ -392,6 +401,13 @@ function DeliveriesContent() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img key={i} src={src} alt="Product" className="w-16 h-16 rounded-lg object-cover border border-border" />
                   ))}
+                </div>
+              )}
+              {log.signature && (
+                <div className="mt-2 pt-2 border-t border-border">
+                  <p className="text-xs text-muted mb-1">Signed by {log.loggedBy} · Chữ ký của {log.loggedBy}</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={log.signature} alt="Signature" className="h-10 bg-white rounded border border-border" />
                 </div>
               )}
               {!log.accepted && canEnter && <RejectionNudge log={log} staffName={session.name} onLogged={refresh} />}
