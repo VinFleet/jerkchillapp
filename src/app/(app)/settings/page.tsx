@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { useSession } from "@/lib/auth/RoleContext";
 import { getSettings, updateSettings } from "@/lib/repo/settings";
+import { CURRENT_VERSION } from "@/lib/changelog";
 import type { AppSettings } from "@/lib/types";
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (next: boolean) => void }) {
@@ -68,6 +70,9 @@ function SettingsContent() {
             }}
           />
         </Card>
+        <Link href="/changelog" className="block text-center text-xs text-muted mt-4">
+          App version v{CURRENT_VERSION} · What&apos;s new · Có gì mới
+        </Link>
       </div>
     </div>
   );

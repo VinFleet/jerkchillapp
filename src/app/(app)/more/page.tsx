@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { Settings, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canAccessModule } from "@/lib/auth/permissions";
 import { NAV_ITEMS, MOBILE_PRIMARY_MODULES } from "@/lib/nav";
+import { CURRENT_VERSION } from "@/lib/changelog";
 
 export default function MorePage() {
   const { session } = useSession();
@@ -46,6 +47,16 @@ export default function MorePage() {
               <Bi value={{ en: "Settings", vi: "Cài đặt" }} className="text-sm font-semibold mt-2" />
             </Link>
           )}
+          <Link
+            href="/changelog"
+            className="min-h-24 bg-surface border border-border rounded-2xl p-4 flex flex-col items-start justify-between active:bg-brand-light transition-colors"
+          >
+            <Sparkles size={24} className="text-brand" />
+            <div>
+              <Bi value={{ en: "What's New", vi: "Có Gì Mới" }} className="text-sm font-semibold" />
+              <p className="text-xs text-muted mt-0.5">v{CURRENT_VERSION}</p>
+            </div>
+          </Link>
         </div>
       </div>
     </div>

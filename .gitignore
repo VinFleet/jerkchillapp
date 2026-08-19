@@ -34,3 +34,6 @@ next-env.d.ts
 /public/worker-*.js
 /public/sw.js.map
 /public/workbox-*.js.map
+
+# local agent runtime state
+/.claude/scheduled_tasks.lock
