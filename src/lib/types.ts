@@ -490,6 +490,8 @@ export type StaffMember = {
   name: string;
   role: string;
   phone?: string;
+  /** Used to address the emailed rota — optional, not every staff member has one. */
+  email?: string;
   startDate?: string;
   dayOff?: Weekday;
   /** VND per hour — Owner-only visibility, enforced in the UI, not just hidden. */

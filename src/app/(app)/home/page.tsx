@@ -15,7 +15,7 @@ import { getReorderFlags } from "@/lib/repo/planner";
 import { getOutOfRangeCount, getOverdueSamples, getOpenPestCount } from "@/lib/repo/foodSafety";
 import { getLicensesNeedingAttention } from "@/lib/repo/licensing";
 import { getReprintFlag } from "@/lib/repo/menu";
-import { getExpiringHealthCerts } from "@/lib/repo/staff";
+import { getExpiringHealthCerts, getExpiringTraining } from "@/lib/repo/staff";
 import { getShoppingList } from "@/lib/repo/shopping";
 import { getBlockersCount } from "@/lib/repo/deliveryPerformance";
 import { getBookingsForDate } from "@/lib/bookings/repo";
@@ -42,6 +42,7 @@ export default function HomePage() {
   const [licensesNeeding, setLicensesNeeding] = useState(0);
   const [reprintNeeded, setReprintNeeded] = useState(false);
   const [healthCertsExpiring, setHealthCertsExpiring] = useState(0);
+  const [trainingDue, setTrainingDue] = useState(0);
   const [shoppingListCount, setShoppingListCount] = useState(0);
   const [deliveryBlockers, setDeliveryBlockers] = useState(0);
   const [bookingsToday, setBookingsToday] = useState(0);
@@ -68,6 +69,7 @@ export default function HomePage() {
       setLicensesNeeding(getLicensesNeedingAttention().length);
       setReprintNeeded(getReprintFlag());
       setHealthCertsExpiring(getExpiringHealthCerts().length);
+      setTrainingDue(getExpiringTraining().length);
       setShoppingListCount(getShoppingList().length);
       setDeliveryBlockers(getBlockersCount("grab") + getBlockersCount("shopeefood"));
     }
@@ -185,6 +187,17 @@ export default function HomePage() {
             <Card className="border-warning/40 bg-warning-tint flex items-center justify-between">
               <p className="text-sm font-semibold text-warning">
                 {healthCertsExpiring} health cert{healthCertsExpiring > 1 ? "s" : ""} expiring soon · sắp hết hạn
+              </p>
+              <ChevronRight size={18} className="text-warning shrink-0" />
+            </Card>
+          </Link>
+        )}
+
+        {trainingDue > 0 && (
+          <Link href="/staff">
+            <Card className="border-warning/40 bg-warning-tint flex items-center justify-between">
+              <p className="text-sm font-semibold text-warning">
+                {trainingDue} training refresher{trainingDue > 1 ? "s" : ""} due · cần đào tạo lại
               </p>
               <ChevronRight size={18} className="text-warning shrink-0" />
             </Card>

@@ -16,6 +16,7 @@ import type {
 } from "@/lib/types";
 import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso } from "@/lib/storage";
 import { INDUCTION_STEPS } from "@/lib/types";
+import type { StaffRole } from "@/lib/staffLabels";
 import { SEED_QUESTIONS, SEED_STAFF_MEMBERS } from "@/lib/seed/staff";
 
 const STAFF_KEY = "staff_members";
@@ -51,8 +52,13 @@ export function getStaffMember(id: string): StaffMember | undefined {
   return readList<StaffMember>(STAFF_KEY).find((s) => s.id === id);
 }
 
-export function addStaffMember(name: string, role: string): StaffMember {
-  const entry: StaffMember = { id: newId("staff"), name, role, active: true };
+export function findStaffByName(name: string): StaffMember | undefined {
+  const needle = name.trim().toLowerCase();
+  return readList<StaffMember>(STAFF_KEY).find((s) => s.name.trim().toLowerCase() === needle);
+}
+
+export function addStaffMember(name: string, role: StaffRole, email?: string, phone?: string): StaffMember {
+  const entry: StaffMember = { id: newId("staff"), name, role, email, phone, active: true };
   const all = readList<StaffMember>(STAFF_KEY);
   all.push(entry);
   writeList(STAFF_KEY, all);
@@ -65,6 +71,20 @@ export function updateStaffMember(id: string, patch: Partial<Omit<StaffMember, "
   if (idx < 0) return;
   all[idx] = { ...all[idx], ...patch };
   writeList(STAFF_KEY, all);
+}
+
+/**
+ * Someone who leaves is deactivated, never deleted — the rota, wages and
+ * reminders drop them, but their induction, training and food-safety-relevant
+ * records stay on file.
+ */
+export function setStaffActive(id: string, active: boolean) {
+  updateStaffMember(id, { active });
+}
+
+/** Reminders should stop when someone leaves, so they're scoped to active staff. */
+function activeStaffIds(): Set<string> {
+  return new Set(getStaff(true).map((s) => s.id));
 }
 
 // ---------- Rota ----------
@@ -188,6 +208,35 @@ export function logTraining(staffId: string, topic: string, loggedBy: string, re
   return entry;
 }
 
+/**
+ * Training due for a refresher, mirroring `getExpiringHealthCerts` — refresher
+ * dates were being captured and then never checked by anything.
+ *
+ * Only the newest record per staff member + topic counts: re-running a training
+ * writes a fresh record, and the superseded one's past due date would otherwise
+ * nag forever.
+ */
+export function getExpiringTraining(
+  leadDays = 30,
+  today = todayIso()
+): { staffId: string; topic: string; refresherDue: string }[] {
+  const leadIso = addDaysIso(today, leadDays);
+  const active = activeStaffIds();
+  const latest = new Map<string, TrainingRecord>();
+  for (const t of readList<TrainingRecord>(TRAINING_KEY)) {
+    const key = `${t.staffId}::${t.topic.trim().toLowerCase()}`;
+    const seen = latest.get(key);
+    if (!seen || seen.date < t.date) latest.set(key, t);
+  }
+  return [...latest.values()]
+    .filter(
+      (t): t is TrainingRecord & { refresherDue: string } =>
+        t.refresherDue !== undefined && t.refresherDue <= leadIso && active.has(t.staffId)
+    )
+    .map((t) => ({ staffId: t.staffId, topic: t.topic, refresherDue: t.refresherDue }))
+    .sort((a, b) => (a.refresherDue < b.refresherDue ? -1 : 1));
+}
+
 // ---------- Health certificate ----------
 
 export function getHealthCert(staffId: string): HealthCert {
@@ -204,8 +253,10 @@ export function updateHealthCert(staffId: string, patch: Partial<Omit<HealthCert
 
 export function getExpiringHealthCerts(leadDays = 30, today = todayIso()): { staffId: string; expiryDate: string }[] {
   const leadIso = addDaysIso(today, leadDays);
+  const active = activeStaffIds();
   return readList<HealthCert>(HEALTH_KEY).filter(
-    (h): h is { staffId: string; expiryDate: string } => h.expiryDate !== null && h.expiryDate <= leadIso
+    (h): h is { staffId: string; expiryDate: string } =>
+      h.expiryDate !== null && h.expiryDate <= leadIso && active.has(h.staffId)
   );
 }
 
@@ -215,7 +266,7 @@ export function getCandidates(): Candidate[] {
   return readList<Candidate>(CANDIDATES_KEY).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-export function addCandidate(name: string, roleApplied: string, phone?: string, cvNote?: string): Candidate {
+export function addCandidate(name: string, roleApplied: StaffRole, phone?: string, cvNote?: string): Candidate {
   const entry: Candidate = {
     id: newId("cand"),
     name,
@@ -239,12 +290,22 @@ export function updateCandidateStatus(id: string, status: CandidateStatus) {
   writeList(CANDIDATES_KEY, all);
 }
 
+/**
+ * Closes the hiring loop — marking someone hired used to dead-end there,
+ * leaving the new starter out of the directory, rota and induction checklist.
+ * Returns undefined if they're already in the directory.
+ */
+export function addStaffFromCandidate(candidate: Candidate): StaffMember | undefined {
+  if (findStaffByName(candidate.name)) return undefined;
+  return addStaffMember(candidate.name, candidate.roleApplied as StaffRole, undefined, candidate.phone);
+}
+
 export function getQuestionBank(role?: string): QuestionBankItem[] {
   const all = readList<QuestionBankItem>(QUESTIONS_KEY);
   return role ? all.filter((q) => q.role === role) : all;
 }
 
-export function addQuestion(role: string, en: string, vi: string): QuestionBankItem {
+export function addQuestion(role: StaffRole, en: string, vi: string): QuestionBankItem {
   const entry: QuestionBankItem = { id: newId("q"), role, question: { en, vi } };
   const all = readList<QuestionBankItem>(QUESTIONS_KEY);
   all.push(entry);

@@ -1,9 +1,16 @@
 import type { QuestionBankItem, StaffMember } from "@/lib/types";
+import type { StaffRole } from "@/lib/staffLabels";
+
+// The seed roles are pinned to the fixed role list, not free text — the
+// scorecard matches a candidate's role against the question bank by exact
+// string, so a drifted seed value would silently produce an empty scorecard.
+type SeededStaff = Omit<StaffMember, "role"> & { role: StaffRole };
+type SeededQuestion = Omit<QuestionBankItem, "role"> & { role: StaffRole };
 
 // Real roster structure from OPERATIONS_AND_FOOD_SAFETY_DATA.md Part D — day
 // off per role is known, but real staff names aren't, so these seed as
 // named placeholders the Owner fills in, not invented people.
-export const SEED_STAFF_MEMBERS: StaffMember[] = [
+export const SEED_STAFF_MEMBERS: SeededStaff[] = [
   { id: "staff_head_chef", name: "Head Chef (add name)", role: "Chef / Kitchen", dayOff: "mon", active: true },
   { id: "staff_kitchen_1", name: "Kitchen Assistant 1 (add name)", role: "Chef / Kitchen", dayOff: "tue", active: true },
   { id: "staff_kitchen_2", name: "Kitchen Assistant 2 (add name)", role: "Chef / Kitchen", dayOff: "wed", active: true },
@@ -12,7 +19,7 @@ export const SEED_STAFF_MEMBERS: StaffMember[] = [
 // A starter question bank per role — reusable, tailor per candidate. Not
 // staff records, just an interview template, so safe to pre-fill.
 
-export const SEED_QUESTIONS: QuestionBankItem[] = [
+export const SEED_QUESTIONS: SeededQuestion[] = [
   { id: "q_kitchen_1", role: "Chef / Kitchen", question: { en: "Tell me about a time service got slammed — what did you do?", vi: "Kể về lúc bếp quá tải — bạn đã làm gì?" } },
   { id: "q_kitchen_2", role: "Chef / Kitchen", question: { en: "How do you handle a dish sent back by a guest?", vi: "Bạn xử lý thế nào khi món ăn bị khách trả lại?" } },
   { id: "q_kitchen_3", role: "Chef / Kitchen", question: { en: "What food safety habits do you never skip?", vi: "Thói quen an toàn thực phẩm nào bạn không bao giờ bỏ qua?" } },

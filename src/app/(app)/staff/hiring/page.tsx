@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, ChevronDown, ChevronUp, CheckCircle2, UserPlus } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { BackLink } from "@/components/BackLink";
 import { PageHeader } from "@/components/PageHeader";
+import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -13,12 +14,22 @@ import {
   getCandidates,
   addCandidate,
   updateCandidateStatus,
+  addStaffFromCandidate,
+  findStaffByName,
   getQuestionBank,
   addQuestion,
   getScorecards,
   addScorecard,
 } from "@/lib/repo/staff";
-import { CANDIDATE_STATUS_LABEL, CANDIDATE_STATUS_ORDER } from "@/lib/staffLabels";
+import {
+  CANDIDATE_STATUS_LABEL,
+  CANDIDATE_STATUS_ORDER,
+  STAFF_ROLES,
+  STAFF_ROLE_LABEL,
+  DEFAULT_STAFF_ROLE,
+  staffRoleLabel,
+} from "@/lib/staffLabels";
+import type { StaffRole } from "@/lib/staffLabels";
 import type { Candidate, CandidateStatus, QuestionBankItem, InterviewScorecard, ScorecardEntry } from "@/lib/types";
 
 const STATUS_TONE: Record<CandidateStatus, "muted" | "warning" | "brand" | "success" | "danger"> = {
@@ -32,7 +43,7 @@ const STATUS_TONE: Record<CandidateStatus, "muted" | "warning" | "brand" | "succ
 function AddCandidateForm({ onAdded }: { onAdded: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [roleApplied, setRoleApplied] = useState("");
+  const [roleApplied, setRoleApplied] = useState<StaffRole>(DEFAULT_STAFF_ROLE);
   const [phone, setPhone] = useState("");
   const [cvNote, setCvNote] = useState("");
 
@@ -49,7 +60,7 @@ function AddCandidateForm({ onAdded }: { onAdded: () => void }) {
 
   const reset = () => {
     setName("");
-    setRoleApplied("");
+    setRoleApplied(DEFAULT_STAFF_ROLE);
     setPhone("");
     setCvNote("");
     setOpen(false);
@@ -64,12 +75,18 @@ function AddCandidateForm({ onAdded }: { onAdded: () => void }) {
         placeholder="Name · Tên"
         className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
       />
-      <input
+      <label className="text-xs text-muted">Role applied for · Vị trí ứng tuyển</label>
+      <select
         value={roleApplied}
-        onChange={(e) => setRoleApplied(e.target.value)}
-        placeholder="Role applied for · Vị trí ứng tuyển"
-        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
-      />
+        onChange={(e) => setRoleApplied(e.target.value as StaffRole)}
+        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 mt-1 text-sm bg-surface focus:outline-none focus:border-brand"
+      >
+        {STAFF_ROLES.map((r) => (
+          <option key={r} value={r}>
+            {STAFF_ROLE_LABEL[r].en} · {STAFF_ROLE_LABEL[r].vi}
+          </option>
+        ))}
+      </select>
       <input
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
@@ -84,13 +101,13 @@ function AddCandidateForm({ onAdded }: { onAdded: () => void }) {
       />
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"
-          disabled={!name.trim() || !roleApplied.trim()}
+          disabled={!name.trim()}
           onClick={() => {
-            addCandidate(name.trim(), roleApplied.trim(), phone.trim() || undefined, cvNote.trim() || undefined);
+            addCandidate(name.trim(), roleApplied, phone.trim() || undefined, cvNote.trim() || undefined);
             reset();
             onAdded();
           }}
@@ -108,7 +125,11 @@ function ScorecardForm({ candidate, interviewer, onSaved }: { candidate: Candida
   const [note, setNote] = useState("");
 
   if (questions.length === 0) {
-    return <p className="text-xs text-muted">No questions in the bank for &ldquo;{candidate.roleApplied}&rdquo; yet.</p>;
+    return (
+      <p className="text-xs text-muted">
+        No questions in the bank for &ldquo;{candidate.roleApplied}&rdquo; yet · Chưa có câu hỏi cho vị trí này
+      </p>
+    );
   }
 
   return (
@@ -160,6 +181,9 @@ function ScorecardForm({ candidate, interviewer, onSaved }: { candidate: Candida
 function CandidateCard({ candidate, interviewer, onChanged }: { candidate: Candidate; interviewer: string; onChanged: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const [scorecards, setScorecards] = useState<InterviewScorecard[]>([]);
+  // Marking someone hired used to be the end of the trail — this is what
+  // tells us whether they've actually been carried into the directory yet.
+  const inDirectory = candidate.status === "hired" && !!findStaffByName(candidate.name);
 
   useEffect(() => {
     if (expanded) setScorecards(getScorecards(candidate.id));
@@ -168,14 +192,20 @@ function CandidateCard({ candidate, interviewer, onChanged }: { candidate: Candi
   return (
     <Card>
       <button className="w-full flex items-center justify-between gap-2 text-left" onClick={() => setExpanded((e) => !e)}>
-        <div>
+        <div className="min-w-0">
           <p className="font-semibold text-sm">{candidate.name}</p>
-          <p className="text-xs text-muted">{candidate.roleApplied}</p>
+          <p className="text-xs text-muted">
+            <Bi value={staffRoleLabel(candidate.roleApplied)} mode="inline" />
+          </p>
+          <Badge tone={STATUS_TONE[candidate.status]} className="mt-1">
+            {CANDIDATE_STATUS_LABEL[candidate.status].en} · {CANDIDATE_STATUS_LABEL[candidate.status].vi}
+          </Badge>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Badge tone={STATUS_TONE[candidate.status]}>{CANDIDATE_STATUS_LABEL[candidate.status].en}</Badge>
-          {expanded ? <ChevronUp size={18} className="text-muted" /> : <ChevronDown size={18} className="text-muted" />}
-        </div>
+        {expanded ? (
+          <ChevronUp size={18} className="text-muted shrink-0" />
+        ) : (
+          <ChevronDown size={18} className="text-muted shrink-0" />
+        )}
       </button>
 
       {expanded && (
@@ -191,14 +221,32 @@ function CandidateCard({ candidate, interviewer, onChanged }: { candidate: Candi
                   updateCandidateStatus(candidate.id, s);
                   onChanged();
                 }}
-                className={`min-h-9 px-3 rounded-full text-xs font-semibold border-2 ${
+                className={`min-h-11 px-3 rounded-full text-xs font-semibold border-2 ${
                   candidate.status === s ? "bg-brand text-white border-brand" : "border-border text-muted"
                 }`}
               >
-                {CANDIDATE_STATUS_LABEL[s].en}
+                {CANDIDATE_STATUS_LABEL[s].en} · {CANDIDATE_STATUS_LABEL[s].vi}
               </button>
             ))}
           </div>
+
+          {candidate.status === "hired" &&
+            (inDirectory ? (
+              <p className="text-sm text-success flex items-center gap-2">
+                <CheckCircle2 size={16} className="shrink-0" /> In the staff directory · Đã có trong danh sách nhân viên
+              </p>
+            ) : (
+              <Button
+                variant="secondary"
+                className="w-full min-h-12 text-sm"
+                onClick={() => {
+                  addStaffFromCandidate(candidate);
+                  onChanged();
+                }}
+              >
+                <UserPlus size={16} className="shrink-0" /> Add to staff directory · Thêm vào danh sách nhân viên
+              </Button>
+            ))}
 
           {scorecards.length > 0 && (
             <div className="space-y-2">
@@ -207,7 +255,7 @@ function CandidateCard({ candidate, interviewer, onChanged }: { candidate: Candi
                 const avg = sc.scores.reduce((sum, s) => sum + s.score, 0) / sc.scores.length;
                 return (
                   <div key={sc.id} className="text-sm">
-                    {sc.interviewer} · {sc.date} · avg {avg.toFixed(1)}/5
+                    {sc.interviewer} · {sc.date} · avg · TB {avg.toFixed(1)}/5
                     {sc.overallNote && <span className="text-muted"> — {sc.overallNote}</span>}
                   </div>
                 );
@@ -234,7 +282,7 @@ function CandidateCard({ candidate, interviewer, onChanged }: { candidate: Candi
 function QuestionBankSection() {
   const [open, setOpen] = useState(false);
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
-  const [role, setRole] = useState("");
+  const [role, setRole] = useState<StaffRole>(DEFAULT_STAFF_ROLE);
   const [en, setEn] = useState("");
   const [vi, setVi] = useState("");
 
@@ -259,7 +307,9 @@ function QuestionBankSection() {
         <div className="mt-3 pt-3 border-t border-border space-y-3">
           {Object.entries(grouped).map(([r, qs]) => (
             <div key={r}>
-              <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">{r}</p>
+              <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">
+                <Bi value={staffRoleLabel(r)} mode="inline" />
+              </p>
               {qs.map((q) => (
                 <p key={q.id} className="text-sm mb-1">
                   {q.question.en} <span className="text-muted">· {q.question.vi}</span>
@@ -268,12 +318,18 @@ function QuestionBankSection() {
             </div>
           ))}
           <div className="pt-2 border-t border-border">
-            <input
+            <label className="text-xs text-muted">Role · Vai trò</label>
+            <select
               value={role}
-              onChange={(e) => setRole(e.target.value)}
-              placeholder="Role · Vai trò"
-              className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
-            />
+              onChange={(e) => setRole(e.target.value as StaffRole)}
+              className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-2 mt-1 text-sm bg-surface focus:outline-none focus:border-brand"
+            >
+              {STAFF_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {STAFF_ROLE_LABEL[r].en} · {STAFF_ROLE_LABEL[r].vi}
+                </option>
+              ))}
+            </select>
             <input
               value={en}
               onChange={(e) => setEn(e.target.value)}
@@ -288,10 +344,10 @@ function QuestionBankSection() {
             />
             <Button
               className="w-full min-h-11 text-sm"
-              disabled={!role.trim() || !en.trim() || !vi.trim()}
+              disabled={!en.trim() || !vi.trim()}
               onClick={() => {
-                addQuestion(role.trim(), en.trim(), vi.trim());
-                setRole("");
+                addQuestion(role, en.trim(), vi.trim());
+                setRole(DEFAULT_STAFF_ROLE);
                 setEn("");
                 setVi("");
                 refresh();
