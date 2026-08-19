@@ -18,14 +18,8 @@ import {
   addChecklistItem,
   getCompletion,
 } from "@/lib/repo/checklists";
-import { todayIso } from "@/lib/storage";
+import { todayIso, addDaysIso } from "@/lib/storage";
 import type { ChecklistArea, ChecklistShift, ChecklistItem, ChecklistTick } from "@/lib/types";
-
-function shiftDate(iso: string, days: number): string {
-  const d = new Date(iso + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 function DateNav({ date, onChange }: { date: string; onChange: (next: string) => void }) {
   const today = todayIso();
@@ -33,7 +27,7 @@ function DateNav({ date, onChange }: { date: string; onChange: (next: string) =>
   return (
     <div className="flex items-center gap-2 mb-3 print:hidden">
       <button
-        onClick={() => onChange(shiftDate(date, -1))}
+        onClick={() => onChange(addDaysIso(date, -1))}
         className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0"
         aria-label="Previous day"
       >
@@ -47,7 +41,7 @@ function DateNav({ date, onChange }: { date: string; onChange: (next: string) =>
         className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm text-center focus:outline-none focus:border-brand"
       />
       <button
-        onClick={() => !isToday && onChange(shiftDate(date, 1))}
+        onClick={() => !isToday && onChange(addDaysIso(date, 1))}
         disabled={isToday}
         className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0 disabled:opacity-40"
         aria-label="Next day"

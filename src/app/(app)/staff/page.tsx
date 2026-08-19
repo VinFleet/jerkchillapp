@@ -19,7 +19,7 @@ import {
   weekDatesFrom,
   mondayOf,
 } from "@/lib/repo/staff";
-import { todayIso } from "@/lib/storage";
+import { todayIso, addDaysIso } from "@/lib/storage";
 import type { StaffMember } from "@/lib/types";
 
 type Tab = "directory" | "rota" | "wages";
@@ -110,11 +110,7 @@ function DirectoryTab({ staff, canEdit, onAdded }: { staff: StaffMember[]; canEd
 }
 
 function WeekNav({ monday, onChange }: { monday: string; onChange: (m: string) => void }) {
-  const shift = (days: number) => {
-    const d = new Date(monday + "T00:00:00");
-    d.setDate(d.getDate() + days);
-    onChange(d.toISOString().slice(0, 10));
-  };
+  const shift = (days: number) => onChange(addDaysIso(monday, days));
   const dates = weekDatesFrom(monday);
   return (
     <div className="flex items-center gap-2 mb-4">

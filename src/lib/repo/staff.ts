@@ -14,7 +14,7 @@ import type {
   InterviewScorecard,
   ScorecardEntry,
 } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId, todayIso } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso } from "@/lib/storage";
 import { INDUCTION_STEPS } from "@/lib/types";
 import { SEED_QUESTIONS, SEED_STAFF_MEMBERS } from "@/lib/seed/staff";
 
@@ -106,20 +106,14 @@ export function shiftHours(shift: ShiftEntry): number {
 }
 
 export function weekDatesFrom(mondayIso: string): string[] {
-  const d = new Date(mondayIso + "T00:00:00");
-  return Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(d);
-    day.setDate(d.getDate() + i);
-    return day.toISOString().slice(0, 10);
-  });
+  return Array.from({ length: 7 }, (_, i) => addDaysIso(mondayIso, i));
 }
 
 export function mondayOf(dateIso: string): string {
   const d = new Date(dateIso + "T00:00:00");
   const dow = d.getDay();
   const diff = dow === 0 ? -6 : 1 - dow;
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().slice(0, 10);
+  return addDaysIso(dateIso, diff);
 }
 
 // ---------- Induction ----------
@@ -209,9 +203,7 @@ export function setHealthCertExpiry(staffId: string, expiryDate: string) {
 }
 
 export function getExpiringHealthCerts(leadDays = 30, today = todayIso()): { staffId: string; expiryDate: string }[] {
-  const lead = new Date(today);
-  lead.setDate(lead.getDate() + leadDays);
-  const leadIso = lead.toISOString().slice(0, 10);
+  const leadIso = addDaysIso(today, leadDays);
   return readList<HealthCert>(HEALTH_KEY).filter(
     (h): h is { staffId: string; expiryDate: string } => h.expiryDate !== null && h.expiryDate <= leadIso
   );

@@ -1,5 +1,5 @@
 import type { OrderingMeta, SupplyItem } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId, todayIso } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso } from "@/lib/storage";
 import { SEED_SUPPLY_ITEMS } from "@/lib/seed/shopping";
 import { getStockItems, getBarOnHand } from "@/lib/repo/stock";
 import { getSuppliers } from "@/lib/repo/suppliers";
@@ -141,9 +141,7 @@ export function getUnconfirmedPricingCount(): number {
 
 /** Items not ordered in a long time — candidates for cleanup (dead SKU, or the supplier link is stale). */
 export function getStaleOrderItems(staleDays = 60, today = todayIso()): ShoppingListRow[] {
-  const cutoff = new Date(today);
-  cutoff.setDate(cutoff.getDate() - staleDays);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const cutoffIso = addDaysIso(today, -staleDays);
   return getShoppingList().filter((r) => !r.lastOrderedAt || r.lastOrderedAt < cutoffIso);
 }
 

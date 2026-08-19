@@ -16,7 +16,7 @@ import {
   getWasteStreak,
 } from "@/lib/repo/stock";
 import { suggestQuantity } from "@/lib/repo/planner";
-import { todayIso } from "@/lib/storage";
+import { todayIso, addDaysIso } from "@/lib/storage";
 import type { StockDayEntry, StockItem, StockSection, PrepCategory } from "@/lib/types";
 
 const PREP_CATEGORY_LABEL: Record<PrepCategory, { en: string; vi: string }> = {
@@ -25,24 +25,18 @@ const PREP_CATEGORY_LABEL: Record<PrepCategory, { en: string; vi: string }> = {
   dessert: { en: "Desserts", vi: "Tráng miệng" },
 };
 
-function shiftDate(date: string, days: number): string {
-  const d = new Date(date + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 function DateNav({ date, onChange }: { date: string; onChange: (d: string) => void }) {
   const isToday = date === todayIso();
   return (
     <div className="flex items-center gap-2 px-4 md:px-8">
-      <button onClick={() => onChange(shiftDate(date, -1))} className="p-2 text-brand" aria-label="Previous day">
+      <button onClick={() => onChange(addDaysIso(date, -1))} className="p-2 text-brand" aria-label="Previous day">
         <ChevronLeft size={20} />
       </button>
       <span className="font-semibold text-sm flex-1 text-center">
         {date} {isToday && <span className="text-brand">· Today / Hôm nay</span>}
       </span>
       <button
-        onClick={() => !isToday && onChange(shiftDate(date, 1))}
+        onClick={() => !isToday && onChange(addDaysIso(date, 1))}
         disabled={isToday}
         className="p-2 text-brand disabled:opacity-30"
         aria-label="Next day"

@@ -63,3 +63,16 @@ export function todayIso(): string {
   const tz = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - tz).toISOString().slice(0, 10);
 }
+
+/**
+ * Add (or subtract) days from a YYYY-MM-DD date, in local time. Re-applying
+ * the timezone offset before toISOString() is required — without it, any
+ * timezone ahead of UTC (e.g. Vietnam, UTC+7) silently loses a day, because
+ * local midnight is already the previous UTC calendar date.
+ */
+export function addDaysIso(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tz).toISOString().slice(0, 10);
+}

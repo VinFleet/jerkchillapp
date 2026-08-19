@@ -10,7 +10,7 @@ import { Bi } from "@/components/Bi";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
 import { getCleaningTasks, isCleaningSignedOff, signOffCleaning, undoCleaningSignoff } from "@/lib/repo/foodSafety";
-import { todayIso } from "@/lib/storage";
+import { todayIso, addDaysIso } from "@/lib/storage";
 import type { CleaningTask, CleaningFrequency } from "@/lib/types";
 
 const FREQ_LABEL: Record<CleaningFrequency, { en: string; vi: string }> = {
@@ -27,25 +27,15 @@ function mondayOf(dateIso: string): string {
   const d = new Date(dateIso + "T00:00:00");
   const dow = d.getDay();
   const diff = dow === 0 ? -6 : 1 - dow;
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().slice(0, 10);
+  return addDaysIso(dateIso, diff);
 }
 
 function weekDatesFrom(mondayIso: string): string[] {
-  const d = new Date(mondayIso + "T00:00:00");
-  return Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(d);
-    day.setDate(d.getDate() + i);
-    return day.toISOString().slice(0, 10);
-  });
+  return Array.from({ length: 7 }, (_, i) => addDaysIso(mondayIso, i));
 }
 
 function WeekNav({ monday, onChange }: { monday: string; onChange: (m: string) => void }) {
-  const shift = (days: number) => {
-    const d = new Date(monday + "T00:00:00");
-    d.setDate(d.getDate() + days);
-    onChange(d.toISOString().slice(0, 10));
-  };
+  const shift = (days: number) => onChange(addDaysIso(monday, days));
   const dates = weekDatesFrom(monday);
   return (
     <div className="flex items-center gap-2 mb-4">

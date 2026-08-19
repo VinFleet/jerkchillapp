@@ -13,7 +13,7 @@ import { BigCheckbox } from "@/components/ui/BigCheckbox";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
 import { getSamples, logSample, markSampleDiscarded, getDestructionChecks, logDestructionCheck, getOverdueSamples } from "@/lib/repo/foodSafety";
-import { todayIso } from "@/lib/storage";
+import { todayIso, addDaysIso } from "@/lib/storage";
 import type { FoodSample, SampleDestructionCheck } from "@/lib/types";
 
 type Tab = "samples" | "weekly";
@@ -22,8 +22,7 @@ function mondayOf(dateIso: string): string {
   const d = new Date(dateIso + "T00:00:00");
   const dow = d.getDay();
   const diff = dow === 0 ? -6 : 1 - dow;
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().slice(0, 10);
+  return addDaysIso(dateIso, diff);
 }
 
 function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: string }) {

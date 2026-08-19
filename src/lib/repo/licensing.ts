@@ -1,5 +1,5 @@
 import type { License } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId, todayIso } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso } from "@/lib/storage";
 import { SEED_LICENSES } from "@/lib/seed/licensing";
 
 const LICENSES_KEY = "licenses";
@@ -35,9 +35,7 @@ export type LicenseStatus = "not_set" | "valid" | "expiring" | "expired";
 export function getLicenseStatus(license: License, today = todayIso()): LicenseStatus {
   if (!license.expiryDate) return "not_set";
   if (license.expiryDate < today) return "expired";
-  const lead = new Date(today);
-  lead.setDate(lead.getDate() + license.renewalLeadDays);
-  const leadIso = lead.toISOString().slice(0, 10);
+  const leadIso = addDaysIso(today, license.renewalLeadDays);
   if (license.expiryDate <= leadIso) return "expiring";
   return "valid";
 }
