@@ -8,6 +8,7 @@ import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useSession } from "@/lib/auth/RoleContext";
+import { useSync } from "@/lib/sync/SyncProvider";
 import { canPostNotice } from "@/lib/auth/permissions";
 import { getNotices, postNotice, getAcks, isAckedBy, ackNotice } from "@/lib/repo/notices";
 import type { Notice, NoticePriority } from "@/lib/types";
@@ -15,20 +16,23 @@ import type { Notice, NoticePriority } from "@/lib/types";
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const hours = Math.floor(diffMs / 3_600_000);
-  if (hours < 1) return "just now";
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 1) return "just now · vừa xong";
+  if (hours < 24) return `${hours}h ago · ${hours} giờ trước`;
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return `${days}d ago · ${days} ngày trước`;
 }
 
 function NoticeCard({ notice, staffName, isManager }: { notice: Notice; staffName: string; isManager: boolean }) {
   const [acked, setAcked] = useState(false);
-  const [ackCount, setAckCount] = useState(0);
+  const [ackNames, setAckNames] = useState<string[]>([]);
+  const [showWho, setShowWho] = useState(false);
+  const { dataVersion } = useSync();
+  const ackCount = ackNames.length;
 
   useEffect(() => {
     setAcked(isAckedBy(notice.id, staffName));
-    setAckCount(getAcks(notice.id).length);
-  }, [notice.id, staffName]);
+    setAckNames(getAcks(notice.id).map((a) => a.staffName));
+  }, [notice.id, staffName, dataVersion]);
 
   return (
     <Card className={notice.priority === "urgent" ? "border-danger/40" : undefined}>
@@ -50,7 +54,7 @@ function NoticeCard({ notice, staffName, isManager }: { notice: Notice; staffNam
           onClick={() => {
             ackNotice(notice.id, staffName);
             setAcked(true);
-            setAckCount(getAcks(notice.id).length);
+            setAckNames(getAcks(notice.id).map((a) => a.staffName));
           }}
           disabled={acked}
           className={`flex items-center gap-2 text-sm font-semibold ${
@@ -61,11 +65,26 @@ function NoticeCard({ notice, staffName, isManager }: { notice: Notice; staffNam
           {acked ? "Acknowledged · Đã xác nhận" : "Mark as read · Đánh dấu đã đọc"}
         </button>
         {isManager && (
-          <span className="flex items-center gap-1 text-xs text-muted">
+          <button
+            onClick={() => setShowWho((v) => !v)}
+            className="flex items-center gap-1 text-xs text-muted font-semibold"
+            aria-label="Show who has read this"
+          >
             <Users size={14} /> {ackCount}
-          </span>
+          </button>
         )}
       </div>
+      {/* "How many" isn't the useful question on a team this size — "who"
+          is, so a manager knows who still needs telling in person. */}
+      {isManager && showWho && (
+        <p className="text-xs text-muted mt-2 pt-2 border-t border-border">
+          {ackCount > 0 ? (
+            <>Read by · Đã đọc: {ackNames.join(", ")}</>
+          ) : (
+            <>Nobody has read this yet · Chưa ai đọc</>
+          )}
+        </p>
+      )}
     </Card>
   );
 }
@@ -146,7 +165,7 @@ function PostNoticeForm({ onPosted }: { onPosted: () => void }) {
       </div>
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"
@@ -173,12 +192,15 @@ function PostNoticeForm({ onPosted }: { onPosted: () => void }) {
 function NoticesPageContent() {
   const { session } = useSession();
   const [notices, setNotices] = useState<Notice[]>([]);
+  const { dataVersion } = useSync();
 
   const refresh = () => setNotices(getNotices());
 
+  // A notice posted on the manager's phone should appear here without anyone
+  // reloading — that's the whole point of it replacing the group chat.
   useEffect(() => {
     refresh();
-  }, []);
+  }, [dataVersion]);
 
   if (!session) return null;
   const isManager = session.role === "owner" || session.role === "manager";

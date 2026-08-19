@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { BigCheckbox } from "@/components/ui/BigCheckbox";
 import { useSession } from "@/lib/auth/RoleContext";
+import { useSync } from "@/lib/sync/SyncProvider";
 import { canCompleteChecklistArea, canEditChecklistTemplate } from "@/lib/auth/permissions";
 import {
   getChecklistItems,
@@ -98,7 +99,7 @@ function AddItemForm({
       />
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={() => setOpen(false)}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"
@@ -111,7 +112,7 @@ function AddItemForm({
             onAdded();
           }}
         >
-          Add
+          Add · Thêm
         </Button>
       </div>
     </Card>
@@ -154,6 +155,7 @@ function ChecklistsPageContent() {
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [ticks, setTicks] = useState<ChecklistTick[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { dataVersion } = useSync();
   const isToday = date === todayIso();
 
   const availableAreas = useMemo<ChecklistArea[]>(() => {
@@ -167,10 +169,13 @@ function ChecklistsPageContent() {
     if (availableAreas.length && !availableAreas.includes(area)) setArea(availableAreas[0]);
   }, [availableAreas, area]);
 
+  // dataVersion bumps when another device's change arrives, so a manager
+  // watching this screen sees the kitchen tick items off live rather than
+  // having to reload — which is what "sees in real time" actually requires.
   useEffect(() => {
     setItems(getChecklistItems(area, shift));
     setTicks(getTicksForDate(date));
-  }, [area, shift, date, refreshKey]);
+  }, [area, shift, date, refreshKey, dataVersion]);
 
   if (!session) return null;
 

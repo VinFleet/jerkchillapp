@@ -70,9 +70,24 @@ function safeSet(key: string, serialized: string): void {
   }
 }
 
+/**
+ * Keys the sync engine mirrors to Supabase. Registered at startup rather than
+ * imported, so this module stays dependency-free (every repo imports it).
+ * Hooking writes here means every write path is caught automatically —
+ * including one-time migrations — without each repo remembering to opt in.
+ */
+const syncedKeys = new Set<string>();
+let onSyncedWrite: ((key: string) => void) | null = null;
+
+export function registerSyncedKeys(keys: string[], notify: (key: string) => void): void {
+  keys.forEach((k) => syncedKeys.add(k));
+  onSyncedWrite = notify;
+}
+
 export function writeList<T>(key: string, value: T[]): void {
   if (typeof window === "undefined") return;
   safeSet(nsKey(key), JSON.stringify(value));
+  if (syncedKeys.has(key)) onSyncedWrite?.(key);
 }
 
 export function readValue<T>(key: string, fallback: T): T {
