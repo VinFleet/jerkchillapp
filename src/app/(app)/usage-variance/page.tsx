@@ -8,11 +8,14 @@ import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
+import { canSeeCostMargin } from "@/lib/auth/permissions";
+import { getSettings } from "@/lib/repo/settings";
 import { getStockItems } from "@/lib/repo/stock";
-import { getSalesCount, setSalesCount, getVarianceForDate } from "@/lib/repo/usageVariance";
+import { getSalesCount, setSalesCount, getVarianceForDate, getIngredientVarianceForDate } from "@/lib/repo/usageVariance";
+import { formatQty } from "@/lib/scale";
 import { todayIso, addDaysIso } from "@/lib/storage";
 import type { StockItem } from "@/lib/types";
-import type { VarianceRow } from "@/lib/repo/usageVariance";
+import type { VarianceRow, IngredientVarianceRow } from "@/lib/repo/usageVariance";
 
 function DateNav({ date, onChange }: { date: string; onChange: (d: string) => void }) {
   const isToday = date === todayIso();
@@ -60,6 +63,7 @@ function UsageVarianceContent() {
   const [date, setDate] = useState(todayIso());
   const [items, setItems] = useState<StockItem[]>([]);
   const [rows, setRows] = useState<VarianceRow[]>([]);
+  const [ingredientRows, setIngredientRows] = useState<IngredientVarianceRow[]>([]);
   const [, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -68,11 +72,14 @@ function UsageVarianceContent() {
 
   useEffect(() => {
     setRows(getVarianceForDate(date));
+    setIngredientRows(getIngredientVarianceForDate(date));
   }, [date]);
 
   if (!session) return null;
+  const showCost = canSeeCostMargin(session.role, getSettings());
   const refresh = () => {
     setRows(getVarianceForDate(date));
+    setIngredientRows(getIngredientVarianceForDate(date));
     setRefreshKey((k) => k + 1);
   };
   const rowFor = (id: string) => rows.find((r) => r.stockItemId === id);
@@ -105,18 +112,68 @@ function UsageVarianceContent() {
                 </div>
               </div>
               {variance !== 0 && (
-                <div className="mt-2 pt-2 border-t border-border flex items-center justify-between">
-                  <span className="text-xs text-muted">Variance · Chênh lệch</span>
-                  <Badge tone={variance > 0 ? "warning" : "muted"}>
-                    {variance > 0 && <AlertTriangle size={12} />}
-                    {variance > 0 ? `+${variance}` : variance} {item.unit}
-                  </Badge>
+                <div className="mt-2 pt-2 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted">Variance · Chênh lệch</span>
+                    <Badge tone={variance > 0 ? "warning" : "muted"}>
+                      {variance > 0 && <AlertTriangle size={12} />}
+                      {variance > 0 ? `+${variance}` : variance} {item.unit}
+                    </Badge>
+                  </div>
+                  {/* Spell out what the number means — a new hire has no way to
+                      know that "+3" is a problem and "-3" is a different one. */}
+                  <p className="text-[11px] text-muted mt-1 leading-snug">
+                    {variance > 0 ? (
+                      <>
+                        More used than sold — check for waste or missing sales
+                        <br />
+                        Dùng nhiều hơn bán — kiểm tra hao hụt hoặc thiếu ghi nhận
+                      </>
+                    ) : (
+                      <>
+                        Fewer used than sold — check the counts were entered right
+                        <br />
+                        Dùng ít hơn bán — kiểm tra lại số liệu đã nhập
+                      </>
+                    )}
+                  </p>
+                  {showCost && row?.varianceCostVnd !== null && row?.varianceCostVnd !== undefined && row.varianceCostVnd !== 0 && (
+                    <p className={`text-xs font-semibold mt-1 ${variance > 0 ? "text-danger" : "text-muted"}`}>
+                      {variance > 0 ? "Cost of the gap" : "Value"}: {Math.abs(row.varianceCostVnd).toLocaleString("vi-VN")}₫
+                    </p>
+                  )}
                 </div>
               )}
             </Card>
           );
         })}
         {items.length === 0 && <p className="text-muted text-center py-10 text-sm">No kitchen prep items to compare · Không có món để so sánh</p>}
+
+        {ingredientRows.length > 0 && (
+          <div className="pt-4">
+            <h2 className="font-bold text-sm mb-1">Ingredient variance · Chênh lệch nguyên liệu</h2>
+            <p className="text-xs text-muted mb-2">
+              What the recipes say should have been used, against what stock movement shows
+              <br />
+              Lượng theo công thức so với lượng thực tế xuất kho
+            </p>
+            <Card>
+              <div className="space-y-2">
+                {ingredientRows.map((r) => (
+                  <div key={`${r.name.en}-${r.unit}`} className="flex items-center justify-between gap-2">
+                    <Bi value={r.name} className="text-sm min-w-0" mode="inline" />
+                    <span
+                      className={`text-sm font-semibold tabular-nums shrink-0 ${r.variance > 0 ? "text-danger" : "text-muted"}`}
+                    >
+                      {r.variance > 0 ? "+" : ""}
+                      {formatQty(r.variance)} {r.unit}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );

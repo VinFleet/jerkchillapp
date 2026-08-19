@@ -114,7 +114,7 @@ export function getBarOnHand(itemId: string, date = todayIso()): number {
 
 const WASTE_KEY = "stock_waste_log";
 
-function costPerUnitFor(item: StockItem): number | null {
+export function costPerUnitFor(item: StockItem): number | null {
   if (item.costPerUnitVnd != null) return item.costPerUnitVnd;
   if (item.recipeId) return getRecipe(item.recipeId)?.costPerPortionVnd ?? null;
   return null;
