@@ -2,6 +2,7 @@ import type { PlannerDecision, Bi } from "@/lib/types";
 import { readList, writeList, newId } from "@/lib/storage";
 import { getStockItems, getRecentEntries, getBarOnHand } from "@/lib/repo/stock";
 import { getRecipe } from "@/lib/repo/recipes";
+import { getSupplyItems } from "@/lib/repo/shopping";
 import { scaleQty } from "@/lib/scale";
 
 const DECISIONS_KEY = "planner_decisions";
@@ -68,9 +69,16 @@ export type ReorderFlag = {
   unit: string;
 };
 
-/** Bar items currently below par — due for reorder. */
+/**
+ * Everything currently below par — bar stock and kitchen ingredients alike.
+ *
+ * This used to look only at the bar, so the ~75 kitchen ingredients were
+ * invisible to the chef here: the one place they'd surface was the Shopping
+ * List, which Chef can't open. Running out of an ingredient mid-prep is
+ * exactly what this card exists to prevent.
+ */
 export function getReorderFlags(date: string): ReorderFlag[] {
-  return getStockItems("bar")
+  const bar: ReorderFlag[] = getStockItems("bar")
     .filter((item) => typeof item.par === "number")
     .map((item) => ({
       itemId: item.id,
@@ -80,6 +88,18 @@ export function getReorderFlags(date: string): ReorderFlag[] {
       unit: item.unit,
     }))
     .filter((f) => f.onHand < f.par);
+
+  const supplies: ReorderFlag[] = getSupplyItems()
+    .filter((s) => s.par > 0 && s.onHand < s.par)
+    .map((s) => ({
+      itemId: s.id,
+      name: s.name,
+      onHand: s.onHand,
+      par: s.par,
+      unit: s.unit,
+    }));
+
+  return [...bar, ...supplies];
 }
 
 export type IngredientForecastRow = {

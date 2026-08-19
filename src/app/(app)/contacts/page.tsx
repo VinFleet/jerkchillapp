@@ -80,7 +80,7 @@ function AddContactForm({ onAdded }: { onAdded: () => void }) {
       />
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"

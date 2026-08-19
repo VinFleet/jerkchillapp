@@ -17,7 +17,9 @@ export function Stepper({
   disabled?: boolean;
   size?: "sm" | "md";
 }) {
-  const btn = size === "sm" ? "w-9 h-9" : "w-11 h-11";
+  // Both sizes clear the 44px minimum — these are the controls used most
+  // often one-handed mid-shift, and "sm" was 36px, under the threshold.
+  const btn = size === "sm" ? "w-11 h-11" : "w-12 h-12";
   return (
     <div className="flex items-center gap-2">
       <button

@@ -79,7 +79,7 @@ function ContactSection({ supplier, canEdit, onChanged }: { supplier: Supplier; 
         />
         <div className="flex gap-2">
           <Button variant="ghost" className="flex-1" onClick={() => setEditing(false)}>
-            Cancel
+            Cancel · Hủy
           </Button>
           <Button className="flex-1" onClick={save}>
             Save · Lưu
@@ -183,7 +183,7 @@ function CertsSection({ supplier, canEdit, onChanged }: { supplier: Supplier; ca
         />
         <div className="flex gap-2">
           <Button variant="ghost" className="flex-1" onClick={() => setEditing(false)}>
-            Cancel
+            Cancel · Hủy
           </Button>
           <Button
             className="flex-1"
@@ -348,7 +348,7 @@ function SupplierDetailContent({ id }: { id: string }) {
       <PageHeader
         title={supplier.name}
         subtitle={`${SUPPLIER_CATEGORY_LABEL[supplier.category].en} · ${SUPPLIER_CATEGORY_LABEL[supplier.category].vi}`}
-        action={<Badge tone={SUPPLIER_STATUS_TONE[supplier.status]}>{SUPPLIER_STATUS_LABEL[supplier.status].en}</Badge>}
+        action={<Badge tone={SUPPLIER_STATUS_TONE[supplier.status]}>{SUPPLIER_STATUS_LABEL[supplier.status].en} · {SUPPLIER_STATUS_LABEL[supplier.status].vi}</Badge>}
       />
       <div className="px-4 md:px-8 mt-2">
         <ContactSection supplier={supplier} canEdit={canEdit} onChanged={refresh} />

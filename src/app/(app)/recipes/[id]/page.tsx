@@ -221,7 +221,10 @@ function RecipeDetailContent({ id }: { id: string }) {
             <div className="space-y-2">
               {draftIngredients.map((ing, i) => (
                 <div key={ing.id} className="flex items-center gap-2">
-                  <span className="flex-1 text-sm min-w-0 truncate">{ing.name.en}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm truncate">{ing.name.en}</span>
+                    <span className="block text-xs text-muted truncate">{ing.name.vi}</span>
+                  </span>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -321,7 +324,7 @@ function RecipeDetailContent({ id }: { id: string }) {
               />
               <div className="flex gap-2 mt-3">
                 <Button variant="ghost" className="flex-1" onClick={() => setFlagOpen(false)}>
-                  Cancel
+                  Cancel · Hủy
                 </Button>
                 <Button className="flex-1" onClick={submitFlag} disabled={!flagNote.trim()}>
                   Send to manager

@@ -71,7 +71,7 @@ function AddSupplierForm({ onAdded }: { onAdded: (supplier: Supplier) => void })
       </p>
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={() => setOpen(false)}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"
@@ -115,7 +115,7 @@ function SuppliersTab({ canEdit }: { canEdit: boolean }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <p className="font-semibold text-sm">{s.name}</p>
-                    <Badge tone={SUPPLIER_STATUS_TONE[s.status]}>{SUPPLIER_STATUS_LABEL[s.status].en}</Badge>
+                    <Badge tone={SUPPLIER_STATUS_TONE[s.status]}>{SUPPLIER_STATUS_LABEL[s.status].en} · {SUPPLIER_STATUS_LABEL[s.status].vi}</Badge>
                   </div>
                   <Bi value={SUPPLIER_CATEGORY_LABEL[s.category]} mode="inline" className="text-xs text-muted" />
                   {s.foodSafetyCertExpiry && <p className="text-xs text-muted mt-1">Food safety cert expires {s.foodSafetyCertExpiry}</p>}
@@ -205,7 +205,7 @@ function AddQuoteForm({ suppliers, onAdded, staffName }: { suppliers: Supplier[]
       />
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"
@@ -363,7 +363,7 @@ function AddRejectionForm({ suppliers, onAdded, staffName }: { suppliers: Suppli
       </button>
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"
@@ -515,7 +515,7 @@ function AddEvaluationForm({ suppliers, onAdded, staffName }: { suppliers: Suppl
       </div>
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"

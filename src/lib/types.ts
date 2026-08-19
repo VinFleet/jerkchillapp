@@ -70,6 +70,8 @@ export type StockDayEntry = {
   /** ISO date, e.g. 2026-08-18 */
   date: string;
   opening: number;
+  /** true when yesterday's closing count was never recorded, so `opening` is an assumption rather than a real count. */
+  openingUncounted?: boolean;
   produced: number;
   closing: number | null;
   enteredBy: string;

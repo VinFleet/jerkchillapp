@@ -67,8 +67,7 @@ function PlannerRow({
             setDecision(updated);
             onChanged();
           }}
-          size="sm"
-        />
+                  />
         {isConfirmed && <CheckCircle2 size={18} className="text-success" />}
       </div>
       <p className="hidden print:block font-semibold text-sm tabular-nums shrink-0">

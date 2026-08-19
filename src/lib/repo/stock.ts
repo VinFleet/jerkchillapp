@@ -57,14 +57,20 @@ export function getOrCreateEntry(itemId: string, date: string, enteredBy: string
   const existing = getEntry(itemId, date);
   if (existing) return existing;
 
+  // If nobody recorded yesterday's closing count, carrying "0" forward would
+  // quietly assert the kitchen ended with nothing — and today's production
+  // plan is built on this number. Carry null instead so the screen can say
+  // "not counted" rather than inventing a zero.
   const [previous] = getRecentEntries(itemId, date, 1);
-  const opening = previous?.closing ?? 0;
+  const opening = previous ? previous.closing ?? 0 : 0;
+  const openingUncounted = Boolean(previous && previous.closing === null);
 
   const fresh: StockDayEntry = {
     id: newId("stk"),
     itemId,
     date,
     opening,
+    openingUncounted,
     produced: 0,
     closing: null,
     enteredBy,

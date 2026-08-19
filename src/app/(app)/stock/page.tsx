@@ -100,7 +100,7 @@ function WasteButton({
         <p className="text-xs font-semibold text-muted mb-2">Log waste · Ghi nhận hao hụt</p>
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-muted">Qty · Số lượng</span>
-          <Stepper value={qty} onChange={setQty} min={1} size="sm" />
+          <Stepper value={qty} onChange={setQty} min={1} />
         </div>
         <div className="flex flex-wrap gap-1.5 mb-3">
           {WASTE_REASON_ORDER.map((r) => (
@@ -111,13 +111,13 @@ function WasteButton({
                 reason === r ? "bg-danger/10 text-danger border-danger" : "border-border text-muted"
               }`}
             >
-              {WASTE_REASON_LABEL[r].en}
+              {WASTE_REASON_LABEL[r].en} · {WASTE_REASON_LABEL[r].vi}
             </button>
           ))}
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" className="flex-1 min-h-10 text-sm" onClick={() => setOpen(false)}>
-            Cancel
+            Cancel · Hủy
           </Button>
           <Button
             className="flex-1 min-h-10 text-sm"
@@ -192,7 +192,16 @@ function LogRow({
       </div>
       <div className="flex items-center justify-between text-sm mb-3">
         <span className="text-muted">Opening · Đầu ngày</span>
-        <span className="font-bold tabular-nums">{entry.opening}</span>
+        <span className="text-right">
+          <span className="font-bold tabular-nums">{entry.opening}</span>
+          {/* Says out loud that this number was assumed, not counted — it
+              drives today's production plan, so a silent 0 misleads. */}
+          {entry.openingUncounted && (
+            <span className="block text-[11px] text-warning font-semibold">
+              Assumed — not counted last night · Ước tính — tối qua chưa đếm
+            </span>
+          )}
+        </span>
       </div>
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm text-muted">
@@ -202,16 +211,19 @@ function LogRow({
           value={entry.produced}
           onChange={(v) => patch({ produced: v })}
           disabled={!canEdit}
-          size="sm"
         />
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted">Closing · Cuối ngày</span>
+        <span className="text-sm text-muted">
+          Closing · Cuối ngày
+          {entry.closing === null && (
+            <span className="block text-[11px] text-warning font-semibold">Not counted yet · Chưa đếm</span>
+          )}
+        </span>
         <Stepper
           value={entry.closing ?? 0}
           onChange={(v) => patch({ closing: v })}
           disabled={!canEdit}
-          size="sm"
         />
       </div>
       <WasteButton item={item} date={date} loggedBy={enteredBy} canEdit={canEdit} showCost={showCost} onLogged={onWasteLogged} />
