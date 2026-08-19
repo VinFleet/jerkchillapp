@@ -43,7 +43,10 @@ export const SEED_CHECKLIST_ITEMS: ChecklistItem[] = [
   { id: "cl_k_c_5", area: "kitchen", shift: "closing", order: 5, active: true, text: { en: "Check and log fridge/freezer temperatures again before leaving", vi: "Kiểm tra và ghi lại nhiệt độ tủ lạnh/tủ đông lần nữa trước khi ra về" }, linkHref: "/food-safety/temperature" },
   { id: "cl_k_c_6", area: "kitchen", shift: "closing", order: 6, active: true, text: { en: "Wrap and label anything held overnight, with date", vi: "Bọc và dán nhãn ngày tháng cho mọi thứ để qua đêm" } },
   { id: "cl_k_c_7", area: "kitchen", shift: "closing", order: 7, active: true, text: { en: "Empty and take out all bins", vi: "Đổ và mang hết rác ra ngoài" } },
-  { id: "cl_k_c_8", area: "kitchen", shift: "closing", order: 8, active: true, text: { en: "Stock rooms and walk-in locked and secured", vi: "Kho hàng và kho lạnh đã khóa và an toàn" } },
+  // The book's wording was "Stock rooms and walk-in locked and secured", but
+  // there is no walk-in on site (confirmed with the Owner) — telling staff to
+  // secure equipment that doesn't exist trains them to tick without looking.
+  { id: "cl_k_c_8", area: "kitchen", shift: "closing", order: 8, active: true, text: { en: "Stock rooms locked and secured", vi: "Kho hàng đã khóa và an toàn" } },
   { id: "cl_k_c_9", area: "kitchen", shift: "closing", order: 9, active: true, text: { en: "Note anything running low for tomorrow — feed into the Ingredient Ordering Checklist", vi: "Ghi lại thứ sắp hết cho ngày mai — đưa vào Danh Sách Đặt Hàng Nguyên Liệu" }, linkHref: "/shopping" },
   { id: "cl_k_c_10", area: "kitchen", shift: "closing", order: 10, active: true, text: { en: "Cash up / reconcile the till, if applicable", vi: "Đối soát tiền mặt / két, nếu có" }, linkHref: "/sales" },
   { id: "cl_k_c_11", area: "kitchen", shift: "closing", order: 11, active: true, text: { en: "Final walk-through — all equipment off, all doors and windows locked before leaving", vi: "Kiểm tra vòng cuối — mọi thiết bị đã tắt, cửa ra vào và cửa sổ đã khóa trước khi ra về" } },

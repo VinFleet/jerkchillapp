@@ -4,7 +4,8 @@ import { SEED_CHECKLIST_ITEMS } from "@/lib/seed/checklists";
 
 const ITEMS_KEY = "checklist_items";
 const TICKS_KEY = "checklist_ticks";
-const RECONCILE_KEY = "checklist_items_reconcile_v1";
+// v2: dropped the "walk-in" from the kitchen closing item — there isn't one.
+const RECONCILE_KEY = "checklist_items_reconcile_v2";
 
 export function ensureChecklistsSeeded() {
   if (!isSeeded(ITEMS_KEY)) {
