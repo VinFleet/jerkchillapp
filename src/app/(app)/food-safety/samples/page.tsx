@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Plus, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { FoodSafetyLogGate } from "@/components/FoodSafetyLogGate";
 import { BackLink } from "@/components/BackLink";
@@ -12,11 +12,16 @@ import { Badge } from "@/components/ui/Badge";
 import { BigCheckbox } from "@/components/ui/BigCheckbox";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
-import { getSamples, logSample, markSampleDiscarded, getDestructionChecks, logDestructionCheck, getOverdueSamples } from "@/lib/repo/foodSafety";
+import { getSamples, logSample, markSampleDiscarded, getDestructionChecks, logDestructionCheck, getOverdueSamples, getFridgeUnits } from "@/lib/repo/foodSafety";
+import { getRecipes } from "@/lib/repo/recipes";
+import { getMenuItems } from "@/lib/repo/menu";
 import { todayIso, addDaysIso } from "@/lib/storage";
-import type { FoodSample, SampleDestructionCheck } from "@/lib/types";
+import type { Bi as BiValue, FoodSample, SampleDestructionCheck } from "@/lib/types";
 
 type Tab = "samples" | "weekly";
+
+const DISH_LIST_ID = "sample-dish-names";
+const LOCATION_LIST_ID = "sample-storage-locations";
 
 function mondayOf(dateIso: string): string {
   const d = new Date(dateIso + "T00:00:00");
@@ -25,8 +30,73 @@ function mondayOf(dateIso: string): string {
   return addDaysIso(dateIso, diff);
 }
 
+/** Dish names the app already holds — recipes first, then any menu item that isn't a recipe. */
+function dishNames(): BiValue[] {
+  const byName = new Map<string, BiValue>();
+  for (const r of getRecipes()) byName.set(r.name.en.toLowerCase(), r.name);
+  for (const m of getMenuItems()) if (!byName.has(m.name.en.toLowerCase())) byName.set(m.name.en.toLowerCase(), m.name);
+  return Array.from(byName.values()).sort((a, b) => a.en.localeCompare(b.en));
+}
+
+/**
+ * Picks the day the dish was served. Defaults to today; a sample taken during
+ * service but written up the next morning can be put on the day it belongs to,
+ * and the banner makes that impossible to do by accident. Future dates blocked.
+ */
+function LogDateBar({ date, onChange }: { date: string; onChange: (next: string) => void }) {
+  const today = todayIso();
+  const isToday = date === today;
+  return (
+    <div className="mb-3">
+      <p className="text-xs text-muted mb-1">Date served · Ngày phục vụ</p>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onChange(addDaysIso(date, -1))}
+          className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0"
+          aria-label="Previous day"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <input
+          type="date"
+          value={date}
+          max={today}
+          onChange={(e) => e.target.value && e.target.value <= today && onChange(e.target.value)}
+          className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm text-center focus:outline-none focus:border-brand"
+        />
+        <button
+          onClick={() => !isToday && onChange(addDaysIso(date, 1))}
+          disabled={isToday}
+          className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0 disabled:opacity-40"
+          aria-label="Next day"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+      {!isToday && (
+        <div className="mt-2 rounded-xl border-2 border-warning/40 bg-warning-tint px-3 py-2">
+          <div className="flex items-start gap-2 text-xs text-warning">
+            <CalendarClock size={16} className="shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-semibold">Logging for {date}, not today</p>
+              <p>Đang ghi cho ngày {date}, không phải hôm nay</p>
+            </div>
+          </div>
+          <button
+            onClick={() => onChange(today)}
+            className="mt-2 w-full min-h-11 rounded-xl bg-warning text-white text-xs font-semibold"
+          >
+            Back to today · Về hôm nay
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: string }) {
   const [open, setOpen] = useState(false);
+  const [date, setDate] = useState(todayIso());
   const [dish, setDish] = useState("");
   const [qty, setQty] = useState("");
   const [location, setLocation] = useState("");
@@ -43,6 +113,7 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
   }
 
   const reset = () => {
+    setDate(todayIso());
     setDish("");
     setQty("");
     setLocation("");
@@ -53,11 +124,13 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
     <Card className="mb-4">
       <p className="font-semibold text-sm mb-2">New sample · Mẫu lưu mới</p>
       <p className="text-xs text-muted mb-2">≥100g solid / ready-to-eat dishes, ≥150ml soups · liquid dishes</p>
+      <LogDateBar date={date} onChange={setDate} />
       <input
         value={dish}
         onChange={(e) => setDish(e.target.value)}
         placeholder="Dish served · Món đã phục vụ"
         className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
+        list={DISH_LIST_ID}
       />
       <input
         value={qty}
@@ -70,16 +143,17 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
         onChange={(e) => setLocation(e.target.value)}
         placeholder="Storage location · Vị trí lưu"
         className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-3 text-sm focus:outline-none focus:border-brand"
+        list={LOCATION_LIST_ID}
       />
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"
           disabled={!dish.trim() || !qty.trim() || !location.trim()}
           onClick={() => {
-            logSample(dish.trim(), qty.trim(), location.trim(), staffName);
+            logSample(date, dish.trim(), qty.trim(), location.trim(), staffName);
             reset();
             onAdded();
           }}
@@ -93,18 +167,45 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
 
 function SamplesTab({ staffName }: { staffName: string }) {
   const [samples, setSamples] = useState<FoodSample[]>([]);
+  const [dishes, setDishes] = useState<BiValue[]>([]);
+  const [units, setUnits] = useState<BiValue[]>([]);
   const refresh = () => setSamples(getSamples());
 
-  useEffect(() => refresh(), []);
+  useEffect(() => {
+    refresh();
+    setDishes(dishNames());
+    setUnits(getFridgeUnits().map((u) => u.name));
+  }, []);
 
   const { session } = useSession();
   if (!session) return null;
   const canEnter = canEnterFoodSafetyLog(session.role, "samples");
   const now = new Date().toISOString();
 
+  // Units on site, plus anywhere samples have actually been put before.
+  const unitNames = new Set(units.map((u) => u.en));
+  const pastLocations = Array.from(new Set(samples.map((s) => s.storageLocation))).filter((l) => !unitNames.has(l));
+
   return (
     <div>
       {canEnter && <AddForm onAdded={refresh} staffName={staffName} />}
+      <datalist id={DISH_LIST_ID}>
+        {dishes.map((d) => (
+          <option key={d.en} value={d.en}>
+            {d.vi}
+          </option>
+        ))}
+      </datalist>
+      <datalist id={LOCATION_LIST_ID}>
+        {units.map((u) => (
+          <option key={u.en} value={u.en}>
+            {u.vi}
+          </option>
+        ))}
+        {pastLocations.map((l) => (
+          <option key={l} value={l} />
+        ))}
+      </datalist>
       <div className="space-y-2">
         {samples.map((s) => {
           const overdue = !s.discarded && s.discardBy < now;

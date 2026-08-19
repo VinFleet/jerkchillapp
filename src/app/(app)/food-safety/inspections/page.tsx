@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle, ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { FoodSafetyLogGate } from "@/components/FoodSafetyLogGate";
 import { BackLink } from "@/components/BackLink";
@@ -13,8 +13,11 @@ import { BigCheckbox } from "@/components/ui/BigCheckbox";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
 import { getInspectionsForDate, logBeforePrep, logDuringPrep, logBeforeServing, inspectionPassed } from "@/lib/repo/foodSafety";
-import { todayIso } from "@/lib/storage";
-import type { ThreeStepInspection, InspectionStage, ServicePeriod } from "@/lib/types";
+import { getRecipes } from "@/lib/repo/recipes";
+import { getMenuItems } from "@/lib/repo/menu";
+import { getSuppliers } from "@/lib/repo/suppliers";
+import { todayIso, addDaysIso } from "@/lib/storage";
+import type { Bi as BiValue, ThreeStepInspection, InspectionStage, ServicePeriod } from "@/lib/types";
 
 const STAGE_LABEL: Record<InspectionStage, { en: string; vi: string }> = {
   before: { en: "Step 1 — Before preparation", vi: "Bước 1 — Trước khi chế biến" },
@@ -23,6 +26,86 @@ const STAGE_LABEL: Record<InspectionStage, { en: string; vi: string }> = {
 };
 
 const STAGE_ORDER: InspectionStage[] = ["before", "during", "before_serving"];
+
+const DISH_LIST_ID = "insp-dish-names";
+const INGREDIENT_LIST_ID = "insp-ingredient-names";
+const SUPPLIER_LIST_ID = "insp-supplier-names";
+
+function sortedBi(byName: Map<string, BiValue>): BiValue[] {
+  return Array.from(byName.values()).sort((a, b) => a.en.localeCompare(b.en));
+}
+
+/** Dish names the app already holds — recipes first, then any menu item that isn't a recipe. */
+function dishNames(): BiValue[] {
+  const byName = new Map<string, BiValue>();
+  for (const r of getRecipes()) byName.set(r.name.en.toLowerCase(), r.name);
+  for (const m of getMenuItems()) if (!byName.has(m.name.en.toLowerCase())) byName.set(m.name.en.toLowerCase(), m.name);
+  return sortedBi(byName);
+}
+
+/** Every ingredient named across the recipe book. */
+function ingredientNames(): BiValue[] {
+  const byName = new Map<string, BiValue>();
+  for (const r of getRecipes()) for (const i of r.ingredients) byName.set(i.name.en.toLowerCase(), i.name);
+  return sortedBi(byName);
+}
+
+/**
+ * Picks the day checks are viewed and logged against. Defaults to today; a
+ * check that was missed and written up the next morning can be put on the day
+ * it actually happened, and the banner makes that impossible to do by accident.
+ * Future dates are blocked.
+ */
+function LogDateBar({ date, onChange }: { date: string; onChange: (next: string) => void }) {
+  const today = todayIso();
+  const isToday = date === today;
+  return (
+    <div className="mb-4">
+      <p className="text-xs text-muted mb-1">Log date · Ngày ghi nhận</p>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onChange(addDaysIso(date, -1))}
+          className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0"
+          aria-label="Previous day"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <input
+          type="date"
+          value={date}
+          max={today}
+          onChange={(e) => e.target.value && e.target.value <= today && onChange(e.target.value)}
+          className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm text-center focus:outline-none focus:border-brand"
+        />
+        <button
+          onClick={() => !isToday && onChange(addDaysIso(date, 1))}
+          disabled={isToday}
+          className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0 disabled:opacity-40"
+          aria-label="Next day"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+      {!isToday && (
+        <div className="mt-2 rounded-xl border-2 border-warning/40 bg-warning-tint px-3 py-2">
+          <div className="flex items-start gap-2 text-xs text-warning">
+            <CalendarClock size={16} className="shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-semibold">Logging for {date}, not today</p>
+              <p>Đang ghi cho ngày {date}, không phải hôm nay</p>
+            </div>
+          </div>
+          <button
+            onClick={() => onChange(today)}
+            className="mt-2 w-full min-h-11 rounded-xl bg-warning text-white text-xs font-semibold"
+          >
+            Back to today · Về hôm nay
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function EntryList({ entries }: { entries: ThreeStepInspection[] }) {
   if (entries.length === 0) return <p className="text-xs text-muted">No checks logged yet · Chưa có lần kiểm tra</p>;
@@ -84,9 +167,9 @@ function BeforePrepForm({ date, service, staffName, onLogged }: { date: string; 
 
   return (
     <div className="space-y-2">
-      <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
-      <input value={ingredient} onChange={(e) => setIngredient(e.target.value)} placeholder="Ingredient · Nguyên liệu" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
-      <input value={supplierSource} onChange={(e) => setSupplierSource(e.target.value)} placeholder="Supplier / source · Nhà cung cấp / nguồn gốc" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
+      <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
+      <input value={ingredient} onChange={(e) => setIngredient(e.target.value)} placeholder="Ingredient · Nguyên liệu" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={INGREDIENT_LIST_ID} />
+      <input value={supplierSource} onChange={(e) => setSupplierSource(e.target.value)} placeholder="Supplier / source · Nhà cung cấp / nguồn gốc" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={SUPPLIER_LIST_ID} />
       <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder="Qty · Số lượng" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
       <BigCheckbox label={{ en: "Sensory OK", vi: "Cảm quan đạt" }} checked={sensoryOk} onToggle={() => setSensoryOk((v) => !v)} />
       <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional) · Ghi chú" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
@@ -124,7 +207,7 @@ function DuringPrepForm({ date, service, staffName, onLogged }: { date: string; 
 
   return (
     <div className="space-y-2">
-      <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
+      <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
       <div className="flex gap-2">
         <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
         <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
@@ -164,8 +247,8 @@ function BeforeServingForm({ date, service, staffName, onLogged }: { date: strin
 
   return (
     <div className="space-y-2">
-      <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
-      <input value={dish} onChange={(e) => setDish(e.target.value)} placeholder="Dish · Món ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
+      <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
+      <input value={dish} onChange={(e) => setDish(e.target.value)} placeholder="Dish · Món ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
       <input type="time" value={timeServed} onChange={(e) => setTimeServed(e.target.value)} className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
       <BigCheckbox label={{ en: "Sensory OK", vi: "Cảm quan đạt" }} checked={sensoryOk} onToggle={() => setSensoryOk((v) => !v)} />
       <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional) · Ghi chú" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
@@ -186,15 +269,23 @@ function BeforeServingForm({ date, service, staffName, onLogged }: { date: strin
 
 function InspectionsContent() {
   const { session } = useSession();
-  const date = todayIso();
+  const [date, setDate] = useState(todayIso());
   const [service, setService] = useState<ServicePeriod>("lunch");
   const [entries, setEntries] = useState<ThreeStepInspection[]>([]);
+  const [dishes, setDishes] = useState<BiValue[]>([]);
+  const [ingredients, setIngredients] = useState<BiValue[]>([]);
+  const [supplierNames, setSupplierNames] = useState<string[]>([]);
 
   const refresh = () => setEntries(getInspectionsForDate(date));
 
   useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setEntries(getInspectionsForDate(date));
+  }, [date]);
+
+  useEffect(() => {
+    setDishes(dishNames());
+    setIngredients(ingredientNames());
+    setSupplierNames(getSuppliers().map((s) => s.name));
   }, []);
 
   if (!session) return null;
@@ -211,6 +302,26 @@ function InspectionsContent() {
         subtitle="Every service, legally required · Mỗi ca phục vụ, bắt buộc theo quy định"
       />
       <div className="px-4 md:px-8">
+        <LogDateBar date={date} onChange={setDate} />
+        <datalist id={DISH_LIST_ID}>
+          {dishes.map((d) => (
+            <option key={d.en} value={d.en}>
+              {d.vi}
+            </option>
+          ))}
+        </datalist>
+        <datalist id={INGREDIENT_LIST_ID}>
+          {ingredients.map((i) => (
+            <option key={i.en} value={i.en}>
+              {i.vi}
+            </option>
+          ))}
+        </datalist>
+        <datalist id={SUPPLIER_LIST_ID}>
+          {supplierNames.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
         <div className="flex gap-2 mb-4">
           {(["lunch", "dinner"] as ServicePeriod[]).map((s) => (
             <button

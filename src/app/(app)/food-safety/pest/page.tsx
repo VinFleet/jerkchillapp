@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { FoodSafetyLogGate } from "@/components/FoodSafetyLogGate";
 import { BackLink } from "@/components/BackLink";
@@ -12,11 +12,69 @@ import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
 import { getPestSightings, logPestSighting, resolvePestSighting } from "@/lib/repo/foodSafety";
-import { todayIso } from "@/lib/storage";
+import { todayIso, addDaysIso } from "@/lib/storage";
 import type { PestSighting } from "@/lib/types";
+
+/**
+ * Picks the day the sighting is logged against. Defaults to today; something
+ * spotted during service but only written up the next morning can be put on the
+ * day it actually happened, and the banner makes that impossible to do by
+ * accident. Future dates are blocked.
+ */
+function LogDateBar({ date, onChange }: { date: string; onChange: (next: string) => void }) {
+  const today = todayIso();
+  const isToday = date === today;
+  return (
+    <div className="mb-3">
+      <p className="text-xs text-muted mb-1">Date seen · Ngày phát hiện</p>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onChange(addDaysIso(date, -1))}
+          className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0"
+          aria-label="Previous day"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <input
+          type="date"
+          value={date}
+          max={today}
+          onChange={(e) => e.target.value && e.target.value <= today && onChange(e.target.value)}
+          className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm text-center focus:outline-none focus:border-brand"
+        />
+        <button
+          onClick={() => !isToday && onChange(addDaysIso(date, 1))}
+          disabled={isToday}
+          className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0 disabled:opacity-40"
+          aria-label="Next day"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+      {!isToday && (
+        <div className="mt-2 rounded-xl border-2 border-warning/40 bg-warning-tint px-3 py-2">
+          <div className="flex items-start gap-2 text-xs text-warning">
+            <CalendarClock size={16} className="shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-semibold">Logging for {date}, not today</p>
+              <p>Đang ghi cho ngày {date}, không phải hôm nay</p>
+            </div>
+          </div>
+          <button
+            onClick={() => onChange(today)}
+            className="mt-2 w-full min-h-11 rounded-xl bg-warning text-white text-xs font-semibold"
+          >
+            Back to today · Về hôm nay
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: string }) {
   const [open, setOpen] = useState(false);
+  const [date, setDate] = useState(todayIso());
   const [location, setLocation] = useState("");
   const [action, setAction] = useState("");
   const [reportedTo, setReportedTo] = useState("");
@@ -33,6 +91,7 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
   }
 
   const reset = () => {
+    setDate(todayIso());
     setLocation("");
     setAction("");
     setReportedTo("");
@@ -42,6 +101,7 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
   return (
     <Card className="mb-4">
       <p className="font-semibold text-sm mb-2">New sighting · Ghi nhận mới</p>
+      <LogDateBar date={date} onChange={setDate} />
       <input
         value={location}
         onChange={(e) => setLocation(e.target.value)}
@@ -62,13 +122,13 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
       />
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={reset}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1"
           disabled={!location.trim() || !action.trim()}
           onClick={() => {
-            logPestSighting(todayIso(), location.trim(), action.trim(), reportedTo.trim(), staffName);
+            logPestSighting(date, location.trim(), action.trim(), reportedTo.trim(), staffName);
             reset();
             onAdded();
           }}

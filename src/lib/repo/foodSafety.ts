@@ -36,6 +36,28 @@ const DESTRUCTION_CHECKS_KEY = "fs_sample_destruction_checks";
 const PEST_KEY = "fs_pest";
 const COMPLAINTS_KEY = "fs_complaints";
 
+/**
+ * Local calendar day of an ISO timestamp. `slice(0, 10)` would give the *UTC*
+ * day, which in Vietnam (UTC+7) is still yesterday's date until 07:00 local.
+ */
+function localDayOf(iso: string): string {
+  const d = new Date(iso);
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tz).toISOString().slice(0, 10);
+}
+
+/**
+ * Same clock time, different calendar day. A check remembered the next morning
+ * can't recover the exact minute it happened, but the day is what the record
+ * legally turns on — so a backdated entry keeps the current time on the chosen
+ * date rather than inventing one.
+ */
+function atSameTimeOn(date: string, at: Date): Date {
+  const d = new Date(date + "T00:00:00");
+  d.setHours(at.getHours(), at.getMinutes(), at.getSeconds(), at.getMilliseconds());
+  return d;
+}
+
 export function ensureFoodSafetySeeded() {
   if (!isSeeded(UNITS_KEY)) {
     writeList(UNITS_KEY, SEED_FRIDGE_UNITS);
@@ -131,11 +153,31 @@ export function getOutOfRangeCount(date: string): number {
 
 // ---------- Cooking / Core Temperature Log ----------
 
-function getAllCookLogs(): CookTempLog[] {
-  return readList<CookTempLog>(COOK_KEY);
+/**
+ * `CookTempLog` has no date of its own — a batch's day is read off `loggedAt`.
+ * A batch probed during service but only written up the next morning still has
+ * to sit on the day it was actually cooked, and moving `loggedAt` to do that
+ * would falsify the other half of the record (when it was really entered). So
+ * a row carries `cookedOn` alongside a truthful `loggedAt`, and every read of a
+ * batch's day goes through `cookDate()`.
+ */
+export type CookTempRow = CookTempLog & { cookedOn?: string };
+
+/** The day the batch was cooked. Rows written before `cookedOn` existed fall back to their entry day. */
+export function cookDate(log: CookTempRow): string {
+  return log.cookedOn ?? localDayOf(log.loggedAt);
 }
 
-export function getCookLogs(limit = 50): CookTempLog[] {
+/** True when the batch was written up on a different day from the one it records. */
+export function isLateCookEntry(log: CookTempRow): boolean {
+  return cookDate(log) !== localDayOf(log.loggedAt);
+}
+
+function getAllCookLogs(): CookTempRow[] {
+  return readList<CookTempRow>(COOK_KEY);
+}
+
+export function getCookLogs(limit = 50): CookTempRow[] {
   const all = getAllCookLogs();
   const supersededIds = new Set(all.map((r) => r.correctionOfId).filter(Boolean));
   return all
@@ -144,8 +186,15 @@ export function getCookLogs(limit = 50): CookTempLog[] {
     .slice(0, limit);
 }
 
-export function logCookTemp(dish: string, batchLabel: string, probeTempC: number, loggedBy: string, correctiveAction?: string): CookTempLog {
-  const entry: CookTempLog = {
+export function logCookTemp(
+  date: string,
+  dish: string,
+  batchLabel: string,
+  probeTempC: number,
+  loggedBy: string,
+  correctiveAction?: string
+): CookTempRow {
+  const entry: CookTempRow = {
     id: newId("cook"),
     dish,
     batchLabel,
@@ -154,11 +203,38 @@ export function logCookTemp(dish: string, batchLabel: string, probeTempC: number
     correctiveAction,
     loggedBy,
     loggedAt: new Date().toISOString(),
+    cookedOn: date,
   };
   const all = getAllCookLogs();
   all.push(entry);
   writeList(COOK_KEY, all);
   return entry;
+}
+
+/** Tamper-evident correction: the original row stays, a new row supersedes it. */
+export function correctCookTemp(
+  originalId: string,
+  probeTempC: number,
+  loggedBy: string,
+  correctiveAction?: string
+): CookTempRow | undefined {
+  const all = getAllCookLogs();
+  const original = all.find((r) => r.id === originalId);
+  if (!original) return undefined;
+  const correction: CookTempRow = {
+    ...original,
+    id: newId("cook"),
+    probeTempC,
+    targetMet: probeTempC >= 75,
+    correctiveAction,
+    loggedBy,
+    loggedAt: new Date().toISOString(),
+    cookedOn: cookDate(original),
+    correctionOfId: original.id,
+  };
+  all.push(correction);
+  writeList(COOK_KEY, all);
+  return correction;
 }
 
 // ---------- Delivery / Receiving Log ----------
@@ -308,8 +384,14 @@ export function getSamples(limit = 100): FoodSample[] {
     .slice(0, limit);
 }
 
-export function logSample(dish: string, qty: string, storageLocation: string, loggedBy: string): FoodSample {
-  const servedAt = new Date();
+/**
+ * `date` is the day the dish was *served*, not the day the row was typed — a
+ * sample written up the morning after service belongs to that service, and its
+ * 24-hour hold has to run from then (so a backdated sample is correctly already
+ * due for discard).
+ */
+export function logSample(date: string, dish: string, qty: string, storageLocation: string, loggedBy: string): FoodSample {
+  const servedAt = atSameTimeOn(date, new Date());
   const discardBy = new Date(servedAt.getTime() + 24 * 3_600_000);
   const entry: FoodSample = {
     id: newId("sample"),
@@ -482,9 +564,9 @@ export function getTempReadingsInRange(from: string, to: string): TempReading[] 
   return all.filter((r) => !supersededIds.has(r.id)).sort((a, b) => (a.loggedAt < b.loggedAt ? 1 : -1));
 }
 
-export function getCookLogsInRange(from: string, to: string): CookTempLog[] {
+export function getCookLogsInRange(from: string, to: string): CookTempRow[] {
   return getCookLogs(5000).filter((r) => {
-    const d = r.loggedAt.slice(0, 10);
+    const d = cookDate(r);
     return d >= from && d <= to;
   });
 }
@@ -507,7 +589,7 @@ export function getInspectionsInRange(from: string, to: string): ThreeStepInspec
 
 export function getSamplesInRange(from: string, to: string): FoodSample[] {
   return getSamples(5000).filter((s) => {
-    const d = s.servedAt.slice(0, 10);
+    const d = localDayOf(s.servedAt);
     return d >= from && d <= to;
   });
 }

@@ -19,6 +19,7 @@ import {
   getOpenPestCount,
   getInspectionsForDate,
   getCookLogs,
+  cookDate,
   getDeliveryLogs,
   getComplaints,
 } from "@/lib/repo/foodSafety";
@@ -32,11 +33,17 @@ function useSummaries() {
     const date = todayIso();
     const outOfRange = getOutOfRangeCount(date);
     const cleaningTotal = getCleaningTasks().length;
-    const cleaningDone = getSignoffsForDate(date).length;
+    // Withdrawn sign-offs stay in the record for the audit trail, but they
+    // aren't done — counting them would show a clean day that isn't.
+    const cleaningDone = getSignoffsForDate(date).filter((s) => !s.revokedAt).length;
     const overdueSamples = getOverdueSamples().length;
     const openPest = getOpenPestCount();
     const inspectionsToday = getInspectionsForDate(date).length;
-    const cookToday = getCookLogs(500).filter((c) => c.loggedAt.slice(0, 10) === date).length;
+    // cookDate() reads the day the batch was actually cooked (so a backdated
+    // entry counts against the right day) and resolves it in local time —
+    // slicing the ISO timestamp gives the UTC day, which in Vietnam is still
+    // yesterday until 07:00.
+    const cookToday = getCookLogs(500).filter((c) => cookDate(c) === date).length;
     const deliveriesToday = getDeliveryLogs(500).filter((d) => d.date === date).length;
     const openComplaints = getComplaints().filter((c) => !c.outcome).length;
 

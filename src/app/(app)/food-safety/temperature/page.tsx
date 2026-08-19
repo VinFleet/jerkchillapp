@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Pencil } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Pencil, ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { FoodSafetyLogGate } from "@/components/FoodSafetyLogGate";
 import { BackLink } from "@/components/BackLink";
@@ -13,8 +13,65 @@ import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
 import { getFridgeUnits, getTempReadingsForDate, logTempReading, correctTempReading } from "@/lib/repo/foodSafety";
-import { todayIso } from "@/lib/storage";
+import { todayIso, addDaysIso } from "@/lib/storage";
 import type { FridgeUnit, TempReading } from "@/lib/types";
+
+/**
+ * Picks the day readings are viewed and logged against. Defaults to today; a
+ * check that was missed and remembered the next morning can be put on the day
+ * it actually happened, and the banner makes that impossible to do by accident.
+ * Future dates are blocked.
+ */
+function LogDateBar({ date, onChange }: { date: string; onChange: (next: string) => void }) {
+  const today = todayIso();
+  const isToday = date === today;
+  return (
+    <div>
+      <p className="text-xs text-muted mb-1">Log date · Ngày ghi nhận</p>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onChange(addDaysIso(date, -1))}
+          className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0"
+          aria-label="Previous day"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <input
+          type="date"
+          value={date}
+          max={today}
+          onChange={(e) => e.target.value && e.target.value <= today && onChange(e.target.value)}
+          className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm text-center focus:outline-none focus:border-brand"
+        />
+        <button
+          onClick={() => !isToday && onChange(addDaysIso(date, 1))}
+          disabled={isToday}
+          className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0 disabled:opacity-40"
+          aria-label="Next day"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+      {!isToday && (
+        <div className="mt-2 rounded-xl border-2 border-warning/40 bg-warning-tint px-3 py-2">
+          <div className="flex items-start gap-2 text-xs text-warning">
+            <CalendarClock size={16} className="shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-semibold">Logging for {date}, not today</p>
+              <p>Đang ghi cho ngày {date}, không phải hôm nay</p>
+            </div>
+          </div>
+          <button
+            onClick={() => onChange(today)}
+            className="mt-2 w-full min-h-11 rounded-xl bg-warning text-white text-xs font-semibold"
+          >
+            Back to today · Về hôm nay
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ReadingForm({
   onSubmit,
@@ -50,7 +107,7 @@ function ReadingForm({
       />
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1 min-h-11" onClick={onCancel}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1 min-h-11"
@@ -155,7 +212,7 @@ function UnitCard({ unit, date, readings, canEnter, staffName, onChanged }: {
 
 function TemperatureContent() {
   const { session } = useSession();
-  const date = todayIso();
+  const [date, setDate] = useState(todayIso());
   const [units, setUnits] = useState<FridgeUnit[]>([]);
   const [readings, setReadings] = useState<TempReading[]>([]);
 
@@ -163,9 +220,8 @@ function TemperatureContent() {
 
   useEffect(() => {
     setUnits(getFridgeUnits());
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setReadings(getTempReadingsForDate(date));
+  }, [date]);
 
   if (!session) return null;
   const canEnter = canEnterFoodSafetyLog(session.role, "temperature");
@@ -178,6 +234,7 @@ function TemperatureContent() {
         subtitle="Check twice daily · Kiểm tra hai lần mỗi ngày"
       />
       <div className="px-4 md:px-8 space-y-3">
+        <LogDateBar date={date} onChange={setDate} />
         {units.map((unit) => (
           <UnitCard
             key={unit.id}
