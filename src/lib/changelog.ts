@@ -11,6 +11,26 @@ export type ChangelogEntry = {
 // changed without having to ask.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.10",
+    date: "2026-08-19",
+    changes: [
+      {
+        en: "Reconciled the app against the real Kitchen Food Safety Book — expanded Reference Rules to match exactly, added Kamereo's real business/cert details and a supplier paperwork checklist, added Staff Training refresher/trainer fields and Health Certificate issue/renewal fields, fixed the Supplier Evaluation \"Docs OK?\" field and a cleaning area label.",
+        vi: "Đối chiếu ứng dụng với Sổ Tay An Toàn Thực Phẩm Bếp thật — cập nhật Quy Tắc Tham Khảo khớp chính xác, thêm thông tin kinh doanh/chứng nhận thật của Kamereo và danh mục giấy tờ nhà cung cấp, thêm trường hạn đào tạo lại/người đào tạo và ngày cấp/gia hạn giấy khám sức khỏe, sửa trường \"Hồ sơ đạt?\" trong đánh giá nhà cung cấp và một nhãn khu vực vệ sinh.",
+      },
+    ],
+  },
+  {
+    version: "1.9",
+    date: "2026-08-19",
+    changes: [
+      {
+        en: "Added explicit waste logging to Stock & Production — record spoiled, over-prepped, or dropped food by quantity and reason, with a daily total (VND cost shown to Owner/Manager only).",
+        vi: "Thêm tính năng ghi nhận hao hụt trong Tồn Kho & Sản Xuất — ghi lại thực phẩm hư hỏng, làm dư, hoặc rơi vỡ theo số lượng và lý do, kèm tổng số hàng ngày (chi phí VND chỉ hiện với Chủ/Quản lý).",
+      },
+    ],
+  },
+  {
     version: "1.8",
     date: "2026-08-19",
     changes: [
