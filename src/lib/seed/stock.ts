@@ -18,7 +18,7 @@ export const SEED_STOCK_ITEMS: StockItem[] = [
   { id: "st_spiced_rum", name: { en: "Spiced Rum", vi: "Rum Gia Vị" }, section: "bar", unit: "bottle (700ml)", par: 2 },
   { id: "st_beer_huda", name: { en: "Beer — Huda", vi: "Bia Huda" }, section: "bar", unit: "can", par: 48, costPerUnitVnd: 25000 },
   { id: "st_beer_tuborg", name: { en: "Beer — Tuborg Ice", vi: "Bia Tuborg Ice" }, section: "bar", unit: "can", par: 48, costPerUnitVnd: 35000 },
-  { id: "st_beer_kblanc", name: { en: "Beer — K Blanc", vi: "Bia K Blanc" }, section: "bar", unit: "can", par: 24, costPerUnitVnd: 45000 },
+  { id: "st_beer_kblanc", name: { en: "Beer — 1664", vi: "Bia 1664" }, section: "bar", unit: "can", par: 24, costPerUnitVnd: 45000 },
   { id: "st_soft_drinks", name: { en: "Soft Drinks (Coke/Sprite/Fanta)", vi: "Nước Ngọt (Coke/Sprite/Fanta)" }, section: "bar", unit: "can", par: 60, costPerUnitVnd: 25000 },
   { id: "st_water", name: { en: "Bottled Water", vi: "Nước Suối" }, section: "bar", unit: "bottle", par: 48, costPerUnitVnd: 15000 },
   { id: "st_lime", name: { en: "Lime (garnish)", vi: "Chanh (trang trí)" }, section: "bar", unit: "kg", par: 2 },

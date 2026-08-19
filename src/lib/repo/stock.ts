@@ -2,7 +2,12 @@ import type { StockItem, StockDayEntry, StockSection } from "@/lib/types";
 import { readList, writeList, isSeeded, markSeeded, newId, todayIso } from "@/lib/storage";
 import { SEED_STOCK_ITEMS } from "@/lib/seed/stock";
 
-const ITEMS_KEY = "stock_items";
+// v2: corrected the K Blanc -> 1664 beer name to match the real menu.
+// Bumping the key forces a fresh reseed of item definitions for browsers
+// that already loaded the old name — day entries live under a separate
+// key (ENTRIES_KEY) and are unaffected, and item names/pars aren't
+// user-editable anywhere, so nothing real gets lost.
+const ITEMS_KEY = "stock_items_v2";
 const ENTRIES_KEY = "stock_entries";
 
 export function ensureStockSeeded() {
