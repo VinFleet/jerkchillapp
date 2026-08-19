@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import type { Session } from "@/lib/types";
+import { supabase } from "@/lib/supabase/client";
 
 const SESSION_KEY = "jc_session";
 
@@ -34,6 +35,13 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
+    // Owner sessions are backed by a real Supabase login — clear that too,
+    // or the device could silently regain Owner access without a password
+    // next time someone taps "Owner" (supabase-js persists its own session
+    // separately from jc_session).
+    if (session?.role === "owner" && supabase) {
+      supabase.auth.signOut();
+    }
     window.localStorage.removeItem(SESSION_KEY);
     setSession(null);
   };

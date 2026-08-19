@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PackageSearch, CheckCircle2, Users, ChevronRight } from "lucide-react";
+import { PackageSearch, CheckCircle2, Users, ChevronRight, Printer } from "lucide-react";
 import Link from "next/link";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Stepper } from "@/components/ui/Stepper";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canConfirmPlanner } from "@/lib/auth/permissions";
@@ -53,11 +54,11 @@ function PlannerRow({
     <Card className="flex items-center justify-between gap-3">
       <div className="flex-1 min-w-0">
         <Bi value={item.name} className="font-semibold text-sm" mode="inline" />
-        <p className="text-xs text-muted mt-1">
+        <p className="text-xs text-muted mt-1 print:hidden">
           Suggested · Gợi ý: {decision.suggestedQty} {item.unit}
         </p>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-3 shrink-0 print:hidden">
         <Stepper
           value={qty}
           disabled={!canConfirm}
@@ -70,6 +71,9 @@ function PlannerRow({
         />
         {isConfirmed && <CheckCircle2 size={18} className="text-success" />}
       </div>
+      <p className="hidden print:block font-semibold text-sm tabular-nums shrink-0">
+        {qty} {item.unit} {isConfirmed ? "✓" : "(suggested)"}
+      </p>
     </Card>
   );
 }
@@ -169,9 +173,17 @@ function PlannerPageContent() {
       <PageHeader
         title="Production Planner · Kế Hoạch Sản Xuất"
         subtitle="Confirm or override today's prep quantities · Xác nhận hoặc điều chỉnh số lượng chuẩn bị"
+        action={
+          <Button variant="ghost" className="min-h-11 px-3 print:hidden" onClick={() => window.print()}>
+            <Printer size={16} />
+          </Button>
+        }
       />
       <div className="px-4 md:px-8">
-        <BookedCoversBanner date={date} />
+        <p className="hidden print:block font-bold text-sm mb-3">Production Planner · {date}</p>
+        <div className="print:hidden">
+          <BookedCoversBanner date={date} />
+        </div>
         <ReorderFlags flags={flags} />
         <IngredientForecastCard rows={forecast} />
         <div className="space-y-3">

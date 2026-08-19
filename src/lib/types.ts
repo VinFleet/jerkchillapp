@@ -361,6 +361,7 @@ export type Contact = {
   role?: string;
   phone?: string;
   email?: string;
+  website?: string;
   notes?: string;
   linkedSupplierId?: string;
 };

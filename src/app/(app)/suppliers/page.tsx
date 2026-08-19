@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Bell } from "lucide-react";
+import Link from "next/link";
+import { Plus, Bell, ChevronRight } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
@@ -84,15 +85,22 @@ function SuppliersTab({ canEdit }: { canEdit: boolean }) {
       {canEdit && <AddSupplierForm onAdded={refresh} />}
       <div className="space-y-2">
         {suppliers.map((s) => (
-          <Card key={s.id}>
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <p className="font-semibold text-sm">{s.name}</p>
-              <Badge tone={SUPPLIER_STATUS_TONE[s.status]}>{SUPPLIER_STATUS_LABEL[s.status].en}</Badge>
-            </div>
-            <Bi value={SUPPLIER_CATEGORY_LABEL[s.category]} mode="inline" className="text-xs text-muted" />
-            {s.foodSafetyCertExpiry && <p className="text-xs text-muted mt-1">Food safety cert expires {s.foodSafetyCertExpiry}</p>}
-            {s.lastReviewed && <p className="text-xs text-muted">Last reviewed {s.lastReviewed}</p>}
-          </Card>
+          <Link key={s.id} href={`/suppliers/${s.id}`}>
+            <Card className="active:bg-brand-light transition-colors">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className="font-semibold text-sm">{s.name}</p>
+                    <Badge tone={SUPPLIER_STATUS_TONE[s.status]}>{SUPPLIER_STATUS_LABEL[s.status].en}</Badge>
+                  </div>
+                  <Bi value={SUPPLIER_CATEGORY_LABEL[s.category]} mode="inline" className="text-xs text-muted" />
+                  {s.foodSafetyCertExpiry && <p className="text-xs text-muted mt-1">Food safety cert expires {s.foodSafetyCertExpiry}</p>}
+                  {s.lastReviewed && <p className="text-xs text-muted">Last reviewed {s.lastReviewed}</p>}
+                </div>
+                <ChevronRight size={18} className="text-muted shrink-0" />
+              </div>
+            </Card>
+          </Link>
         ))}
       </div>
     </div>

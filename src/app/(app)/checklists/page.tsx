@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, ArrowRight } from "lucide-react";
+import { Plus, ArrowRight, ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { BigCheckbox } from "@/components/ui/BigCheckbox";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canCompleteChecklistArea, canEditChecklistTemplate } from "@/lib/auth/permissions";
@@ -19,6 +20,48 @@ import {
 } from "@/lib/repo/checklists";
 import { todayIso } from "@/lib/storage";
 import type { ChecklistArea, ChecklistShift, ChecklistItem, ChecklistTick } from "@/lib/types";
+
+function shiftDate(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function DateNav({ date, onChange }: { date: string; onChange: (next: string) => void }) {
+  const today = todayIso();
+  const isToday = date === today;
+  return (
+    <div className="flex items-center gap-2 mb-3 print:hidden">
+      <button
+        onClick={() => onChange(shiftDate(date, -1))}
+        className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0"
+        aria-label="Previous day"
+      >
+        <ChevronLeft size={18} />
+      </button>
+      <input
+        type="date"
+        value={date}
+        max={today}
+        onChange={(e) => e.target.value && onChange(e.target.value)}
+        className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm text-center focus:outline-none focus:border-brand"
+      />
+      <button
+        onClick={() => !isToday && onChange(shiftDate(date, 1))}
+        disabled={isToday}
+        className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center shrink-0 disabled:opacity-40"
+        aria-label="Next day"
+      >
+        <ChevronRight size={18} />
+      </button>
+      {!isToday && (
+        <button onClick={() => onChange(today)} className="text-xs text-brand font-semibold shrink-0">
+          Today · Hôm nay
+        </button>
+      )}
+    </div>
+  );
+}
 
 function AddItemForm({
   area,
@@ -111,12 +154,13 @@ function ManagerOverview({ date }: { date: string }) {
 
 function ChecklistsPageContent() {
   const { session } = useSession();
-  const date = todayIso();
+  const [date, setDate] = useState(todayIso());
   const [area, setArea] = useState<ChecklistArea>("kitchen");
   const [shift, setShift] = useState<ChecklistShift>("opening");
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [ticks, setTicks] = useState<ChecklistTick[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const isToday = date === todayIso();
 
   const availableAreas = useMemo<ChecklistArea[]>(() => {
     if (!session) return [];
@@ -136,22 +180,43 @@ function ChecklistsPageContent() {
 
   if (!session) return null;
 
-  const canComplete = canCompleteChecklistArea(session.role, area);
+  const canComplete = isToday && canCompleteChecklistArea(session.role, area);
   const canEditTemplate = canEditChecklistTemplate(session.role);
   const isChecked = (itemId: string) => ticks.find((t) => t.itemId === itemId)?.checked ?? false;
+  const tickFor = (itemId: string) => ticks.find((t) => t.itemId === itemId);
 
   return (
     <div className="pb-6">
       <PageHeader
         title="Checklists · Danh Sách Công Việc"
         subtitle="Tap to check off · Chạm để hoàn thành"
+        action={
+          <Button variant="ghost" className="min-h-11 px-3 print:hidden" onClick={() => window.print()}>
+            <Printer size={16} />
+          </Button>
+        }
       />
 
       <div className="px-4 md:px-8">
-        {(session.role === "owner" || session.role === "manager") && <ManagerOverview date={date} />}
+        {(session.role === "owner" || session.role === "manager") && (
+          <div className="print:hidden">
+            <ManagerOverview date={date} />
+          </div>
+        )}
+
+        <DateNav date={date} onChange={setDate} />
+        {!isToday && (
+          <div className="mb-3 print:hidden">
+            <Badge tone="muted">Viewing history — read-only · Đang xem lịch sử — chỉ đọc</Badge>
+          </div>
+        )}
+
+        <p className="hidden print:block font-bold text-sm mb-3">
+          {date} · {area === "kitchen" ? "Kitchen" : "FOH"} · {shift === "opening" ? "Opening" : "Closing"}
+        </p>
 
         {availableAreas.length > 1 && (
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2 mb-3 print:hidden">
             {availableAreas.map((a) => (
               <button
                 key={a}
@@ -166,7 +231,7 @@ function ChecklistsPageContent() {
           </div>
         )}
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 print:hidden">
           {(["opening", "closing"] as ChecklistShift[]).map((s) => (
             <button
               key={s}
@@ -181,31 +246,39 @@ function ChecklistsPageContent() {
         </div>
 
         <div className="space-y-2">
-          {items.map((item) => (
-            <div key={item.id}>
-              <BigCheckbox
-                label={item.text}
-                checked={isChecked(item.id)}
-                disabled={!canComplete}
-                onToggle={() => {
-                  toggleTick(item.id, date, session.name);
-                  setRefreshKey((k) => k + 1);
-                }}
-              />
-              {item.linkHref && (
-                <Link href={item.linkHref} className="flex items-center gap-1 text-xs text-brand font-semibold mt-1 ml-1">
-                  Open log · Mở sổ ghi <ArrowRight size={12} />
-                </Link>
-              )}
-            </div>
-          ))}
+          {items.map((item) => {
+            const tick = tickFor(item.id);
+            return (
+              <div key={item.id}>
+                <BigCheckbox
+                  label={item.text}
+                  checked={isChecked(item.id)}
+                  disabled={!canComplete}
+                  onToggle={() => {
+                    toggleTick(item.id, date, session.name);
+                    setRefreshKey((k) => k + 1);
+                  }}
+                />
+                {item.linkHref && (
+                  <Link href={item.linkHref} className="flex items-center gap-1 text-xs text-brand font-semibold mt-1 ml-1 print:hidden">
+                    Open log · Mở sổ ghi <ArrowRight size={12} />
+                  </Link>
+                )}
+                {tick?.checked && (
+                  <p className="hidden print:block text-xs text-muted ml-1">
+                    {tick.checkedBy} · {tick.checkedAt ? new Date(tick.checkedAt).toLocaleTimeString() : ""}
+                  </p>
+                )}
+              </div>
+            );
+          })}
           {items.length === 0 && (
             <p className="text-muted text-center py-6 text-sm">No items yet · Chưa có mục nào</p>
           )}
         </div>
 
-        {canEditTemplate && (
-          <div className="mt-4">
+        {canEditTemplate && isToday && (
+          <div className="mt-4 print:hidden">
             <AddItemForm area={area} shift={shift} onAdded={() => setRefreshKey((k) => k + 1)} />
           </div>
         )}

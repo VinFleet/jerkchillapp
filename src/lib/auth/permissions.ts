@@ -40,7 +40,7 @@ export const MODULE_ORDER: ModuleId[] = [
 ];
 
 const MODULE_ACCESS: Record<ModuleId, Role[]> = {
-  recipes: ["owner", "manager", "chef", "bartender"],
+  recipes: ["owner", "manager", "chef"],
   stock: ["owner", "manager", "chef", "bartender"],
   checklists: ["owner", "manager", "chef", "bartender"],
   planner: ["owner", "manager", "chef"],

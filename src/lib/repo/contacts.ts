@@ -15,6 +15,20 @@ export function getContacts(category?: ContactCategory): Contact[] {
   return category ? all.filter((c) => c.category === category) : all;
 }
 
+export function getContact(id: string): Contact | undefined {
+  return getContacts().find((c) => c.id === id);
+}
+
+/** Seed data links suppliers to contacts from both sides (Supplier.contactId and Contact.linkedSupplierId) — check both. */
+export function getContactForSupplier(supplierId: string, supplierContactId?: string): Contact | undefined {
+  const all = getContacts();
+  if (supplierContactId) {
+    const byId = all.find((c) => c.id === supplierContactId);
+    if (byId) return byId;
+  }
+  return all.find((c) => c.linkedSupplierId === supplierId);
+}
+
 export function addContact(input: Omit<Contact, "id">): Contact {
   const entry: Contact = { ...input, id: newId("contact") };
   const all = getContacts();
