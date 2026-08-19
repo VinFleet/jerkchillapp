@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
-import { canEditSuppliers } from "@/lib/auth/permissions";
+import { canManageSuppliers } from "@/lib/auth/permissions";
 import { getSupplier, updateSupplier, getRejections, getEvaluations, toggleSupplierDocItem } from "@/lib/repo/suppliers";
 import { getContactForSupplier, addContact, updateContact } from "@/lib/repo/contacts";
 import { SUPPLIER_CATEGORY_LABEL, SUPPLIER_STATUS_LABEL, SUPPLIER_STATUS_TONE } from "@/lib/supplierLabels";
@@ -336,7 +336,7 @@ function SupplierDetailContent({ id }: { id: string }) {
     return <div className="p-6 text-center text-muted">Supplier not found · Không tìm thấy nhà cung cấp</div>;
   }
 
-  const canEdit = canEditSuppliers(session.role);
+  const canEdit = canManageSuppliers(session.role);
   const refresh = () => {
     setSupplier(getSupplier(id) ?? null);
     setTick((t) => t + 1);

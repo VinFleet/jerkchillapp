@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Bell, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, Bell, ChevronRight, Trash2, Award } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
@@ -10,15 +11,25 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
-import { canEditSuppliers } from "@/lib/auth/permissions";
-import { getSuppliers, addSupplier, getRejections, logRejection, getEvaluations, logEvaluation } from "@/lib/repo/suppliers";
+import { canEditSuppliers, canManageSuppliers } from "@/lib/auth/permissions";
+import {
+  getSuppliers,
+  addSupplier,
+  getRejections,
+  logRejection,
+  getEvaluations,
+  logEvaluation,
+  getQuotes,
+  addQuote,
+  deleteQuote,
+} from "@/lib/repo/suppliers";
 import { SUPPLIER_CATEGORY_LABEL, SUPPLIER_STATUS_LABEL, SUPPLIER_STATUS_TONE } from "@/lib/supplierLabels";
 import { todayIso } from "@/lib/storage";
-import type { Supplier, RejectionRecord, SupplierEvaluation, SupplierCategory, EvaluationDecision } from "@/lib/types";
+import type { Supplier, RejectionRecord, SupplierEvaluation, SupplierCategory, EvaluationDecision, SupplierQuote } from "@/lib/types";
 
-type Tab = "suppliers" | "rejections" | "evaluations";
+type Tab = "suppliers" | "prices" | "rejections" | "evaluations";
 
-function AddSupplierForm({ onAdded }: { onAdded: () => void }) {
+function AddSupplierForm({ onAdded }: { onAdded: (supplier: Supplier) => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [category, setCategory] = useState<SupplierCategory>("grocery");
@@ -46,7 +57,7 @@ function AddSupplierForm({ onAdded }: { onAdded: () => void }) {
       <select
         value={category}
         onChange={(e) => setCategory(e.target.value as SupplierCategory)}
-        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-3 text-sm bg-surface focus:outline-none focus:border-brand"
+        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm bg-surface focus:outline-none focus:border-brand"
       >
         {(Object.keys(SUPPLIER_CATEGORY_LABEL) as SupplierCategory[]).map((c) => (
           <option key={c} value={c}>
@@ -54,6 +65,10 @@ function AddSupplierForm({ onAdded }: { onAdded: () => void }) {
           </option>
         ))}
       </select>
+      <p className="text-xs text-muted mb-3 flex items-center gap-1.5">
+        <Award size={13} className="shrink-0" />
+        A compliance paperwork checklist is added automatically · Danh mục giấy tờ tuân thủ sẽ tự động được thêm
+      </p>
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={() => setOpen(false)}>
           Cancel
@@ -62,10 +77,10 @@ function AddSupplierForm({ onAdded }: { onAdded: () => void }) {
           className="flex-1"
           disabled={!name.trim()}
           onClick={() => {
-            addSupplier(name.trim(), category);
+            const created = addSupplier(name.trim(), category);
             setName("");
             setOpen(false);
-            onAdded();
+            onAdded(created);
           }}
         >
           Add · Thêm
@@ -76,13 +91,22 @@ function AddSupplierForm({ onAdded }: { onAdded: () => void }) {
 }
 
 function SuppliersTab({ canEdit }: { canEdit: boolean }) {
+  const router = useRouter();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const refresh = () => setSuppliers(getSuppliers());
   useEffect(() => refresh(), []);
 
   return (
     <div>
-      {canEdit && <AddSupplierForm onAdded={refresh} />}
+      {canEdit && (
+        <AddSupplierForm
+          onAdded={(created) => {
+            // Land straight on the new supplier's page so the compliance
+            // checklist that was just attached is the first thing seen.
+            router.push(`/suppliers/${created.id}`);
+          }}
+        />
+      )}
       <div className="space-y-2">
         {suppliers.map((s) => (
           <Link key={s.id} href={`/suppliers/${s.id}`}>
@@ -102,6 +126,175 @@ function SuppliersTab({ canEdit }: { canEdit: boolean }) {
             </Card>
           </Link>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function AddQuoteForm({ suppliers, onAdded, staffName }: { suppliers: Supplier[]; onAdded: () => void; staffName: string }) {
+  const [open, setOpen] = useState(false);
+  const [supplierId, setSupplierId] = useState("");
+  const [itemName, setItemName] = useState("");
+  const [packSize, setPackSize] = useState("");
+  const [unit, setUnit] = useState("");
+  const [packCostVnd, setPackCostVnd] = useState("");
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full min-h-14 rounded-2xl border-2 border-dashed border-brand-tint text-brand font-semibold flex items-center justify-center gap-2 mb-4"
+      >
+        <Plus size={18} /> Add a price quote · Thêm báo giá
+      </button>
+    );
+  }
+
+  const reset = () => {
+    setSupplierId("");
+    setItemName("");
+    setPackSize("");
+    setUnit("");
+    setPackCostVnd("");
+    setOpen(false);
+  };
+
+  return (
+    <Card className="mb-4">
+      <p className="font-semibold text-sm mb-2">New price quote · Báo giá mới</p>
+      <select
+        value={supplierId}
+        onChange={(e) => setSupplierId(e.target.value)}
+        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm bg-surface focus:outline-none focus:border-brand"
+      >
+        <option value="">Select supplier · Chọn nhà cung cấp</option>
+        {suppliers.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+      <input
+        value={itemName}
+        onChange={(e) => setItemName(e.target.value)}
+        placeholder="Item · Mặt hàng (e.g. Chicken leg quarters)"
+        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
+        list="quote-item-names"
+      />
+      <div className="flex gap-2 mb-2">
+        <input
+          value={packSize}
+          onChange={(e) => setPackSize(e.target.value)}
+          placeholder="Pack size · Quy cách (e.g. 4pc pack)"
+          className="flex-1 min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
+        />
+        <input
+          value={unit}
+          onChange={(e) => setUnit(e.target.value)}
+          placeholder="Unit · ĐVT (e.g. kg)"
+          className="w-28 min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
+        />
+      </div>
+      <input
+        type="number"
+        inputMode="decimal"
+        value={packCostVnd}
+        onChange={(e) => setPackCostVnd(e.target.value)}
+        placeholder="Price (₫) · Giá (₫)"
+        className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-3 text-sm focus:outline-none focus:border-brand"
+      />
+      <div className="flex gap-2">
+        <Button variant="ghost" className="flex-1" onClick={reset}>
+          Cancel
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={!supplierId || !itemName.trim() || !packSize.trim() || !unit.trim() || !packCostVnd.trim()}
+          onClick={() => {
+            addQuote({
+              supplierId,
+              itemName: itemName.trim(),
+              packSize: packSize.trim(),
+              unit: unit.trim(),
+              packCostVnd: Number(packCostVnd),
+              loggedBy: staffName,
+            });
+            reset();
+            onAdded();
+          }}
+        >
+          Save · Lưu
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function PricesTab({ suppliers, canEdit, staffName }: { suppliers: Supplier[]; canEdit: boolean; staffName: string }) {
+  const [quotes, setQuotes] = useState<SupplierQuote[]>([]);
+  const refresh = () => setQuotes(getQuotes());
+  useEffect(() => refresh(), []);
+  const supplierName = (id: string) => suppliers.find((s) => s.id === id)?.name ?? "—";
+
+  const groups = new Map<string, SupplierQuote[]>();
+  for (const q of quotes) {
+    const key = q.itemName.trim().toLowerCase();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(q);
+  }
+  const sortedGroups = Array.from(groups.values())
+    .map((g) => [...g].sort((a, b) => a.packCostVnd - b.packCostVnd))
+    .sort((a, b) => a[0].itemName.localeCompare(b[0].itemName));
+
+  return (
+    <div>
+      {canEdit && <AddQuoteForm suppliers={suppliers} onAdded={refresh} staffName={staffName} />}
+      <datalist id="quote-item-names">
+        {Array.from(new Set(quotes.map((q) => q.itemName))).map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
+      <div className="space-y-3">
+        {sortedGroups.map((group) => (
+          <Card key={group[0].itemName.trim().toLowerCase()}>
+            <p className="font-semibold text-sm mb-2">{group[0].itemName}</p>
+            <div className="space-y-1.5">
+              {group.map((q, i) => (
+                <div key={q.id} className="flex items-center justify-between gap-2 text-sm">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium">{supplierName(q.supplierId)}</span>
+                    <span className="text-muted"> · {q.packSize}</span>
+                    {i === 0 && group.length > 1 && (
+                      <Badge tone="success" className="ml-2">
+                        Best price · Rẻ nhất
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-semibold">
+                      {q.packCostVnd.toLocaleString("vi-VN")}₫/{q.unit}
+                    </span>
+                    {canEdit && (
+                      <button
+                        onClick={() => {
+                          deleteQuote(q.id);
+                          refresh();
+                        }}
+                        className="text-danger"
+                        aria-label="Delete quote"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+        {sortedGroups.length === 0 && (
+          <p className="text-muted text-center py-10 text-sm">No price quotes logged yet · Chưa có báo giá nào</p>
+        )}
       </div>
     </div>
   );
@@ -389,14 +582,16 @@ function SuppliersContent() {
 
   if (!session) return null;
   const canEdit = canEditSuppliers(session.role);
+  const canManage = canManageSuppliers(session.role);
 
   return (
     <div className="pb-6">
-      <PageHeader title="Supplier Management · Quản Lý Nhà Cung Cấp" subtitle="Approved list, rejections, evaluations · Danh sách, từ chối, đánh giá" />
+      <PageHeader title="Supplier Management · Quản Lý Nhà Cung Cấp" subtitle="Approved list, prices, rejections, evaluations · Danh sách, giá, từ chối, đánh giá" />
       <div className="px-4 md:px-8">
         <div className="flex gap-2 mb-4 overflow-x-auto">
           {([
             ["suppliers", "Suppliers · NCC"],
+            ["prices", "Prices · Giá"],
             ["rejections", "Rejections · Từ chối"],
             ["evaluations", "Evaluations · Đánh giá"],
           ] as [Tab, string][]).map(([t, label]) => (
@@ -412,7 +607,8 @@ function SuppliersContent() {
           ))}
         </div>
 
-        {tab === "suppliers" && <SuppliersTab canEdit={canEdit} />}
+        {tab === "suppliers" && <SuppliersTab canEdit={canManage} />}
+        {tab === "prices" && <PricesTab suppliers={suppliers} canEdit={canManage} staffName={session.name} />}
         {tab === "rejections" && <RejectionsTab suppliers={suppliers} canEdit={canEdit} staffName={session.name} />}
         {tab === "evaluations" && <EvaluationsTab suppliers={suppliers} canEdit={canEdit} staffName={session.name} />}
       </div>

@@ -232,6 +232,8 @@ export type DeliveryLog = {
   productPhotos?: string[];
   invoiceNote?: string;
   photoNote?: string;
+  /** Drawn signature (PNG data URL) confirming whoever checked the delivery actually signed off on it. */
+  signature?: string;
   accepted: boolean;
   rejectionReason?: string;
   supplierNotified?: boolean;
@@ -366,6 +368,18 @@ export type Supplier = {
   documentChecklist?: SupplierDocItem[];
   lastReviewed?: string;
   status: SupplierStatus;
+};
+
+/** A price quote from a supplier for one item — lets Chef/Manager/Owner compare the same item across suppliers before ordering. */
+export type SupplierQuote = {
+  id: string;
+  supplierId: string;
+  itemName: string;
+  packSize: string;
+  unit: string;
+  packCostVnd: number;
+  quotedAt: string;
+  loggedBy: string;
 };
 
 export type RejectionRecord = {

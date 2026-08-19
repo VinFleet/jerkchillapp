@@ -1,10 +1,11 @@
-import type { Supplier, RejectionRecord, SupplierEvaluation, SupplierCategory } from "@/lib/types";
+import type { Supplier, RejectionRecord, SupplierEvaluation, SupplierCategory, SupplierQuote } from "@/lib/types";
 import { readList, writeList, isSeeded, markSeeded, newId, todayIso } from "@/lib/storage";
-import { SEED_SUPPLIERS } from "@/lib/seed/suppliers";
+import { SEED_SUPPLIERS, STANDARD_SUPPLIER_DOC_CHECKLIST } from "@/lib/seed/suppliers";
 
 const SUPPLIERS_KEY = "suppliers";
 const REJECTIONS_KEY = "supplier_rejections";
 const EVALUATIONS_KEY = "supplier_evaluations";
+const QUOTES_KEY = "supplier_quotes";
 const KAMEREO_ENRICH_KEY = "suppliers_kamereo_enrich_v1";
 
 export function ensureSuppliersSeeded() {
@@ -48,7 +49,15 @@ export function getSupplier(id: string): Supplier | undefined {
 }
 
 export function addSupplier(name: string, category: SupplierCategory): Supplier {
-  const entry: Supplier = { id: newId("sup"), name, category, status: "review" };
+  const entry: Supplier = {
+    id: newId("sup"),
+    name,
+    category,
+    status: "review",
+    // Every new supplier gets the standard Vietnamese compliance paperwork
+    // checklist attached automatically, so onboarding one never skips it.
+    documentChecklist: STANDARD_SUPPLIER_DOC_CHECKLIST.map((d) => ({ ...d })),
+  };
   const all = getSuppliers();
   all.push(entry);
   writeList(SUPPLIERS_KEY, all);
@@ -61,6 +70,28 @@ export function updateSupplier(id: string, patch: Partial<Omit<Supplier, "id">>)
   if (idx < 0) return;
   all[idx] = { ...all[idx], ...patch };
   writeList(SUPPLIERS_KEY, all);
+}
+
+// ---------- Supplier Price Quotes ----------
+
+export function getQuotes(): SupplierQuote[] {
+  return readList<SupplierQuote>(QUOTES_KEY).sort((a, b) => (a.quotedAt < b.quotedAt ? 1 : -1));
+}
+
+export function getQuotesForSupplier(supplierId: string): SupplierQuote[] {
+  return getQuotes().filter((q) => q.supplierId === supplierId);
+}
+
+export function addQuote(input: Omit<SupplierQuote, "id" | "quotedAt"> & { quotedAt?: string }): SupplierQuote {
+  const entry: SupplierQuote = { ...input, id: newId("quote"), quotedAt: input.quotedAt ?? todayIso() };
+  const all = readList<SupplierQuote>(QUOTES_KEY);
+  all.push(entry);
+  writeList(QUOTES_KEY, all);
+  return entry;
+}
+
+export function deleteQuote(id: string) {
+  writeList(QUOTES_KEY, readList<SupplierQuote>(QUOTES_KEY).filter((q) => q.id !== id));
 }
 
 // ---------- Goods Rejection / Defect Record ----------

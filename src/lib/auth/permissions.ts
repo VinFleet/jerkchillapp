@@ -47,7 +47,7 @@ const MODULE_ACCESS: Record<ModuleId, Role[]> = {
   notices: ["owner", "manager", "chef", "bartender"],
   bookings: ["owner", "manager", "bartender"],
   foodSafety: ["owner", "manager", "chef", "bartender"],
-  suppliers: ["owner", "manager"],
+  suppliers: ["owner", "manager", "chef"],
   contacts: ["owner", "manager"],
   licensing: ["owner", "manager"],
   sales: ["owner", "manager"],
@@ -137,10 +137,22 @@ export function canEnterFoodSafetyLog(role: Role, log: FoodSafetyLogType): boole
   return false;
 }
 
-/** Supplier Management, Contacts Directory, Licensing Calendar: Owner/Manager only. */
+/** Supplier Management: rejections and formal periodic evaluations (continue/review/replace decisions) stay Owner/Manager only. */
 export function canEditSuppliers(role: Role): boolean {
   return role === "owner" || role === "manager";
 }
+
+/**
+ * Adding new suppliers, editing their contact/certification/document-checklist
+ * details, and logging price quotes: Owner/Manager/Chef — chefs are often the
+ * ones sourcing a new supplier or comparing prices day to day, so they need
+ * to be able to add one and see how prices stack up, not just Owner/Manager.
+ */
+export function canManageSuppliers(role: Role): boolean {
+  return role === "owner" || role === "manager" || role === "chef";
+}
+
+/** Contacts Directory, Licensing Calendar: Owner/Manager only. */
 
 export function canEditContacts(role: Role): boolean {
   return role === "owner" || role === "manager";

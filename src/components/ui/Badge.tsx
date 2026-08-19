@@ -10,10 +10,10 @@ const TONE_CLASSES: Record<Tone, string> = {
   brand: "bg-brand-light text-brand",
 };
 
-export function Badge({ tone = "muted", children }: { tone?: Tone; children: ReactNode }) {
+export function Badge({ tone = "muted", className = "", children }: { tone?: Tone; className?: string; children: ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${TONE_CLASSES[tone]}`}
+      className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${TONE_CLASSES[tone]} ${className}`}
     >
       {children}
     </span>
