@@ -17,7 +17,10 @@ import type {
 import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
 import { SEED_FRIDGE_UNITS, SEED_CLEANING_TASKS } from "@/lib/seed/foodSafety";
 
-const UNITS_KEY = "fs_fridge_units";
+// v2: real units on site replaced the earlier placeholder names — bumping
+// the key forces a fresh seed for anyone whose browser already stored the
+// old placeholder list (writeList/isSeeded never overwrite existing data).
+const UNITS_KEY = "fs_fridge_units_v2";
 const READINGS_KEY = "fs_temp_readings";
 const COOK_KEY = "fs_cook_logs";
 const DELIVERY_KEY = "fs_delivery_logs";
