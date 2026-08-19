@@ -2,7 +2,7 @@ import type { Recipe, RecipeFlag, Role } from "@/lib/types";
 import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
 import { SEED_RECIPES } from "@/lib/seed/recipes";
 
-const KEY = "recipes";
+const KEY = "recipes_v2";
 const FLAGS_KEY = "recipe_flags";
 
 export function ensureRecipesSeeded() {

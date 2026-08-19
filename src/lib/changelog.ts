@@ -11,6 +11,26 @@ export type ChangelogEntry = {
 // changed without having to ask.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.12",
+    date: "2026-08-19",
+    changes: [
+      {
+        en: "Delivery / Receiving Log rebuilt — pick items from a dropdown instead of typing, and attach a photo of the invoice/delivery note plus photos of the products received, straight from the camera.",
+        vi: "Làm mới Sổ Nhận Hàng — chọn mặt hàng từ danh sách thay vì gõ tay, đính kèm ảnh hóa đơn/phiếu giao hàng và ảnh sản phẩm nhận được, chụp trực tiếp bằng camera.",
+      },
+    ],
+  },
+  {
+    version: "1.11",
+    date: "2026-08-19",
+    changes: [
+      {
+        en: "Reconciled the Recipe Book against the real Chef's Recipe Book — fixed a scaling bug where 8 recipes (Mac and Cheese, House Salad, both Escovitch sauces, Apple Crumble, Custard, Gravy, Stuffing, Roast Chicken) were scaled from the wrong base portion count (over-quantifying by 20–200%), fixed House Salad's dressing sugar amount, added 10 missing recipes (Roast Potato, Long Stem Broccoli, Baby Carrot in Orange Sauce, Butternut Squash, Yorkshire Pudding, Pickled Veg, Spicy Pickles, and the 3 cocktail syrups), and replaced the 4 outdated cocktail recipes with the real batch-premix versions matching the current menu.",
+        vi: "Đối chiếu Sổ Công Thức với Sổ Công Thức Bếp thật — sửa lỗi nhân khẩu phần sai ở 8 công thức (Mì Ống Phô Mai, Salad Nhà Làm, cả 2 sốt Escovitch, Bánh Táo Nướng Giòn, Sốt Custard, Nước Sốt Gravy, Nhân Bánh Mì Nướng, Gà Nướng) khiến tính dư nguyên liệu 20–200%, sửa lượng đường sốt Salad Nhà Làm, thêm 10 công thức còn thiếu (Khoai Tây Nướng, Bông Cải Xanh Cọng Dài, Cà Rốt Baby Sốt Cam, Bí Đỏ Butternut, Bánh Yorkshire, Rau Củ Ngâm Chua, Dưa Chua Cay, và 3 loại si rô cocktail), thay 4 công thức cocktail cũ bằng công thức premix thật khớp với thực đơn hiện tại.",
+      },
+    ],
+  },
+  {
     version: "1.10",
     date: "2026-08-19",
     changes: [

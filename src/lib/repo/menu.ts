@@ -5,6 +5,7 @@ import { SEED_MENU_ITEMS, SEED_PRINTED_MATERIALS } from "@/lib/seed/menu";
 const MENU_KEY = "menu_items";
 const REPRINT_FLAG_KEY = "menu_needs_reprint";
 const MATERIALS_KEY = "printed_materials";
+const COCKTAIL_RECIPE_LINK_KEY = "menu_cocktail_recipe_link_v1";
 
 export function ensureMenuSeeded() {
   if (!isSeeded(MENU_KEY)) {
@@ -14,6 +15,23 @@ export function ensureMenuSeeded() {
   if (!isSeeded(MATERIALS_KEY)) {
     writeList(MATERIALS_KEY, SEED_PRINTED_MATERIALS);
     markSeeded(MATERIALS_KEY);
+  }
+  // One-time migration: link the 3 new cocktail menu items to their real
+  // Recipe Book entries (added after these menu items first seeded) without
+  // touching any prices a manager may have already edited.
+  if (!isSeeded(COCKTAIL_RECIPE_LINK_KEY)) {
+    const all = readList<MenuItem>(MENU_KEY);
+    let changed = false;
+    for (const seedItem of SEED_MENU_ITEMS) {
+      if (!seedItem.recipeId) continue;
+      const idx = all.findIndex((m) => m.id === seedItem.id);
+      if (idx >= 0 && !all[idx].recipeId) {
+        all[idx] = { ...all[idx], recipeId: seedItem.recipeId };
+        changed = true;
+      }
+    }
+    if (changed) writeList(MENU_KEY, all);
+    markSeeded(COCKTAIL_RECIPE_LINK_KEY);
   }
 }
 
