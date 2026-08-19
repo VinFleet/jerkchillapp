@@ -1,7 +1,6 @@
-// Downscales and compresses a captured photo to a JPEG data URL before it
-// goes into localStorage — a raw phone camera photo can be several MB, and
-// there is no file-storage backend here, so every photo has to be small
-// enough that a handful of them per delivery doesn't blow the storage quota.
+// Downscales and compresses a captured photo to a JPEG data URL. A raw phone
+// camera photo can be several MB; the full-resolution copy goes to Supabase
+// Storage and only a small preview stays in the record.
 export function compressImageFile(file: File, maxDim = 1280, quality = 0.6): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -28,4 +27,27 @@ export function compressImageFile(file: File, maxDim = 1280, quality = 0.6): Pro
     };
     reader.readAsDataURL(file);
   });
+}
+
+/** Preview size that lives inside the record — legible at a glance, ~10-20KB. */
+export const THUMB_MAX_DIM = 320;
+export const THUMB_QUALITY = 0.5;
+
+/**
+ * Produces both sizes in one pass over the file: the full-resolution copy
+ * destined for Storage, and the small preview that stays in the record so
+ * every device can see the evidence offline.
+ */
+export async function captureFullAndThumb(file: File): Promise<{ full: string; thumb: string }> {
+  const [full, thumb] = await Promise.all([
+    compressImageFile(file),
+    compressImageFile(file, THUMB_MAX_DIM, THUMB_QUALITY),
+  ]);
+  return { full, thumb };
+}
+
+/** Rough byte size of a data URL, for logging and quota decisions. */
+export function dataUrlBytes(dataUrl: string): number {
+  const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  return Math.floor((base64.length * 3) / 4);
 }

@@ -11,9 +11,25 @@ import { retrySync } from "@/lib/sync/engine";
  * that might be an hour stale.
  */
 export function SyncIndicator({ className = "" }: { className?: string }) {
-  const { status, pendingCount, syncNow } = useSync();
+  const { status, pendingCount, pendingPhotos, syncNow } = useSync();
 
   if (status === "off") return null;
+
+  // A photo that hasn't uploaded exists in exactly one place. Say so plainly
+  // — losing the device before it syncs would lose the evidence with it.
+  if (status === "synced" && pendingPhotos > 0) {
+    return (
+      <button
+        onClick={() => void syncNow()}
+        className={`flex items-center gap-1.5 text-[11px] font-semibold text-warning ${className}`}
+        aria-label={`${pendingPhotos} photos not backed up yet. Tap to retry.`}
+      >
+        <CloudOff size={13} />
+        <span className="hidden sm:inline">{pendingPhotos} photo{pendingPhotos > 1 ? "s" : ""} not backed up</span>
+        <span className="sm:hidden">{pendingPhotos} ảnh chưa lưu</span>
+      </button>
+    );
+  }
 
   const view = {
     syncing: { icon: RefreshCw, spin: true, tone: "text-muted", en: "Syncing…", vi: "Đang đồng bộ…" },

@@ -111,20 +111,24 @@ function ExportTable({ type, from, to }: { type: FoodSafetyLogType; from: string
                   inspector reading only the printed table would otherwise see
                   none of what was captured at the door. */}
               <Td>
+                {/* The preview is what prints — it's embedded in the record,
+                    so the exported PDF is self-contained and doesn't depend on
+                    a signed URL that expires or needs a connection. Full
+                    resolution stays available in the app. */}
                 <div className="flex flex-wrap items-end gap-1">
-                  {r.invoicePhoto && (
+                  {r.invoicePhotoRef && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.invoicePhoto} alt="Invoice" className="w-16 h-16 object-cover border border-black/20" />
+                    <img src={r.invoicePhotoRef.thumb} alt="Invoice" className="w-16 h-16 object-cover border border-black/20" />
                   )}
-                  {r.productPhotos?.map((src, i) => (
+                  {r.productPhotoRefs?.map((ref) => (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img key={i} src={src} alt="Product" className="w-16 h-16 object-cover border border-black/20" />
+                    <img key={ref.id} src={ref.thumb} alt="Product" className="w-16 h-16 object-cover border border-black/20" />
                   ))}
                   {r.signature && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={r.signature} alt="Signature" className="h-10 bg-white border border-black/20" />
                   )}
-                  {!r.invoicePhoto && !r.productPhotos?.length && !r.signature && "—"}
+                  {!r.invoicePhotoRef && !r.productPhotoRefs?.length && !r.signature && "—"}
                 </div>
               </Td>
             </tr>

@@ -214,6 +214,27 @@ export type DeliveryLogItem = {
   unit: string;
 };
 
+/**
+ * A photo attached to a legal record.
+ *
+ * The small preview lives in the record itself, so it syncs to every device
+ * and is visible offline. The full-resolution image goes to Supabase Storage
+ * — a phone camera shot is 150-400KB as base64, and keeping months of them
+ * inline would exhaust the browser's storage quota and make every sync
+ * re-download them.
+ *
+ * Full bytes stay on the device that took the photo until `path` is set,
+ * i.e. until the upload is confirmed. Evidence is never dropped on the
+ * assumption that an upload worked.
+ */
+export type PhotoRef = {
+  id: string;
+  /** ~320px JPEG data URL — small enough to live in the record and sync. */
+  thumb: string;
+  /** Object path in the delivery-photos bucket, once the full image is uploaded. */
+  path?: string;
+};
+
 export type DeliveryLog = {
   id: string;
   supplierId: string;
@@ -229,8 +250,11 @@ export type DeliveryLog = {
   packagingOk: boolean;
   useByOk: boolean;
   /** Photo of the invoice / delivery note. */
-  invoicePhoto?: string;
+  invoicePhotoRef?: PhotoRef;
   /** Photos of the delivered products (proof-of-delivery style). */
+  productPhotoRefs?: PhotoRef[];
+  /** Legacy inline base64, from before photos moved to Storage — migrated on load, kept so old records still render. */
+  invoicePhoto?: string;
   productPhotos?: string[];
   invoiceNote?: string;
   photoNote?: string;

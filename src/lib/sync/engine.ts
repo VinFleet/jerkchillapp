@@ -14,6 +14,7 @@ import {
   isAppendOnly,
   type SyncedCollection,
 } from "@/lib/sync/collections";
+import { uploadPendingPhotos } from "@/lib/photos/upload";
 
 /**
  * Local-first sync.
@@ -315,6 +316,9 @@ export async function syncNow(): Promise<void> {
   // a manual tap on the indicator still retries, for right after the SQL runs.
   if (status === "not_set_up") return;
   await pushAll();
+  // Photos go up before the records are pulled, so a record that arrives on
+  // another device already has a Storage path to resolve rather than a gap.
+  await uploadPendingPhotos();
   await pullAll();
 }
 

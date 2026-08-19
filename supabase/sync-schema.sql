@@ -128,3 +128,29 @@ begin
     alter publication supabase_realtime add table synced_records;
   end if;
 end $$;
+
+-- ---------- Delivery photo storage ----------
+-- Full-resolution intake photos (delivery notes, invoices, the goods
+-- themselves) live here rather than inside the record. A phone camera shot is
+-- 150-400KB as base64; keeping months of them inline exhausted the browser's
+-- storage quota and made every sync re-download them. The record keeps only a
+-- ~320px preview, so every device still sees the evidence offline.
+--
+-- Private, not public: an invoice photo shows supplier pricing, and these are
+-- compliance records. Reads go through short-lived signed URLs.
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('delivery-photos', 'delivery-photos', false, 10485760, array['image/jpeg', 'image/png'])
+on conflict (id) do nothing;
+
+drop policy if exists "Staff can read delivery photos" on storage.objects;
+create policy "Staff can read delivery photos" on storage.objects
+  for select using (bucket_id = 'delivery-photos' and auth.role() = 'authenticated');
+
+drop policy if exists "Staff can upload delivery photos" on storage.objects;
+create policy "Staff can upload delivery photos" on storage.objects
+  for insert with check (bucket_id = 'delivery-photos' and auth.role() = 'authenticated');
+
+-- No update or delete policy, deliberately. These are the photographic half
+-- of a food-safety record — once filed, an intake photo cannot be replaced or
+-- removed, matching the append-only rule on the records themselves.

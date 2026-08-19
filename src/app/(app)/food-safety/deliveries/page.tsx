@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { BigCheckbox } from "@/components/ui/BigCheckbox";
 import { PhotoField } from "@/components/ui/PhotoField";
+import { StoredPhoto } from "@/components/ui/StoredPhoto";
 import { SignaturePad } from "@/components/ui/SignaturePad";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
@@ -18,7 +19,7 @@ import { getDeliveryLogs, logDelivery } from "@/lib/repo/foodSafety";
 import { getSuppliers, getRejections, logRejection } from "@/lib/repo/suppliers";
 import { getSupplyItems, receiveSupply } from "@/lib/repo/shopping";
 import { todayIso } from "@/lib/storage";
-import type { DeliveryLog, DeliveryLogItem, Supplier, SupplyItem } from "@/lib/types";
+import type { DeliveryLog, DeliveryLogItem, Supplier, SupplyItem, PhotoRef } from "@/lib/types";
 
 const CUSTOM_ITEM = "__custom__";
 
@@ -97,8 +98,8 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
   const [packagingOk, setPackagingOk] = useState(false);
   const [useByOk, setUseByOk] = useState(false);
   const [reason, setReason] = useState("");
-  const [invoicePhoto, setInvoicePhoto] = useState<string[]>([]);
-  const [productPhotos, setProductPhotos] = useState<string[]>([]);
+  const [invoicePhoto, setInvoicePhoto] = useState<PhotoRef[]>([]);
+  const [productPhotos, setProductPhotos] = useState<PhotoRef[]>([]);
   const [signature, setSignature] = useState("");
   const [allSupplyItems, setAllSupplyItems] = useState<SupplyItem[]>([]);
 
@@ -172,11 +173,13 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
         photos={invoicePhoto}
         onChange={setInvoicePhoto}
         max={1}
+        context="delivery invoice"
       />
       <PhotoField
         label={{ en: "Photos of products received", vi: "Ảnh sản phẩm nhận được" }}
         photos={productPhotos}
         onChange={setProductPhotos}
+        context="delivery products"
       />
 
       <div className="flex gap-2 mb-2">
@@ -246,8 +249,8 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
               accepted,
               rejectionReason: accepted ? undefined : reason.trim() || undefined,
               supplierNotified: accepted ? undefined : false,
-              invoicePhoto: invoicePhoto[0],
-              productPhotos: productPhotos.length > 0 ? productPhotos : undefined,
+              invoicePhotoRef: invoicePhoto[0],
+              productPhotoRefs: productPhotos.length > 0 ? productPhotos : undefined,
               signature,
               loggedBy: staffName,
             });
@@ -399,15 +402,11 @@ function DeliveriesContent() {
                 <p className="text-sm text-danger mt-2">{log.rejectionReason}</p>
               )}
               {log.invoiceNote && <p className="text-sm text-muted mt-2">{log.invoiceNote}</p>}
-              {(log.invoicePhoto || (log.productPhotos && log.productPhotos.length > 0)) && (
+              {(log.invoicePhotoRef || (log.productPhotoRefs && log.productPhotoRefs.length > 0)) && (
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {log.invoicePhoto && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={log.invoicePhoto} alt="Invoice" className="w-16 h-16 rounded-lg object-cover border border-border" />
-                  )}
-                  {log.productPhotos?.map((src, i) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={i} src={src} alt="Product" className="w-16 h-16 rounded-lg object-cover border border-border" />
+                  {log.invoicePhotoRef && <StoredPhoto photo={log.invoicePhotoRef} alt="Invoice / delivery note" />}
+                  {log.productPhotoRefs?.map((ref) => (
+                    <StoredPhoto key={ref.id} photo={ref} alt="Product received" />
                   ))}
                 </div>
               )}
