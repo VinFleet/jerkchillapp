@@ -246,7 +246,7 @@ function AddEvaluationForm({ suppliers, onAdded, staffName }: { suppliers: Suppl
   const [period, setPeriod] = useState(String(new Date(todayIso()).getFullYear()));
   const [quality, setQuality] = useState(3);
   const [onTime, setOnTime] = useState(3);
-  const [docs, setDocs] = useState(3);
+  const [docsOk, setDocsOk] = useState(true);
   const [decision, setDecision] = useState<EvaluationDecision>("continue");
 
   if (!open) {
@@ -264,7 +264,7 @@ function AddEvaluationForm({ suppliers, onAdded, staffName }: { suppliers: Suppl
     setSupplierId("");
     setQuality(3);
     setOnTime(3);
-    setDocs(3);
+    setDocsOk(true);
     setDecision("continue");
     setOpen(false);
   };
@@ -292,7 +292,20 @@ function AddEvaluationForm({ suppliers, onAdded, staffName }: { suppliers: Suppl
       />
       <ScorePicker label="Quality · Chất lượng" value={quality} onChange={setQuality} />
       <ScorePicker label="On-time delivery · Giao hàng đúng hẹn" value={onTime} onChange={setOnTime} />
-      <ScorePicker label="Documentation · Hồ sơ giấy tờ" value={docs} onChange={setDocs} />
+      <p className="text-xs text-muted mb-1">Docs OK? · Hồ sơ đạt?</p>
+      <div className="flex gap-2 mb-3">
+        {[true, false].map((v) => (
+          <button
+            key={String(v)}
+            onClick={() => setDocsOk(v)}
+            className={`flex-1 min-h-10 rounded-full text-xs font-semibold border-2 ${
+              docsOk === v ? "bg-brand text-white border-brand" : "border-border text-muted"
+            }`}
+          >
+            {v ? "Yes · Đạt" : "No · Chưa đạt"}
+          </button>
+        ))}
+      </div>
       <p className="text-xs text-muted mb-1 mt-2">Decision · Quyết định</p>
       <div className="flex gap-2 mb-3">
         {(["continue", "review", "replace"] as EvaluationDecision[]).map((d) => (
@@ -320,7 +333,7 @@ function AddEvaluationForm({ suppliers, onAdded, staffName }: { suppliers: Suppl
               period: period.trim(),
               qualityScore: quality,
               onTimeScore: onTime,
-              documentationScore: docs,
+              docsOk,
               decision,
               evaluatedBy: staffName,
             });
@@ -354,7 +367,7 @@ function EvaluationsTab({ suppliers, canEdit, staffName }: { suppliers: Supplier
               <Badge tone={e.decision === "continue" ? "success" : e.decision === "review" ? "warning" : "danger"}>{e.decision}</Badge>
             </div>
             <p className="text-xs text-muted">
-              Quality {e.qualityScore}/5 · On-time {e.onTimeScore}/5 · Docs {e.documentationScore}/5
+              Quality {e.qualityScore}/5 · On-time {e.onTimeScore}/5 · Docs {e.docsOk ? "OK" : "Not OK"}
             </p>
             <p className="text-xs text-muted mt-1">{e.evaluatedBy}</p>
           </Card>

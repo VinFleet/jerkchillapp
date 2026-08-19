@@ -9,7 +9,7 @@ export const SEED_CONTACTS: Contact[] = [
   { id: "ct_police", category: "emergency", name: "Police · Công an", phone: "113" },
   { id: "ct_fire", category: "emergency", name: "Fire · Cứu hỏa", phone: "114" },
   { id: "ct_medical", category: "emergency", name: "Medical emergency · Cấp cứu y tế", phone: "115" },
-  { id: "ct_kamereo", category: "supplier", name: "Kamereo", linkedSupplierId: "sup_kamereo", notes: "Grocery, dry goods, produce, dairy, spices — weekly price list" },
+  { id: "ct_kamereo", category: "supplier", name: "Kamereo Co., Ltd. · Công ty TNHH Kamereo", linkedSupplierId: "sup_kamereo", phone: "0812 46 37 27", email: "info@kamereo.vn", website: "kamereo.vn", notes: "F05 & F06A, 1st Floor, The Manor Officetel, 89 Nguyen Huu Canh, Ward 22, Binh Thanh District, HCMC — wholesale produce, meat, dry goods, beverages, ordered through their app" },
   { id: "ct_thai_thinh", category: "supplier", name: "Công ty TNHH MTV Thái Thịnh", linkedSupplierId: "sup_thai_thinh", notes: "Beer: Huda, Tuborg Ice, K Blanc" },
   { id: "ct_goi_da", category: "supplier", name: "Gọi Đá", phone: "0865 609 135", linkedSupplierId: "sup_goi_da", notes: "Ice" },
   { id: "ct_building", category: "building", name: "Thien Minh Building Management", phone: "0909 689 398" },

@@ -180,8 +180,8 @@ export function getTrainingRecords(staffId: string): TrainingRecord[] {
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
-export function logTraining(staffId: string, topic: string, loggedBy: string): TrainingRecord {
-  const entry: TrainingRecord = { id: newId("train"), staffId, topic, date: todayIso(), loggedBy };
+export function logTraining(staffId: string, topic: string, loggedBy: string, refresherDue?: string, trainer?: string): TrainingRecord {
+  const entry: TrainingRecord = { id: newId("train"), staffId, topic, date: todayIso(), refresherDue, trainer, loggedBy };
   const all = readList<TrainingRecord>(TRAINING_KEY);
   all.push(entry);
   writeList(TRAINING_KEY, all);
@@ -194,11 +194,11 @@ export function getHealthCert(staffId: string): HealthCert {
   return readList<HealthCert>(HEALTH_KEY).find((h) => h.staffId === staffId) ?? { staffId, expiryDate: null };
 }
 
-export function setHealthCertExpiry(staffId: string, expiryDate: string) {
+export function updateHealthCert(staffId: string, patch: Partial<Omit<HealthCert, "staffId">>) {
   const all = readList<HealthCert>(HEALTH_KEY);
   const idx = all.findIndex((h) => h.staffId === staffId);
-  if (idx >= 0) all[idx] = { staffId, expiryDate };
-  else all.push({ staffId, expiryDate });
+  if (idx >= 0) all[idx] = { ...all[idx], ...patch };
+  else all.push({ staffId, expiryDate: null, ...patch });
   writeList(HEALTH_KEY, all);
 }
 

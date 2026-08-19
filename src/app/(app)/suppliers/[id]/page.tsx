@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, use as usePromise } from "react";
-import { Phone, Mail, Globe, Pencil } from "lucide-react";
+import { Phone, Mail, Globe, Pencil, Check } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { BackLink } from "@/components/BackLink";
 import { PageHeader } from "@/components/PageHeader";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEditSuppliers } from "@/lib/auth/permissions";
-import { getSupplier, updateSupplier, getRejections, getEvaluations } from "@/lib/repo/suppliers";
+import { getSupplier, updateSupplier, getRejections, getEvaluations, toggleSupplierDocItem } from "@/lib/repo/suppliers";
 import { getContactForSupplier, addContact, updateContact } from "@/lib/repo/contacts";
 import { SUPPLIER_CATEGORY_LABEL, SUPPLIER_STATUS_LABEL, SUPPLIER_STATUS_TONE } from "@/lib/supplierLabels";
 import type { Supplier, Contact, RejectionRecord, SupplierEvaluation } from "@/lib/types";
@@ -144,6 +144,8 @@ function ContactSection({ supplier, canEdit, onChanged }: { supplier: Supplier; 
 
 function CertsSection({ supplier, canEdit, onChanged }: { supplier: Supplier; canEdit: boolean; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
+  const [businessRegNo, setBusinessRegNo] = useState(supplier.businessRegNo ?? "");
+  const [regOnFile, setRegOnFile] = useState(supplier.regOnFile ?? false);
   const [certExpiry, setCertExpiry] = useState(supplier.foodSafetyCertExpiry ?? "");
   const [otherCerts, setOtherCerts] = useState(supplier.otherCerts ?? "");
 
@@ -151,6 +153,21 @@ function CertsSection({ supplier, canEdit, onChanged }: { supplier: Supplier; ca
     return (
       <Card className="mb-4">
         <p className="font-semibold text-sm mb-2">Certifications · Chứng nhận</p>
+        <label className="text-xs text-muted">Business registration No. · Số ĐKKD</label>
+        <input
+          value={businessRegNo}
+          onChange={(e) => setBusinessRegNo(e.target.value)}
+          placeholder="e.g. 0315000500 — issued 19 Apr 2018, Dept. of Planning & Investment, HCMC"
+          className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 mt-1 text-sm focus:outline-none focus:border-brand"
+        />
+        <button
+          onClick={() => setRegOnFile((v) => !v)}
+          className={`w-full min-h-11 rounded-xl border-2 font-semibold text-sm mb-3 ${
+            regOnFile ? "bg-brand text-white border-brand" : "border-border text-muted"
+          }`}
+        >
+          {regOnFile ? "✓ Registration on file · Có ĐKKD" : "Registration on file? · Có ĐKKD?"}
+        </button>
         <label className="text-xs text-muted">Food safety cert expiry · Ngày hết hạn ATTP</label>
         <input
           type="date"
@@ -172,6 +189,8 @@ function CertsSection({ supplier, canEdit, onChanged }: { supplier: Supplier; ca
             className="flex-1"
             onClick={() => {
               updateSupplier(supplier.id, {
+                businessRegNo: businessRegNo.trim() || undefined,
+                regOnFile,
                 foodSafetyCertExpiry: certExpiry.trim() || undefined,
                 otherCerts: otherCerts.trim() || undefined,
               });
@@ -197,12 +216,58 @@ function CertsSection({ supplier, canEdit, onChanged }: { supplier: Supplier; ca
         )}
       </div>
       <p className="text-sm">
+        {supplier.regOnFile
+          ? `Registration on file${supplier.businessRegNo ? ` — ${supplier.businessRegNo}` : ""}`
+          : "Registration not yet on file · Chưa có ĐKKD trong hồ sơ"}
+      </p>
+      <p className="text-sm mt-2">
         {supplier.foodSafetyCertExpiry
           ? `Food safety cert expires ${supplier.foodSafetyCertExpiry}`
           : "No food safety cert expiry on file · Chưa có ngày hết hạn ATTP"}
       </p>
       {supplier.otherCerts && <p className="text-sm text-muted mt-1">{supplier.otherCerts}</p>}
       {supplier.lastReviewed && <p className="text-xs text-muted mt-2">Last reviewed {supplier.lastReviewed}</p>}
+    </Card>
+  );
+}
+
+function DocumentChecklistSection({ supplier, canEdit, onChanged }: { supplier: Supplier; canEdit: boolean; onChanged: () => void }) {
+  if (!supplier.documentChecklist || supplier.documentChecklist.length === 0) return null;
+  const done = supplier.documentChecklist.filter((d) => d.checked).length;
+
+  return (
+    <Card className="mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <p className="font-semibold text-sm">Paperwork to collect · Giấy tờ cần thu thập</p>
+        <Badge tone={done === supplier.documentChecklist.length ? "success" : "muted"}>
+          {done}/{supplier.documentChecklist.length}
+        </Badge>
+      </div>
+      <div className="space-y-2">
+        {supplier.documentChecklist.map((item, i) => (
+          <button
+            key={i}
+            disabled={!canEdit}
+            onClick={() => {
+              toggleSupplierDocItem(supplier.id, i);
+              onChanged();
+            }}
+            className="w-full flex items-start gap-3 text-left disabled:opacity-90"
+          >
+            <span
+              className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                item.checked ? "bg-brand border-brand text-white" : "border-border"
+              }`}
+            >
+              {item.checked && <Check size={14} />}
+            </span>
+            <span>
+              <span className="block text-sm">{item.label.en}</span>
+              <span className="block text-xs text-muted">{item.label.vi}</span>
+            </span>
+          </button>
+        ))}
+      </div>
     </Card>
   );
 }
@@ -231,7 +296,7 @@ function HistorySection({ supplierId }: { supplierId: string }) {
                   <Badge tone={e.decision === "continue" ? "success" : e.decision === "review" ? "warning" : "danger"}>{e.decision}</Badge>
                 </div>
                 <p className="text-xs text-muted">
-                  Quality {e.qualityScore}/5 · On-time {e.onTimeScore}/5 · Docs {e.documentationScore}/5
+                  Quality {e.qualityScore}/5 · On-time {e.onTimeScore}/5 · Docs {e.docsOk ? "OK" : "Not OK"}
                 </p>
               </div>
             ))}
@@ -288,6 +353,7 @@ function SupplierDetailContent({ id }: { id: string }) {
       <div className="px-4 md:px-8 mt-2">
         <ContactSection supplier={supplier} canEdit={canEdit} onChanged={refresh} />
         <CertsSection supplier={supplier} canEdit={canEdit} onChanged={refresh} />
+        <DocumentChecklistSection supplier={supplier} canEdit={canEdit} onChanged={refresh} />
         <HistorySection supplierId={supplier.id} />
       </div>
     </div>

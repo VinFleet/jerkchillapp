@@ -24,7 +24,10 @@ const UNITS_KEY = "fs_fridge_units_v2";
 const READINGS_KEY = "fs_temp_readings";
 const COOK_KEY = "fs_cook_logs";
 const DELIVERY_KEY = "fs_delivery_logs";
-const CLEANING_TASKS_KEY = "fs_cleaning_tasks";
+// v2: corrected "Walk-in fridge" Vietnamese label to match the Food Safety
+// Book exactly ("Kho lạnh", not "Tủ lạnh lớn"). Task ids are unchanged, so
+// existing sign-off records still link correctly.
+const CLEANING_TASKS_KEY = "fs_cleaning_tasks_v2";
 const CLEANING_SIGNOFFS_KEY = "fs_cleaning_signoffs";
 const INSPECTIONS_KEY = "fs_inspections";
 const SAMPLES_KEY = "fs_samples";

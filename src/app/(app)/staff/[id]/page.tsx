@@ -22,7 +22,7 @@ import {
   getTrainingRecords,
   logTraining,
   getHealthCert,
-  setHealthCertExpiry,
+  updateHealthCert,
   getDisciplinaryEntries,
   logDisciplinary,
 } from "@/lib/repo/staff";
@@ -107,22 +107,46 @@ function ConductSection({ staffId }: { staffId: string }) {
 
 function HealthCertSection({ staffId }: { staffId: string }) {
   const [editing, setEditing] = useState(false);
-  const [date, setDate] = useState("");
+  const [issueDate, setIssueDate] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [renewedOn, setRenewedOn] = useState("");
+  const [notes, setNotes] = useState("");
   const [, setTick] = useState(0);
   const cert = getHealthCert(staffId);
 
-  return (
-    <Card>
-      <p className="font-semibold text-sm mb-2">Health Certificate · Giấy Khám Sức Khỏe</p>
-      <p className="text-sm">{cert.expiryDate ? `Expires ${cert.expiryDate}` : "No date on file · Chưa có ngày"}</p>
-      {editing ? (
-        <div className="mt-2 flex items-center gap-2">
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
+  const startEditing = () => {
+    setIssueDate(cert.issueDate ?? "");
+    setExpiryDate(cert.expiryDate ?? "");
+    setRenewedOn(cert.renewedOn ?? "");
+    setNotes(cert.notes ?? "");
+    setEditing(true);
+  };
+
+  if (editing) {
+    return (
+      <Card>
+        <p className="font-semibold text-sm mb-2">Health Certificate · Giấy Khám Sức Khỏe</p>
+        <label className="text-xs text-muted">Issue date · Ngày cấp</label>
+        <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-2 mt-1 text-sm" />
+        <label className="text-xs text-muted">Expiry (annual) · Hết hạn (hàng năm)</label>
+        <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-2 mt-1 text-sm" />
+        <label className="text-xs text-muted">Renewed on · Ngày gia hạn</label>
+        <input type="date" value={renewedOn} onChange={(e) => setRenewedOn(e.target.value)} className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-2 mt-1 text-sm" />
+        <label className="text-xs text-muted">Notes · Ghi chú</label>
+        <input value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-3 mt-1 text-sm" />
+        <div className="flex gap-2">
+          <Button variant="ghost" className="flex-1 min-h-11 text-sm" onClick={() => setEditing(false)}>
+            Cancel
+          </Button>
           <Button
-            className="min-h-11 text-sm"
-            disabled={!date}
+            className="flex-1 min-h-11 text-sm"
             onClick={() => {
-              setHealthCertExpiry(staffId, date);
+              updateHealthCert(staffId, {
+                issueDate: issueDate || undefined,
+                expiryDate: expiryDate || null,
+                renewedOn: renewedOn || undefined,
+                notes: notes.trim() || undefined,
+              });
               setEditing(false);
               setTick((t) => t + 1);
             }}
@@ -130,18 +154,30 @@ function HealthCertSection({ staffId }: { staffId: string }) {
             Save
           </Button>
         </div>
-      ) : (
-        <button onClick={() => setEditing(true)} className="mt-2 text-xs text-brand font-semibold">
-          {cert.expiryDate ? "Update date · Cập nhật" : "Add date · Thêm ngày"}
-        </button>
-      )}
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <p className="font-semibold text-sm mb-2">Health Certificate · Giấy Khám Sức Khỏe</p>
+      <p className="text-sm">{cert.expiryDate ? `Expires ${cert.expiryDate}` : "No date on file · Chưa có ngày"}</p>
+      {cert.issueDate && <p className="text-xs text-muted mt-1">Issued {cert.issueDate}</p>}
+      {cert.renewedOn && <p className="text-xs text-muted">Renewed {cert.renewedOn}</p>}
+      {cert.notes && <p className="text-xs text-muted mt-1">{cert.notes}</p>}
+      <button onClick={startEditing} className="mt-2 text-xs text-brand font-semibold">
+        {cert.expiryDate ? "Update · Cập nhật" : "Add date · Thêm ngày"}
+      </button>
     </Card>
   );
 }
 
 function TrainingSection({ staffId, staffName }: { staffId: string; staffName: string }) {
   const [records, setRecords] = useState<TrainingRecord[]>([]);
+  const [open, setOpen] = useState(false);
   const [topic, setTopic] = useState("");
+  const [refresherDue, setRefresherDue] = useState("");
+  const [trainer, setTrainer] = useState("");
   const refresh = () => setRecords(getTrainingRecords(staffId));
 
   useEffect(() => {
@@ -152,30 +188,69 @@ function TrainingSection({ staffId, staffName }: { staffId: string; staffName: s
   return (
     <Card>
       <p className="font-semibold text-sm mb-2">Training Record · Hồ Sơ Đào Tạo</p>
-      <div className="flex gap-2 mb-3">
-        <input
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          placeholder="Training topic · Chủ đề"
-          className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
-        />
-        <Button
-          className="min-h-11 text-sm px-3"
-          disabled={!topic.trim()}
-          onClick={() => {
-            logTraining(staffId, topic.trim(), staffName);
-            setTopic("");
-            refresh();
-          }}
+      {open ? (
+        <div className="mb-3">
+          <input
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            placeholder="Topic · Nội dung"
+            className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
+          />
+          <label className="text-xs text-muted">Refresher due · Hạn đào tạo lại</label>
+          <input
+            type="date"
+            value={refresherDue}
+            onChange={(e) => setRefresherDue(e.target.value)}
+            className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-2 mt-1 text-sm focus:outline-none focus:border-brand"
+          />
+          <input
+            value={trainer}
+            onChange={(e) => setTrainer(e.target.value)}
+            placeholder="Trainer · Người đào tạo"
+            className="w-full min-h-11 rounded-xl border-2 border-border px-3 mb-3 text-sm focus:outline-none focus:border-brand"
+          />
+          <div className="flex gap-2">
+            <Button variant="ghost" className="flex-1 min-h-10 text-sm" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 min-h-10 text-sm"
+              disabled={!topic.trim()}
+              onClick={() => {
+                logTraining(staffId, topic.trim(), staffName, refresherDue || undefined, trainer.trim() || undefined);
+                setTopic("");
+                setRefresherDue("");
+                setTrainer("");
+                setOpen(false);
+                refresh();
+              }}
+            >
+              Save · Lưu
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="w-full min-h-11 rounded-xl border-2 border-dashed border-brand-tint text-brand font-semibold flex items-center justify-center gap-2 mb-3 text-sm"
         >
-          <Plus size={16} />
-        </Button>
-      </div>
-      <div className="space-y-1">
+          <Plus size={16} /> Add training · Thêm đào tạo
+        </button>
+      )}
+      <div className="space-y-2">
         {records.map((r) => (
-          <p key={r.id} className="text-sm">
-            {r.date} — {r.topic}
-          </p>
+          <div key={r.id} className="text-sm pb-2 border-b border-border last:border-0 last:pb-0">
+            <p>
+              {r.date} — {r.topic}
+            </p>
+            {(r.trainer || r.refresherDue) && (
+              <p className="text-xs text-muted">
+                {r.trainer && `Trainer: ${r.trainer}`}
+                {r.trainer && r.refresherDue && " · "}
+                {r.refresherDue && `Refresher due ${r.refresherDue}`}
+              </p>
+            )}
+          </div>
         ))}
         {records.length === 0 && <p className="text-muted text-sm">No training logged yet · Chưa có đào tạo</p>}
       </div>

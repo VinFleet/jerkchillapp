@@ -5,11 +5,38 @@ import { SEED_SUPPLIERS } from "@/lib/seed/suppliers";
 const SUPPLIERS_KEY = "suppliers";
 const REJECTIONS_KEY = "supplier_rejections";
 const EVALUATIONS_KEY = "supplier_evaluations";
+const KAMEREO_ENRICH_KEY = "suppliers_kamereo_enrich_v1";
 
 export function ensureSuppliersSeeded() {
-  if (isSeeded(SUPPLIERS_KEY)) return;
-  writeList(SUPPLIERS_KEY, SEED_SUPPLIERS);
-  markSeeded(SUPPLIERS_KEY);
+  if (!isSeeded(SUPPLIERS_KEY)) {
+    writeList(SUPPLIERS_KEY, SEED_SUPPLIERS);
+    markSeeded(SUPPLIERS_KEY);
+    markSeeded(KAMEREO_ENRICH_KEY);
+    return;
+  }
+  // One-time enrichment for browsers seeded before Kamereo's real business
+  // registration / cert data (Food Safety Book Section 3.3) was available.
+  // Only fills in fields the user hasn't already set — never overwrites a
+  // real edit — and never runs more than once.
+  if (!isSeeded(KAMEREO_ENRICH_KEY)) {
+    const all = readList<Supplier>(SUPPLIERS_KEY);
+    const idx = all.findIndex((s) => s.id === "sup_kamereo");
+    const seedKamereo = SEED_SUPPLIERS.find((s) => s.id === "sup_kamereo");
+    if (idx >= 0 && seedKamereo && !all[idx].businessRegNo) {
+      all[idx] = { ...all[idx], ...seedKamereo };
+      writeList(SUPPLIERS_KEY, all);
+    }
+    markSeeded(KAMEREO_ENRICH_KEY);
+  }
+}
+
+export function toggleSupplierDocItem(supplierId: string, index: number) {
+  const supplier = getSupplier(supplierId);
+  if (!supplier?.documentChecklist) return;
+  const documentChecklist = supplier.documentChecklist.map((item, i) =>
+    i === index ? { ...item, checked: !item.checked } : item
+  );
+  updateSupplier(supplierId, { documentChecklist });
 }
 
 export function getSuppliers(): Supplier[] {

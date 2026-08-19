@@ -333,13 +333,23 @@ export type ComplaintLog = {
 export type SupplierCategory = "grocery" | "beer" | "liquor" | "produce_market" | "ice" | "other";
 export type SupplierStatus = "approved" | "review" | "replace";
 
+/** Free-form per-supplier paperwork checklist, e.g. "business reg on file", "HACCP cert" — items and count vary by supplier. */
+export type SupplierDocItem = {
+  label: Bi;
+  checked: boolean;
+};
+
 export type Supplier = {
   id: string;
   name: string;
   category: SupplierCategory;
   contactId?: string;
+  /** business registration number, plus issue date/authority as free text, e.g. "0315000500 — issued 19 Apr 2018, Dept. of Planning & Investment, HCMC" */
+  businessRegNo?: string;
+  regOnFile?: boolean;
   foodSafetyCertExpiry?: string;
   otherCerts?: string;
+  documentChecklist?: SupplierDocItem[];
   lastReviewed?: string;
   status: SupplierStatus;
 };
@@ -364,7 +374,8 @@ export type SupplierEvaluation = {
   period: string;
   qualityScore: number;
   onTimeScore: number;
-  documentationScore: number;
+  /** matches the Food Safety Book's Log 5.13 "Docs OK?" column — a pass/fail, not a 1-5 score. */
+  docsOk: boolean;
   decision: EvaluationDecision;
   notes?: string;
   evaluatedBy: string;
@@ -482,12 +493,18 @@ export type TrainingRecord = {
   staffId: string;
   topic: string;
   date: string;
+  /** ISO date this training needs refreshing by, per the Staff Training Record log. */
+  refresherDue?: string;
+  trainer?: string;
   loggedBy: string;
 };
 
 export type HealthCert = {
   staffId: string;
+  issueDate?: string;
   expiryDate: string | null;
+  renewedOn?: string;
+  notes?: string;
 };
 
 // ---------- Staff: hiring & recruitment ----------
