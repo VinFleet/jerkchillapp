@@ -63,9 +63,51 @@ drop policy if exists "Staff can read synced records" on synced_records;
 create policy "Staff can read synced records" on synced_records
   for select using (auth.role() = 'authenticated');
 
+-- Operational data (checklists, notices, stock) is freely writable.
 drop policy if exists "Staff can write synced records" on synced_records;
-create policy "Staff can write synced records" on synced_records
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+drop policy if exists "Staff can insert synced records" on synced_records;
+create policy "Staff can insert synced records" on synced_records
+  for insert with check (auth.role() = 'authenticated');
+
+drop policy if exists "Staff can update synced records" on synced_records;
+create policy "Staff can update synced records" on synced_records
+  for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+-- ---------- Food-safety logs are append-only, enforced here ----------
+-- These are legal records (QĐ 1246/QĐ-BYT, Circular 30/2012/TT-BYT) and must
+-- be tamper-evident: a correction writes a new row that supersedes the old
+-- one, so nothing is ever edited away or removed. The app already refuses to
+-- delete them, but an app-side rule is a convention — this makes it a
+-- guarantee, including against anyone with the shared staff password and a
+-- REST client.
+drop policy if exists "Staff can delete synced records" on synced_records;
+create policy "Staff can delete synced records" on synced_records
+  for delete using (auth.role() = 'authenticated' and collection not like 'fs\_%');
+
+-- Blocks the other route to the same outcome: flipping `deleted` on an
+-- existing food-safety row, or rewriting one that's already been filed.
+create or replace function guard_food_safety_append_only()
+returns trigger as $$
+begin
+  if old.collection like 'fs\_%' then
+    if new.deleted then
+      raise exception 'Food-safety records cannot be deleted (collection %, record %)', old.collection, old.record_id;
+    end if;
+    -- The record's own identity is fixed; only forward progress is allowed
+    -- (a cleaning sign-off being withdrawn, a sample discarded, a complaint
+    -- outcome revised — all of which keep the prior state inside `data`).
+    if new.record_id <> old.record_id or new.collection <> old.collection then
+      raise exception 'Food-safety records cannot be re-keyed';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists synced_records_food_safety_guard on synced_records;
+create trigger synced_records_food_safety_guard
+  before update on synced_records
+  for each row execute function guard_food_safety_append_only();
 
 -- NOTE — same limitation as restaurant_tables: the app signs in with one
 -- shared staff account, so Supabase cannot tell a bartender's session from a

@@ -11,6 +11,7 @@ import {
   SYNCED_COLLECTIONS,
   SYNCED_COLLECTION_IDS,
   STORAGE_KEY_TO_COLLECTION,
+  isAppendOnly,
   type SyncedCollection,
 } from "@/lib/sync/collections";
 
@@ -30,6 +31,7 @@ import {
 
 const DIRTY_KEY = "sync_dirty";
 const LAST_PULL_KEY = "sync_last_pull";
+const PUSHED_KEY_PREFIX = "sync_pushed:";
 const PULL_OVERLAP_MS = 30_000;
 
 export type SyncStatus = "off" | "not_set_up" | "offline" | "syncing" | "synced" | "error";
@@ -104,32 +106,57 @@ type RemoteRow = {
   updated_at: string;
 };
 
+/** Record ids already confirmed on the server, so immutable rows are pushed once rather than every sync. */
+function getPushedIds(collection: SyncedCollection): Set<string> {
+  return new Set(readValue<string[]>(`${PUSHED_KEY_PREFIX}${collection}`, []));
+}
+
+function addPushedIds(collection: SyncedCollection, ids: string[]) {
+  const all = getPushedIds(collection);
+  ids.forEach((id) => all.add(id));
+  writeValue(`${PUSHED_KEY_PREFIX}${collection}`, Array.from(all));
+}
+
 /**
- * Pushes whole collections rather than individual edits. They're small (a
- * day's checklist ticks, the notice board), and it means a device that was
- * offline for a while converges in one round-trip instead of replaying a
- * queue that may have grown stale.
+ * Pushes whole collections rather than individual edits — they're small, and
+ * a device that was offline for a while converges in one round-trip instead
+ * of replaying a queue that may have grown stale.
+ *
+ * The exception is immutable append-only records (a logged fridge check never
+ * changes). Those are pushed once and then skipped: a delivery log carries
+ * photos, and re-uploading months of them on every sync would be pointlessly
+ * expensive on a phone's data plan.
  */
 async function pushCollection(collection: SyncedCollection): Promise<void> {
   if (!supabase) return;
   const config = SYNCED_COLLECTIONS[collection];
   const records = readList<unknown>(config.storageKey);
   const tenant = getActiveTenant();
-
   if (records.length === 0) return;
 
-  const rows = records.map((record) => ({
-    tenant_id: tenant,
-    collection,
-    record_id: config.idOf(record),
-    data: record as Record<string, unknown>,
-    deleted: false,
-  }));
+  const skipAlreadyPushed = isAppendOnly(collection) && !config.mutable;
+  const pushed = skipAlreadyPushed ? getPushedIds(collection) : null;
+  const toPush = pushed ? records.filter((r) => !pushed.has(config.idOf(r))) : records;
+  if (toPush.length === 0) return;
 
-  const { error } = await supabase.from("synced_records").upsert(rows, {
-    onConflict: "tenant_id,collection,record_id",
-  });
-  if (error) throw error;
+  // Photos push in small batches so one oversized request can't fail the
+  // whole collection and strand a legally-required record on one device.
+  const BATCH = 25;
+  for (let i = 0; i < toPush.length; i += BATCH) {
+    const slice = toPush.slice(i, i + BATCH);
+    const rows = slice.map((record) => ({
+      tenant_id: tenant,
+      collection,
+      record_id: config.idOf(record),
+      data: record as Record<string, unknown>,
+      deleted: false,
+    }));
+    const { error } = await supabase.from("synced_records").upsert(rows, {
+      onConflict: "tenant_id,collection,record_id",
+    });
+    if (error) throw error;
+    if (skipAlreadyPushed) addPushedIds(collection, slice.map((r) => config.idOf(r)));
+  }
 }
 
 export async function pushAll(): Promise<void> {
@@ -157,24 +184,53 @@ export async function pushAll(): Promise<void> {
 // ---------- pull ----------
 
 /**
- * Merges a remote row into the local list. A record the local device has
- * pending (dirty) is left alone, so a change made offline isn't clobbered by
- * an older remote copy before it has had a chance to push.
+ * Merges remote rows into the local list.
+ *
+ * Append-only (food-safety) collections union: a record present on either
+ * side survives, nothing is deleted, and where a record legitimately
+ * progressed on both devices the collection's own reconcile decides — always
+ * in a direction that loses no information. Because nothing can be lost,
+ * these merge even while the device has unpushed changes; skipping would
+ * leave a manager's phone missing checks the tablet already recorded.
+ *
+ * Mutable (operational) collections are last-write-wins, and are skipped
+ * while dirty so an offline edit isn't clobbered by an older remote copy
+ * before it has had a chance to push.
  */
 function mergeRows(collection: SyncedCollection, rows: RemoteRow[]): boolean {
   const config = SYNCED_COLLECTIONS[collection];
-  if (getDirty().includes(collection)) return false;
+  const appendOnly = isAppendOnly(collection);
+  if (!appendOnly && getDirty().includes(collection)) return false;
 
   const local = readList<unknown>(config.storageKey);
   const byId = new Map(local.map((r) => [config.idOf(r), r]));
   let changed = false;
 
   for (const row of rows) {
+    const existing = byId.get(row.record_id);
+
+    if (appendOnly) {
+      // A tombstone on a legal record means someone deleted history. Refuse
+      // it — the local copy is evidence and stays.
+      if (row.deleted) continue;
+      if (!existing) {
+        byId.set(row.record_id, row.data);
+        changed = true;
+        continue;
+      }
+      if (!config.reconcile) continue; // immutable: the two copies are the same record
+      const merged = config.reconcile(existing, row.data);
+      if (JSON.stringify(merged) !== JSON.stringify(existing)) {
+        byId.set(row.record_id, merged);
+        changed = true;
+      }
+      continue;
+    }
+
     if (row.deleted) {
       if (byId.delete(row.record_id)) changed = true;
       continue;
     }
-    const existing = byId.get(row.record_id);
     if (!existing) {
       byId.set(row.record_id, row.data);
       changed = true;
