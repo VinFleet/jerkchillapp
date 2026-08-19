@@ -2,7 +2,10 @@ import type { Recipe, RecipeFlag, Role } from "@/lib/types";
 import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
 import { SEED_RECIPES } from "@/lib/seed/recipes";
 
-const KEY = "recipes_v2";
+// v3: pack sizes rewritten per-can so they stay correct when a recipe is
+// scaled (a total can count silently went stale at any non-base portion
+// count). Safe to reseed — recipes still aren't user-editable.
+const KEY = "recipes_v3";
 const FLAGS_KEY = "recipe_flags";
 
 export function ensureRecipesSeeded() {

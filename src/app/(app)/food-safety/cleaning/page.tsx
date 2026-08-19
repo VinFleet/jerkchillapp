@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
-import { getCleaningTasks, isCleaningSignedOff, signOffCleaning, undoCleaningSignoff } from "@/lib/repo/foodSafety";
+import { getCleaningTasks, isCleaningSignedOff, signOffCleaning, revokeCleaningSignoff } from "@/lib/repo/foodSafety";
 import { todayIso, addDaysIso } from "@/lib/storage";
 import type { CleaningTask, CleaningFrequency } from "@/lib/types";
 
@@ -109,16 +109,27 @@ function CleaningContent() {
                             <td key={d} className="p-1 text-center">
                               <button
                                 disabled={!canEnter}
+                                aria-label={`${task.area.en} — ${d}`}
                                 onClick={() => {
-                                  if (signed) undoCleaningSignoff(task.id, d);
-                                  else signOffCleaning(task.id, d, session.name);
+                                  if (signed) {
+                                    // Withdrawing a sign-off is a change to a legal
+                                    // record, so it needs a reason on file — never a
+                                    // silent one-tap reversal.
+                                    const reason = window.prompt(
+                                      `Withdraw the sign-off for ${task.area.en} on ${d}?\nRút lại xác nhận cho ${task.area.vi} ngày ${d}?\n\nReason · Lý do:`
+                                    );
+                                    if (!reason || !reason.trim()) return;
+                                    revokeCleaningSignoff(task.id, d, session.name, reason.trim());
+                                  } else {
+                                    signOffCleaning(task.id, d, session.name);
+                                  }
                                   setRefreshKey((k) => k + 1);
                                 }}
-                                className={`w-9 h-9 rounded-lg flex items-center justify-center mx-auto border-2 ${
+                                className={`w-11 h-11 rounded-lg flex items-center justify-center mx-auto border-2 ${
                                   signed ? "bg-success text-white border-success" : "border-border text-transparent"
                                 } disabled:opacity-50`}
                               >
-                                <Check size={16} strokeWidth={3} />
+                                <Check size={18} strokeWidth={3} />
                               </button>
                             </td>
                           );

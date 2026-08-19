@@ -134,19 +134,42 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
   );
 }
 
-function OutcomeForm({ complaint, onSaved }: { complaint: ComplaintLog; onSaved: () => void }) {
+function OutcomeForm({ complaint, staffName, onSaved }: { complaint: ComplaintLog; staffName: string; onSaved: () => void }) {
   const [investigation, setInvestigation] = useState(complaint.investigation ?? "");
   const [outcome, setOutcome] = useState(complaint.outcome ?? "");
   const [editing, setEditing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const revisions = complaint.revisions ?? [];
 
   if (!editing && complaint.outcome) {
     return (
       <div className="mt-2 pt-2 border-t border-border">
         <p className="text-xs font-semibold text-muted uppercase tracking-wide">Outcome · Kết quả</p>
         <p className="text-sm">{complaint.outcome}</p>
-        <button onClick={() => setEditing(true)} className="text-xs text-brand font-semibold mt-1">
-          Edit · Sửa
-        </button>
+        <div className="flex items-center gap-3 mt-1">
+          <button onClick={() => setEditing(true)} className="text-xs text-brand font-semibold">
+            Edit · Sửa
+          </button>
+          {revisions.length > 0 && (
+            <button onClick={() => setShowHistory((v) => !v)} className="text-xs text-muted font-semibold">
+              {showHistory ? "Hide" : "Show"} {revisions.length} earlier version{revisions.length > 1 ? "s" : ""} ·{" "}
+              {showHistory ? "Ẩn" : "Xem"} bản trước
+            </button>
+          )}
+        </div>
+        {showHistory && (
+          <div className="mt-2 space-y-2">
+            {revisions.map((r, i) => (
+              <div key={i} className="rounded-lg bg-black/5 dark:bg-white/5 px-3 py-2">
+                <p className="text-[11px] text-muted">
+                  Replaced by {r.replacedBy} · {new Date(r.replacedAt).toLocaleString()}
+                </p>
+                {r.investigation && <p className="text-xs mt-1">Investigation: {r.investigation}</p>}
+                {r.outcome && <p className="text-xs">Outcome: {r.outcome}</p>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -175,14 +198,19 @@ function OutcomeForm({ complaint, onSaved }: { complaint: ComplaintLog; onSaved:
         rows={2}
         className="w-full rounded-xl border-2 border-border px-3 py-2 text-sm focus:outline-none focus:border-brand"
       />
+      {complaint.outcome && (
+        <p className="text-[11px] text-muted">
+          The current version is kept on file as an earlier version · Bản hiện tại sẽ được lưu lại làm bản trước
+        </p>
+      )}
       <div className="flex gap-2">
         <Button variant="ghost" className="flex-1 min-h-10 text-sm" onClick={() => setEditing(false)}>
-          Cancel
+          Cancel · Hủy
         </Button>
         <Button
           className="flex-1 min-h-10 text-sm"
           onClick={() => {
-            updateComplaintOutcome(complaint.id, investigation.trim(), outcome.trim());
+            updateComplaintOutcome(complaint.id, investigation.trim(), outcome.trim(), staffName);
             setEditing(false);
             onSaved();
           }}
@@ -236,7 +264,7 @@ function ComplaintsContent() {
               {c.reportedToAuthority && (
                 <p className="text-xs text-muted mt-1">Reported to authority · Đã báo cơ quan chức năng</p>
               )}
-              {canManage && <OutcomeForm complaint={c} onSaved={refresh} />}
+              {canManage && <OutcomeForm complaint={c} staffName={session.name} onSaved={refresh} />}
             </Card>
           ))}
           {complaints.length === 0 && <p className="text-muted text-center py-10 text-sm">No complaints logged · Chưa có khiếu nại nào</p>}

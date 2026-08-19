@@ -101,6 +101,22 @@ export function markSupplyOrdered(id: string) {
   updateSupplyItem(id, { lastOrderedAt: todayIso() });
 }
 
+export function setSupplyOnHand(id: string, onHand: number) {
+  updateSupplyItem(id, { onHand: Math.max(0, onHand) });
+}
+
+/**
+ * Adds a received quantity to what's on hand. Called when a delivery is
+ * accepted, so counting stock isn't a separate chore staff have to remember —
+ * without this every item sits permanently "below par" and the whole ordering
+ * list stops meaning anything.
+ */
+export function receiveSupply(id: string, qty: number) {
+  const item = getSupplyItems().find((s) => s.id === id);
+  if (!item || qty <= 0) return;
+  updateSupplyItem(id, { onHand: item.onHand + qty });
+}
+
 // ---------- Unified shopping list ----------
 
 export type ShoppingListRow = {

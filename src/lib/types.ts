@@ -256,6 +256,14 @@ export type CleaningSignoff = {
   date: string;
   signedBy: string;
   signedAt: string;
+  /**
+   * A sign-off is never deleted — legally-required records are tamper-evident
+   * (edits logged, not silently overwritten). Withdrawing one stamps these
+   * instead, so the export still shows it happened and who reversed it.
+   */
+  revokedBy?: string;
+  revokedAt?: string;
+  revokedReason?: string;
 };
 
 export type InspectionStage = "before" | "during" | "before_serving";
@@ -329,6 +337,14 @@ export type PestSighting = {
 export type ComplaintCategory = "allergy" | "quality" | "service" | "other";
 export type ComplaintSeverity = "low" | "medium" | "high";
 
+/** One superseded version of a complaint's investigation/outcome, kept so the record is tamper-evident rather than overwritten in place. */
+export type ComplaintRevision = {
+  investigation?: string;
+  outcome?: string;
+  replacedBy: string;
+  replacedAt: string;
+};
+
 export type ComplaintLog = {
   id: string;
   date: string;
@@ -338,6 +354,8 @@ export type ComplaintLog = {
   description: string;
   investigation?: string;
   outcome?: string;
+  /** Previous investigation/outcome versions, oldest first. Never edited, only appended. */
+  revisions?: ComplaintRevision[];
   severity: ComplaintSeverity;
   reportedToAuthority?: boolean;
   loggedBy: string;

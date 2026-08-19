@@ -21,7 +21,10 @@ export const SEED_CLEANING_TASKS: CleaningTask[] = [
   { id: "ct_prep_surfaces", area: { en: "Food prep surfaces", vi: "Bề mặt sơ chế thực phẩm" }, frequency: "after_use", active: true },
   { id: "ct_chopping_boards", area: { en: "Chopping boards", vi: "Thớt" }, frequency: "after_use", active: true },
   { id: "ct_floors", area: { en: "Floors", vi: "Sàn nhà" }, frequency: "daily", active: true },
-  { id: "ct_walkin_fridge", area: { en: "Walk-in fridge", vi: "Kho lạnh" }, frequency: "weekly", active: true },
+  // Named for the units the temperature log actually tracks — there is no
+  // walk-in on site (see SEED_FRIDGE_UNITS above), so a "Walk-in fridge" row
+  // told staff to clean equipment the app elsewhere says doesn't exist.
+  { id: "ct_walkin_fridge", area: { en: "Fridges & freezer (deep clean)", vi: "Tủ lạnh & tủ đông (vệ sinh kỹ)" }, frequency: "weekly", active: true },
   { id: "ct_extraction", area: { en: "Extraction hood / filters", vi: "Chụp hút mùi / bộ lọc" }, frequency: "monthly", active: true },
   { id: "ct_waste_bins", area: { en: "Waste bins", vi: "Thùng rác" }, frequency: "daily", active: true },
 ];

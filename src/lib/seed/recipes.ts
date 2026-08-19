@@ -41,8 +41,11 @@ export const SEED_RECIPES: Recipe[] = [
     category: "side",
     basePortions: 36,
     ingredients: [
-      ing("i1", "Kidney beans, canned (whole cans, not drained)", "Đậu đỏ đóng hộp (nguyên hộp, không để ráo)", 1600, "g (4 cans)"),
-      ing("i2", "Coconut milk", "Nước cốt dừa", 880, "ml (2×440ml cans)"),
+      // Pack sizes are written per-can, not as a total can count — a count
+      // would go stale the moment the recipe is scaled, since only the number
+      // scales and the unit text doesn't.
+      ing("i1", "Kidney beans, canned (whole cans, not drained)", "Đậu đỏ đóng hộp (nguyên hộp, không để ráo)", 1600, "g (400g cans)"),
+      ing("i2", "Coconut milk", "Nước cốt dừa", 880, "ml (440ml cans)"),
       ing("i3", "Water", "Nước", 800, "ml"),
       ing("i4", "Long grain rice", "Gạo tẻ hạt dài", 2000, "g"),
       ing("i5", "Sea salt", "Muối biển", 36, "g"),

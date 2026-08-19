@@ -96,7 +96,7 @@ function ExportTable({ type, from, to }: { type: FoodSafetyLogType; from: string
     return (
       <table className="w-full border-collapse">
         <thead>
-          <tr><Th>Date</Th><Th>Supplier</Th><Th>Items</Th><Th>Temp °C</Th><Th>Invoice #</Th><Th>Packaging</Th><Th>Use-by</Th><Th>Result</Th><Th>Reason</Th><Th>Notified</Th><Th>Logged by</Th></tr>
+          <tr><Th>Date</Th><Th>Supplier</Th><Th>Items</Th><Th>Temp °C</Th><Th>Invoice #</Th><Th>Packaging</Th><Th>Use-by</Th><Th>Result</Th><Th>Reason</Th><Th>Notified</Th><Th>Logged by</Th><Th>Evidence</Th></tr>
         </thead>
         <tbody>
           {rows.map((r) => (
@@ -107,6 +107,26 @@ function ExportTable({ type, from, to }: { type: FoodSafetyLogType; from: string
               <Td>{r.packagingOk ? "OK" : "FAIL"}</Td><Td>{r.useByOk ? "OK" : "FAIL"}</Td>
               <Td>{r.accepted ? "Accepted" : "REJECTED"}</Td><Td>{r.rejectionReason ?? "—"}</Td>
               <Td>{r.accepted ? "—" : r.supplierNotified ? "Yes" : "No"}</Td><Td>{r.loggedBy}</Td>
+              {/* The photos and signature are the actual intake evidence — an
+                  inspector reading only the printed table would otherwise see
+                  none of what was captured at the door. */}
+              <Td>
+                <div className="flex flex-wrap items-end gap-1">
+                  {r.invoicePhoto && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.invoicePhoto} alt="Invoice" className="w-16 h-16 object-cover border border-black/20" />
+                  )}
+                  {r.productPhotos?.map((src, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={i} src={src} alt="Product" className="w-16 h-16 object-cover border border-black/20" />
+                  ))}
+                  {r.signature && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.signature} alt="Signature" className="h-10 bg-white border border-black/20" />
+                  )}
+                  {!r.invoicePhoto && !r.productPhotos?.length && !r.signature && "—"}
+                </div>
+              </Td>
             </tr>
           ))}
         </tbody>
@@ -119,12 +139,19 @@ function ExportTable({ type, from, to }: { type: FoodSafetyLogType; from: string
     return (
       <table className="w-full border-collapse">
         <thead>
-          <tr><Th>Date</Th><Th>Task</Th><Th>Signed by</Th><Th>Signed at</Th></tr>
+          <tr><Th>Date</Th><Th>Task</Th><Th>Signed by</Th><Th>Signed at</Th><Th>Status</Th></tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
               <Td>{r.date}</Td><Td>{taskName(r.taskId)}</Td><Td>{r.signedBy}</Td><Td>{new Date(r.signedAt).toLocaleTimeString()}</Td>
+              {/* Withdrawn sign-offs stay in the record rather than vanishing,
+                  so the printed log shows the full history to an inspector. */}
+              <Td>
+                {r.revokedAt
+                  ? `WITHDRAWN by ${r.revokedBy} on ${new Date(r.revokedAt).toLocaleString()}${r.revokedReason ? ` — ${r.revokedReason}` : ""}`
+                  : "Signed off"}
+              </Td>
             </tr>
           ))}
         </tbody>

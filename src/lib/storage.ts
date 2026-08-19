@@ -25,9 +25,54 @@ export function readList<T>(key: string): T[] {
   }
 }
 
+/**
+ * Raised when the browser's storage is full. Every write goes through here so
+ * a failed save is never silent — legally-required food-safety records must
+ * not appear to save and then not exist.
+ */
+export class StorageFullError extends Error {
+  constructor() {
+    super("Storage is full");
+    this.name = "StorageFullError";
+  }
+}
+
+type StorageListener = (full: boolean) => void;
+const storageListeners = new Set<StorageListener>();
+
+/** Subscribe to storage-full state so the shell can show a persistent warning. */
+export function onStorageFull(listener: StorageListener): () => void {
+  storageListeners.add(listener);
+  return () => storageListeners.delete(listener);
+}
+
+let storageIsFull = false;
+
+export function isStorageFull(): boolean {
+  return storageIsFull;
+}
+
+function setStorageFull(full: boolean) {
+  if (storageIsFull === full) return;
+  storageIsFull = full;
+  storageListeners.forEach((l) => l(full));
+}
+
+function safeSet(key: string, serialized: string): void {
+  try {
+    window.localStorage.setItem(key, serialized);
+    setStorageFull(false);
+  } catch {
+    // QuotaExceededError (name varies by browser; Safari private mode throws
+    // a plain error). Either way the write did not happen — surface it.
+    setStorageFull(true);
+    throw new StorageFullError();
+  }
+}
+
 export function writeList<T>(key: string, value: T[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(nsKey(key), JSON.stringify(value));
+  safeSet(nsKey(key), JSON.stringify(value));
 }
 
 export function readValue<T>(key: string, fallback: T): T {
@@ -42,7 +87,7 @@ export function readValue<T>(key: string, fallback: T): T {
 
 export function writeValue<T>(key: string, value: T): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(nsKey(key), JSON.stringify(value));
+  safeSet(nsKey(key), JSON.stringify(value));
 }
 
 export function isSeeded(key: string): boolean {

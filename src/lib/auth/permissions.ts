@@ -48,7 +48,10 @@ const MODULE_ACCESS: Record<ModuleId, Role[]> = {
   bookings: ["owner", "manager", "bartender"],
   foodSafety: ["owner", "manager", "chef", "bartender"],
   suppliers: ["owner", "manager", "chef"],
-  contacts: ["owner", "manager"],
+  // Everyone: kitchen and bar staff need the emergency numbers (113/114/115)
+  // and building management during a shift with no manager on site. Editing
+  // is still Owner/Manager only — see canEditContacts.
+  contacts: ["owner", "manager", "chef", "bartender"],
   licensing: ["owner", "manager"],
   sales: ["owner", "manager"],
   staff: ["owner", "manager"],

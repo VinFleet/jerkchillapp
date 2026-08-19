@@ -27,7 +27,8 @@ const DELIVERY_KEY = "fs_delivery_logs";
 // v2: corrected "Walk-in fridge" Vietnamese label to match the Food Safety
 // Book exactly ("Kho lạnh", not "Tủ lạnh lớn"). Task ids are unchanged, so
 // existing sign-off records still link correctly.
-const CLEANING_TASKS_KEY = "fs_cleaning_tasks_v2";
+// v3: renamed the "Walk-in fridge" area to match the units actually on site.
+const CLEANING_TASKS_KEY = "fs_cleaning_tasks_v3";
 const CLEANING_SIGNOFFS_KEY = "fs_cleaning_signoffs";
 const INSPECTIONS_KEY = "fs_inspections";
 const SAMPLES_KEY = "fs_samples";
@@ -182,30 +183,38 @@ export function getCleaningTasks(): CleaningTask[] {
   return readList<CleaningTask>(CLEANING_TASKS_KEY).filter((t) => t.active);
 }
 
+/** All sign-off rows for a date, including revoked ones (the export needs to show those). */
 export function getSignoffsForDate(date: string): CleaningSignoff[] {
   return readList<CleaningSignoff>(CLEANING_SIGNOFFS_KEY).filter((s) => s.date === date);
 }
 
+/** Only counts as signed off if it hasn't since been withdrawn. */
 export function isCleaningSignedOff(taskId: string, date: string): boolean {
-  return getSignoffsForDate(date).some((s) => s.taskId === taskId);
+  return getSignoffsForDate(date).some((s) => s.taskId === taskId && !s.revokedAt);
 }
 
 export function signOffCleaning(taskId: string, date: string, signedBy: string): CleaningSignoff {
   const all = readList<CleaningSignoff>(CLEANING_SIGNOFFS_KEY);
-  const existing = all.find((s) => s.taskId === taskId && s.date === date);
-  if (existing) return existing;
+  const active = all.find((s) => s.taskId === taskId && s.date === date && !s.revokedAt);
+  if (active) return active;
   const entry: CleaningSignoff = { id: newId("clean"), taskId, date, signedBy, signedAt: new Date().toISOString() };
   all.push(entry);
   writeList(CLEANING_SIGNOFFS_KEY, all);
   return entry;
 }
 
-export function undoCleaningSignoff(taskId: string, date: string) {
+/**
+ * Withdraws a sign-off without deleting it — the original row stays, stamped
+ * with who reversed it and why, so the inspector-ready export still shows the
+ * full history. Deleting the row instead would make the log tamper-*able*,
+ * which the compliance requirement explicitly forbids.
+ */
+export function revokeCleaningSignoff(taskId: string, date: string, revokedBy: string, reason: string) {
   const all = readList<CleaningSignoff>(CLEANING_SIGNOFFS_KEY);
-  writeList(
-    CLEANING_SIGNOFFS_KEY,
-    all.filter((s) => !(s.taskId === taskId && s.date === date))
-  );
+  const idx = all.findIndex((s) => s.taskId === taskId && s.date === date && !s.revokedAt);
+  if (idx < 0) return;
+  all[idx] = { ...all[idx], revokedBy, revokedAt: new Date().toISOString(), revokedReason: reason };
+  writeList(CLEANING_SIGNOFFS_KEY, all);
 }
 
 // ---------- Three-Step Food Inspection ----------
@@ -432,11 +441,36 @@ export function logComplaint(
   return entry;
 }
 
-export function updateComplaintOutcome(id: string, investigation: string, outcome: string) {
+/**
+ * Records an investigation/outcome. Any previous version is pushed onto
+ * `revisions` rather than being overwritten — this is the log most likely to
+ * matter in an allergy incident, so the earlier wording, who replaced it and
+ * when all have to survive.
+ */
+export function updateComplaintOutcome(id: string, investigation: string, outcome: string, updatedBy: string) {
   const all = readList<ComplaintLog>(COMPLAINTS_KEY);
   const idx = all.findIndex((c) => c.id === id);
   if (idx < 0) return;
-  all[idx] = { ...all[idx], investigation, outcome };
+  const prev = all[idx];
+  const hadPrevious = Boolean(prev.investigation || prev.outcome);
+  const unchanged = prev.investigation === investigation && prev.outcome === outcome;
+  if (unchanged) return;
+  all[idx] = {
+    ...prev,
+    investigation,
+    outcome,
+    revisions: hadPrevious
+      ? [
+          ...(prev.revisions ?? []),
+          {
+            investigation: prev.investigation,
+            outcome: prev.outcome,
+            replacedBy: updatedBy,
+            replacedAt: new Date().toISOString(),
+          },
+        ]
+      : prev.revisions,
+  };
   writeList(COMPLAINTS_KEY, all);
 }
 

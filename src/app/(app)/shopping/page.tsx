@@ -16,6 +16,7 @@ import {
   addSupplyItem,
   updateSupplyItem,
   updateOrderingMeta,
+  setSupplyOnHand,
   type ShoppingListRow,
 } from "@/lib/repo/shopping";
 import { getSuppliers } from "@/lib/repo/suppliers";
@@ -72,8 +73,60 @@ function EditMetaForm({ row, suppliers, onSaved }: { row: ShoppingListRow; suppl
   );
 }
 
+/** Quick stock count. Kitchen supplies only — bar counts come from the Stock Log. */
+function CountControl({ row, onChanged }: { row: ShoppingListRow; onChanged: () => void }) {
+  const [counting, setCounting] = useState(false);
+  const [value, setValue] = useState(String(row.onHand));
+
+  if (row.kind !== "supply") return null;
+
+  if (!counting) {
+    return (
+      <button
+        onClick={() => {
+          setValue(String(row.onHand));
+          setCounting(true);
+        }}
+        className="text-xs text-brand font-semibold"
+      >
+        Count · Đếm
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        inputMode="decimal"
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-20 min-h-11 rounded-xl border-2 border-brand px-2 text-sm text-center"
+        aria-label={`On hand · ${row.name.en}`}
+      />
+      <span className="text-xs text-muted">{row.unit}</span>
+      <Button
+        className="min-h-11 px-3 text-sm"
+        onClick={() => {
+          setSupplyOnHand(row.id, Number(value) || 0);
+          setCounting(false);
+          onChanged();
+        }}
+      >
+        Save · Lưu
+      </Button>
+      <button onClick={() => setCounting(false)} className="text-xs text-muted font-semibold">
+        Cancel · Hủy
+      </button>
+    </div>
+  );
+}
+
 function ShoppingRow({ row, suppliers, onChanged }: { row: ShoppingListRow; suppliers: Supplier[]; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
+  const toOrder = Math.max(0, row.par - row.onHand);
+  const supplier = suppliers.find((s) => s.id === row.supplierId);
 
   return (
     <Card>
@@ -84,9 +137,17 @@ function ShoppingRow({ row, suppliers, onChanged }: { row: ShoppingListRow; supp
             {row.onHand} / {row.par} {row.unit} · {supplierName(row.supplierId)}
           </p>
         </div>
-        <Badge tone="warning">
-          <AlertTriangle size={12} /> Below par
-        </Badge>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <Badge tone="warning">
+            <AlertTriangle size={12} /> Order {toOrder} {row.unit}
+          </Badge>
+          {supplier?.status === "replace" && (
+            <Badge tone="danger">Supplier being replaced</Badge>
+          )}
+          {supplier?.status === "review" && (
+            <Badge tone="warning">Supplier under review</Badge>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center justify-between mt-2 text-xs">
@@ -110,20 +171,23 @@ function ShoppingRow({ row, suppliers, onChanged }: { row: ShoppingListRow; supp
         />
       )}
 
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
+      <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-border flex-wrap">
         <span className="text-xs text-muted">
           {row.lastOrderedAt ? `Last ordered ${row.lastOrderedAt}` : "Never ordered · Chưa từng đặt"}
         </span>
-        <Button
-          variant="secondary"
-          className="min-h-9 text-xs px-3"
-          onClick={() => {
-            row.markOrdered();
-            onChanged();
-          }}
-        >
-          <CheckCircle2 size={14} /> Mark ordered · Đã đặt
-        </Button>
+        <div className="flex items-center gap-3">
+          <CountControl row={row} onChanged={onChanged} />
+          <Button
+            variant="secondary"
+            className="min-h-11 text-xs px-3"
+            onClick={() => {
+              row.markOrdered();
+              onChanged();
+            }}
+          >
+            <CheckCircle2 size={14} /> Mark ordered · Đã đặt
+          </Button>
+        </div>
       </div>
     </Card>
   );

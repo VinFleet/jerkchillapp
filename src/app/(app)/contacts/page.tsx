@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Phone, Mail } from "lucide-react";
+import { Plus, Phone, Mail, Pencil, Trash2 } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEditContacts } from "@/lib/auth/permissions";
-import { getContacts, addContact } from "@/lib/repo/contacts";
+import { getContacts, addContact, updateContact, removeContact } from "@/lib/repo/contacts";
 import { CONTACT_CATEGORY_LABEL, CONTACT_CATEGORY_ORDER } from "@/lib/contactLabels";
 import type { Contact, ContactCategory } from "@/lib/types";
 
@@ -104,7 +104,66 @@ function AddContactForm({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-function ContactCard({ contact }: { contact: Contact }) {
+function ContactCard({ contact, canEdit, onChanged }: { contact: Contact; canEdit: boolean; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(contact.name);
+  const [role, setRole] = useState(contact.role ?? "");
+  const [phone, setPhone] = useState(contact.phone ?? "");
+  const [email, setEmail] = useState(contact.email ?? "");
+  const [notes, setNotes] = useState(contact.notes ?? "");
+
+  if (editing) {
+    return (
+      <Card>
+        <p className="font-semibold text-sm mb-2">Edit contact · Sửa liên hệ</p>
+        <div className="space-y-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name · Tên"
+            className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand" />
+          <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Role · Vai trò"
+            className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand" />
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone · Điện thoại"
+            className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand" />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email"
+            className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand" />
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes · Ghi chú"
+            className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand" />
+        </div>
+        <div className="flex gap-2 mt-3">
+          <Button variant="ghost" className="flex-1 min-h-11 text-sm" onClick={() => setEditing(false)}>
+            Cancel · Hủy
+          </Button>
+          <Button
+            className="flex-1 min-h-11 text-sm"
+            disabled={!name.trim()}
+            onClick={() => {
+              updateContact(contact.id, {
+                name: name.trim(),
+                role: role.trim() || undefined,
+                phone: phone.trim() || undefined,
+                email: email.trim() || undefined,
+                notes: notes.trim() || undefined,
+              });
+              setEditing(false);
+              onChanged();
+            }}
+          >
+            Save · Lưu
+          </Button>
+        </div>
+        <button
+          onClick={() => {
+            if (!window.confirm(`Delete ${contact.name}? · Xóa ${contact.name}?`)) return;
+            removeContact(contact.id);
+            onChanged();
+          }}
+          className="w-full mt-3 text-xs text-danger font-semibold flex items-center justify-center gap-1"
+        >
+          <Trash2 size={12} /> Delete contact · Xóa liên hệ
+        </button>
+      </Card>
+    );
+  }
+
   return (
     <Card className="flex items-center justify-between gap-3">
       <div className="min-w-0">
@@ -130,6 +189,15 @@ function ContactCard({ contact }: { contact: Contact }) {
           >
             <Mail size={18} />
           </a>
+        )}
+        {canEdit && (
+          <button
+            onClick={() => setEditing(true)}
+            className="w-11 h-11 rounded-xl border-2 border-border text-muted flex items-center justify-center"
+            aria-label={`Edit ${contact.name}`}
+          >
+            <Pencil size={16} />
+          </button>
         )}
       </div>
     </Card>
@@ -163,7 +231,7 @@ function ContactsContent() {
               </h2>
               <div className="space-y-2">
                 {items.map((c) => (
-                  <ContactCard key={c.id} contact={c} />
+                  <ContactCard key={c.id} contact={c} canEdit={canEdit} onChanged={refresh} />
                 ))}
               </div>
             </div>

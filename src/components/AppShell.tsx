@@ -9,6 +9,7 @@ import { canAccessModule } from "@/lib/auth/permissions";
 import { useSession } from "@/lib/auth/RoleContext";
 import { ROLE_LABEL } from "@/lib/roleLabels";
 import { Bi } from "@/components/Bi";
+import { StorageFullBanner } from "@/components/StorageFullBanner";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -92,7 +93,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </button>
       </header>
 
-      <main className="flex-1 pb-24 md:pb-8 print:pb-0">{children}</main>
+      <main className="flex-1 pb-24 md:pb-8 print:pb-0">
+        <StorageFullBanner />
+        {children}
+      </main>
 
       {/* Mobile bottom nav — Home + a few primaries, everything else behind More */}
       <nav className="md:hidden print:hidden fixed bottom-0 left-0 right-0 z-20 bg-surface border-t border-border safe-bottom">

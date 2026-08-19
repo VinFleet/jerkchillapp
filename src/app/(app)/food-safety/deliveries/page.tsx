@@ -16,7 +16,7 @@ import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
 import { getDeliveryLogs, logDelivery } from "@/lib/repo/foodSafety";
 import { getSuppliers, getRejections, logRejection } from "@/lib/repo/suppliers";
-import { getSupplyItems } from "@/lib/repo/shopping";
+import { getSupplyItems, receiveSupply } from "@/lib/repo/shopping";
 import { todayIso } from "@/lib/storage";
 import type { DeliveryLog, DeliveryLogItem, Supplier, SupplyItem } from "@/lib/types";
 
@@ -251,6 +251,14 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
               signature,
               loggedBy: staffName,
             });
+            // An accepted delivery is the moment stock actually arrives, so
+            // top up what's on hand here rather than making someone count it
+            // again on the Shopping List. Rejected goods never went in.
+            if (accepted) {
+              for (const it of items) {
+                if (it.supplyItemId) receiveSupply(it.supplyItemId, it.qty);
+              }
+            }
             reset();
             onAdded();
           }}
