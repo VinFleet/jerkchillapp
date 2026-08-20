@@ -131,6 +131,7 @@ function ZaloSettingsContent() {
                   bad_state: "The request didn't match the one that started — try again from this page.",
                   expired: "It took longer than 10 minutes — start again.",
                   wrong_oa: "That's a different Official Account from the one configured here.",
+                  no_oa_id: "Zalo didn't say which Official Account was approved. Set ZALO_OA_ID and try again.",
                   exchange_failed: "Zalo rejected the code. Check the App ID and secret.",
                 }[failureReason ?? ""] ?? "Try again."
               }
@@ -165,7 +166,15 @@ function ZaloSettingsContent() {
               <br />
               Chỉ cần cấp quyền một lần.
             </p>
-            <Button onClick={() => { window.location.href = "/api/zalo/connect"; }}>
+            <Button
+              onClick={() => {
+                // A full navigation, not router.push: this route answers with a
+                // redirect to Zalo's consent screen, and a client-side
+                // navigation cannot follow one off-site.
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                window.location.href = "/api/zalo/connect";
+              }}
+            >
               <Link2 size={15} className="mr-1.5" /> Connect Zalo · Kết nối Zalo
             </Button>
           </Card>

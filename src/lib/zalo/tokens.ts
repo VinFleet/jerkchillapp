@@ -132,7 +132,10 @@ async function tokenRequest(
 export async function exchangeAuthorizationCode(
   cfg: ZaloConfig,
   code: string,
-  codeVerifier: string
+  codeVerifier: string,
+  /** The `oa_id` Zalo returns on the callback — the authoritative answer to
+   *  which Official Account was actually authorised. */
+  oaIdFromCallback: string
 ): Promise<void> {
   const db = serviceClient();
   const next = await tokenRequest(cfg, {
@@ -144,7 +147,7 @@ export async function exchangeAuthorizationCode(
   const { error } = await db.from("zalo_tokens").upsert(
     {
       scope: "oa",
-      subject_id: cfg.oaId,
+      subject_id: oaIdFromCallback,
       access_token: next.accessToken,
       refresh_token: next.refreshToken,
       access_expires: new Date(next.accessExpiresAt).toISOString(),
@@ -153,7 +156,7 @@ export async function exchangeAuthorizationCode(
     { onConflict: "scope,subject_id" }
   );
   if (error) throw new Error(`Could not store the Zalo grant: ${error.message}`);
-  await audit(db, cfg.oaId, "exchange");
+  await audit(db, oaIdFromCallback, "exchange");
 }
 
 /**
@@ -162,9 +165,34 @@ export async function exchangeAuthorizationCode(
  * Throws rather than returning null when there is no grant at all: that is a
  * setup problem a person has to fix, and silently doing nothing would hide it.
  */
+/**
+ * Which OA this app is actually working with.
+ *
+ * ZALO_OA_ID is optional, because the consent callback tells us the answer. If
+ * it isn't configured, the stored grant is the source of truth — there is only
+ * ever one for a single restaurant.
+ */
+async function resolveOaId(db: SupabaseClient, cfg: ZaloConfig): Promise<string | null> {
+  if (cfg.oaId) return cfg.oaId;
+  const { data } = await db
+    .from("zalo_tokens")
+    .select("subject_id")
+    .eq("scope", "oa")
+    .limit(1)
+    .maybeSingle();
+  return (data as { subject_id?: string } | null)?.subject_id ?? null;
+}
+
 export async function getValidAccessToken(cfg: ZaloConfig): Promise<string> {
   const db = serviceClient();
-  const current = await loadTokens(db, cfg.oaId);
+  const oaId = await resolveOaId(db, cfg);
+  if (!oaId) {
+    throw new ZaloError(
+      -135,
+      "No Zalo grant stored — the owner needs to connect the Official Account"
+    );
+  }
+  const current = await loadTokens(db, oaId);
   if (!current) {
     throw new ZaloError(
       -135,
@@ -183,7 +211,7 @@ export async function getValidAccessToken(cfg: ZaloConfig): Promise<string> {
       grant_type: "refresh_token",
     });
   } catch (err) {
-    await audit(db, cfg.oaId, "refresh_failed", err instanceof Error ? err.message : String(err));
+    await audit(db, oaId, "refresh_failed", err instanceof Error ? err.message : String(err));
     throw err;
   }
 
@@ -200,7 +228,7 @@ export async function getValidAccessToken(cfg: ZaloConfig): Promise<string> {
       rotated_at: rotatedAt,
     })
     .eq("scope", "oa")
-    .eq("subject_id", cfg.oaId)
+    .eq("subject_id", oaId)
     .eq("rotated_at", current.rotatedAt)
     .select("access_token");
 
@@ -208,7 +236,7 @@ export async function getValidAccessToken(cfg: ZaloConfig): Promise<string> {
     // We hold a rotated pair we could not persist. This is the unrecoverable
     // case the design exists to avoid, so it is logged loudly rather than
     // swallowed.
-    await audit(db, cfg.oaId, "refresh_failed", `persist failed: ${error.message}`);
+    await audit(db, oaId, "refresh_failed", `persist failed: ${error.message}`);
     throw new Error(
       `Zalo token rotated but could not be saved (${error.message}) — reconnect the Official Account`
     );
@@ -217,11 +245,11 @@ export async function getValidAccessToken(cfg: ZaloConfig): Promise<string> {
   if (!data || data.length === 0) {
     // Another invocation won the race and wrote first. Ours is now the stale
     // one; use theirs rather than rotating again.
-    const winner = await loadTokens(db, cfg.oaId);
+    const winner = await loadTokens(db, oaId);
     if (winner) return winner.accessToken;
     throw new Error("Zalo token refresh raced and no grant remains — reconnect the Official Account");
   }
 
-  await audit(db, cfg.oaId, "refresh");
+  await audit(db, oaId, "refresh");
   return next.accessToken;
 }

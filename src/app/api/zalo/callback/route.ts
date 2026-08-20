@@ -50,14 +50,20 @@ export async function GET(request: Request) {
   }
   if (!verifier) return done(request, { connected: "0", reason: "expired" });
 
-  // Zalo returns oa_id on the callback; if it disagrees with the configured
-  // one, the owner approved a different Official Account than this app expects.
-  if (oaId && oaId !== cfg.oaId) {
+  // Zalo returns oa_id on the callback. When ZALO_OA_ID is configured it is
+  // enforced — approving some other Official Account is a mistake worth
+  // catching. When it isn't, this callback is how we learn which OA we have,
+  // so there is nothing to compare against and the returned value is stored.
+  if (cfg.oaId && oaId && oaId !== cfg.oaId) {
     return done(request, { connected: "0", reason: "wrong_oa" });
+  }
+  const effectiveOaId = oaId ?? cfg.oaId;
+  if (!effectiveOaId) {
+    return done(request, { connected: "0", reason: "no_oa_id" });
   }
 
   try {
-    await exchangeAuthorizationCode(cfg, code, verifier);
+    await exchangeAuthorizationCode(cfg, code, verifier, effectiveOaId);
     return done(request, { connected: "1" });
   } catch {
     return done(request, { connected: "0", reason: "exchange_failed" });

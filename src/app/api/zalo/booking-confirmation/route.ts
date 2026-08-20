@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendBookingConfirmation } from "@/lib/zalo/zns";
-import { zaloIsConfigured } from "@/lib/zalo/config";
+import { zaloBookingConfirmationsConfigured } from "@/lib/zalo/config";
 
 /**
  * Sends a guest their booking confirmation over Zalo.
@@ -26,7 +26,7 @@ type Body = {
 };
 
 export async function POST(request: Request) {
-  if (!zaloIsConfigured()) {
+  if (!zaloBookingConfirmationsConfigured()) {
     return NextResponse.json({ status: "skipped", reason: "not_configured" });
   }
 

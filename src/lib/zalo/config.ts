@@ -13,8 +13,14 @@
 export type ZaloConfig = {
   appId: string;
   appSecret: string;
-  oaId: string;
-  bookingTemplateId: string;
+  /**
+   * Optional. Zalo returns `oa_id` on the consent callback, which is how you
+   * learn which Official Account was authorised — so requiring it up front
+   * would send the owner hunting for a value the flow is about to hand us.
+   * When set, it is enforced: approving a different OA is rejected.
+   */
+  oaId: string | null;
+  bookingTemplateId: string | null;
   /** Sends go to Zalo's dev wallet and only reach OA admins. */
   developmentMode: boolean;
 };
@@ -22,10 +28,12 @@ export type ZaloConfig = {
 function readConfig(): ZaloConfig | null {
   const appId = process.env.ZALO_APP_ID;
   const appSecret = process.env.ZALO_APP_SECRET;
-  const oaId = process.env.ZALO_OA_ID;
-  const bookingTemplateId = process.env.ZALO_BOOKING_TEMPLATE_ID;
+  const oaId = process.env.ZALO_OA_ID ?? null;
+  // Only the booking-confirmation path needs a template; group messaging and
+  // the connection itself do not, so it must not gate the whole integration.
+  const bookingTemplateId = process.env.ZALO_BOOKING_TEMPLATE_ID ?? null;
 
-  if (!appId || !appSecret || !oaId || !bookingTemplateId) return null;
+  if (!appId || !appSecret) return null;
 
   return {
     appId,
@@ -46,8 +54,21 @@ export function getZaloConfig(): ZaloConfig | null {
   return readConfig();
 }
 
+/** Whether Zalo is connected at all — app id and secret present. */
 export function zaloIsConfigured(): boolean {
   return typeof window === "undefined" && readConfig() !== null;
+}
+
+/**
+ * Whether guest booking confirmations specifically can be sent.
+ *
+ * Separate from zaloIsConfigured because the group-message path needs no
+ * template — treating them as one flag would have blocked free group alerts on
+ * a paid feature the restaurant may never enable.
+ */
+export function zaloBookingConfirmationsConfigured(): boolean {
+  const cfg = typeof window === "undefined" ? readConfig() : null;
+  return Boolean(cfg?.bookingTemplateId);
 }
 
 /** Service-role Supabase credentials, used only for the locked-down token table. */

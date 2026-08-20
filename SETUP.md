@@ -161,7 +161,13 @@ at any hour.
 - [ ] A **Zalo Cloud Account** at [zalo.cloud](https://zalo.cloud), linked and
       funded. Without it every send fails with `-136` / `-137`.
 - [ ] A **Zalo App** at [developers.zalo.me](https://developers.zalo.me), linked
-      to the OA. Gives you the App ID and secret.
+      to the OA. Gives you the App ID and secret. **✅ Done — 20 Aug 2026.**
+- [ ] In the Zalo app console, register the **callback URL** under Login →
+      Add Platform → Web. It must **byte-match** what the app sends:
+      `https://<your-vercel-domain>/api/zalo/callback`
+      Zalo does not document wildcard or prefix matching — assume exact match,
+      and note that a `localhost` URL is usually rejected, so do this against
+      the deployed site rather than your laptop.
 - [ ] A **message template** submitted and approved by Zalo. Review takes days,
       so do this early. It needs three parameters named `customer`, `time`
       and `guests`.
@@ -183,13 +189,22 @@ since it varies by template.
       what keeps them out of the browser:
 
   ```
-  ZALO_APP_ID
-  ZALO_APP_SECRET
-  ZALO_OA_ID
-  ZALO_BOOKING_TEMPLATE_ID
-  SUPABASE_SERVICE_ROLE_KEY     # Supabase → Project Settings → API
+  ZALO_APP_ID                   # required
+  ZALO_APP_SECRET               # required
+  SUPABASE_SERVICE_ROLE_KEY     # required — Supabase → Project Settings → API
+  ZALO_REDIRECT_URI             # the callback URL you registered above
+  ZALO_BOOKING_TEMPLATE_ID      # only for guest booking confirmations
+  ZALO_OA_ID                    # optional — learned from the connect callback
   ```
 
+  You do **not** need to hunt for the OA ID. Zalo returns it when you approve
+  the app, and it's stored then. Set it only if you want the app to refuse a
+  connection to any other Official Account.
+
+- [ ] Go to **Settings → Zalo connection → Connect Zalo** and approve the app.
+      One tap, once. The page then reports what your Official Account can
+      actually do — whether the package covers group messaging, and whether a
+      Cloud Account is linked for paid guest messages.
 - [ ] Set `ZALO_DEVELOPMENT_MODE=true` for the first test. In development mode
       Zalo only delivers to OA administrators, so you can prove the whole path
       without messaging a real guest. Remove it when you're happy.

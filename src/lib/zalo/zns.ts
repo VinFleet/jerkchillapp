@@ -55,7 +55,10 @@ export async function sendBookingConfirmation(
   now: Date = new Date()
 ): Promise<ZnsSendResult> {
   const cfg = getZaloConfig();
-  if (!cfg) return { status: "skipped", reason: "not_configured" };
+  // A missing template means booking confirmations specifically aren't set up,
+  // even though the rest of the Zalo integration may be. Skipping is correct —
+  // sending a null template_id would just earn a -109.
+  if (!cfg || !cfg.bookingTemplateId) return { status: "skipped", reason: "not_configured" };
 
   const phone = normalizeVnPhone(input.phone);
   if (!phone) return { status: "skipped", reason: "invalid_phone" };
