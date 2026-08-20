@@ -128,3 +128,79 @@ restaurant.
 - **Backups**: Supabase takes automatic daily backups on paid plans; on
   the free tier there's no automatic backup, so if the booking data
   becomes business-critical, that's worth budgeting for eventually.
+
+---
+
+## Part 6 — Zalo booking confirmations (optional, costs money)
+
+**Skip this entirely if you don't want it.** Everything else works without it,
+and the app behaves exactly as it does today until all four environment
+variables below exist.
+
+### What this does and doesn't do
+
+Zalo will send a **guest** their booking confirmation. It will **not** carry the
+restaurant's own reminders, for reasons that are Zalo's rules, not ours:
+
+- **Nothing sends between 22:00 and 06:00 Vietnam time.** A hard platform ban.
+  The closing checklist, the last fridge check and the end-of-day sales entry
+  all happen inside that window.
+- **You cannot message someone who hasn't contacted your OA in the last 7 days.**
+  Staff won't do that reliably.
+- **There is no API for posting into a group chat.** The staff Zalo group can't
+  be written to programmatically.
+
+For internal messages, use the **Share** buttons already in the app — they drop
+the rota, order list or notice straight into whichever Zalo chat you pick, free,
+at any hour.
+
+### Before you can turn it on
+
+- [ ] An **Official Account** at [oa.zalo.me](https://oa.zalo.me), **verified**.
+      Unverified accounts cannot send ZNS at all.
+- [ ] A **Zalo Cloud Account** at [zalo.cloud](https://zalo.cloud), linked and
+      funded. Without it every send fails with `-136` / `-137`.
+- [ ] A **Zalo App** at [developers.zalo.me](https://developers.zalo.me), linked
+      to the OA. Gives you the App ID and secret.
+- [ ] A **message template** submitted and approved by Zalo. Review takes days,
+      so do this early. It needs three parameters named `customer`, `time`
+      and `guests`.
+- [ ] Ask Zalo about their rule that personal data be **processed on servers in
+      Vietnam**. Vercel is not in Vietnam. We don't know how strictly this is
+      enforced for a small restaurant, but it is their written policy and it is
+      better to ask before paying.
+
+Rough cost: Zalo's own sample template lists ~800đ per message. At ten bookings
+a day that is on the order of 240,000đ/month — but confirm your real price,
+since it varies by template.
+
+### Turning it on
+
+- [ ] Run [`supabase/zalo-schema.sql`](supabase/zalo-schema.sql) in the Supabase
+      SQL editor. Creates the token table, locked so only the server can read it.
+- [ ] In Vercel, add these environment variables (**Project Settings →
+      Environment Variables**). None of them start with `NEXT_PUBLIC_`, which is
+      what keeps them out of the browser:
+
+  ```
+  ZALO_APP_ID
+  ZALO_APP_SECRET
+  ZALO_OA_ID
+  ZALO_BOOKING_TEMPLATE_ID
+  SUPABASE_SERVICE_ROLE_KEY     # Supabase → Project Settings → API
+  ```
+
+- [ ] Set `ZALO_DEVELOPMENT_MODE=true` for the first test. In development mode
+      Zalo only delivers to OA administrators, so you can prove the whole path
+      without messaging a real guest. Remove it when you're happy.
+- [ ] Make a test booking on `/book` using **your own** phone number and confirm
+      the Zalo message arrives.
+- [ ] Set `ZALO_DEVELOPMENT_MODE=false` (or delete it) to go live.
+
+### If it stops working
+
+The most likely cause is money: `-137` means the Zalo Cloud Account can't be
+charged. `-135` means the OA lost its verification or paid plan. `-133` means
+you tried to send at night. Nothing here can break a booking — confirmations are
+sent after the booking is already saved, and a failure is logged, not shown to
+the guest.

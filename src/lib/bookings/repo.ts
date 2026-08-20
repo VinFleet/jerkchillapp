@@ -181,8 +181,48 @@ export async function getPublicAvailability(date: string): Promise<AvailabilityR
 }
 
 export async function createPublicBooking(input: NewBookingInput): Promise<void> {
-  const { error } = await requireClient()
+  const { data, error } = await requireClient()
     .from("bookings")
-    .insert({ ...input, tenant_id: TENANT_ID, source: "online", duration_minutes: input.duration_minutes ?? 90 });
+    .insert({ ...input, tenant_id: TENANT_ID, source: "online", duration_minutes: input.duration_minutes ?? 90 })
+    .select("id")
+    .single();
   if (error) throw error;
+
+  // The booking is saved at this point. Confirming it over Zalo is a courtesy
+  // on top, so it is deliberately not awaited and never rethrows — a guest
+  // whose confirmation fails still has a table, and must not be shown an error
+  // suggesting otherwise. The route answers "skipped" when Zalo isn't set up,
+  // which is the normal case until the Official Account exists.
+  void notifyGuestOverZalo({
+    bookingRef: (data as { id: string }).id,
+    phone: input.customer_phone,
+    guestName: input.customer_name,
+    bookingTime: `${input.booking_time.slice(0, 5)} ${formatDateForGuest(input.booking_date)}`,
+    partySize: input.party_size,
+  });
+}
+
+/** "2026-08-20" -> "20/08/2026", the format Zalo templates expect. */
+function formatDateForGuest(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+async function notifyGuestOverZalo(payload: {
+  bookingRef: string;
+  phone: string;
+  guestName: string;
+  bookingTime: string;
+  partySize: number;
+}): Promise<void> {
+  try {
+    await fetch("/api/zalo/booking-confirmation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Offline, blocked, or the route is unreachable — none of which should
+    // surface to a guest who has already booked.
+  }
 }
