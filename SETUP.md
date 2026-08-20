@@ -56,8 +56,17 @@ restaurant.
 
 ## Part 2 — Test it locally
 
-- [ ] Go to `/bookings` in the app, sign in with the staff login you
-      created, and confirm the page loads (no "not connected" message).
+- [ ] Open the app. On the "Where are you working?" screen, tap **Kitchen**
+      and enter the **station login** — this is the one-time device setup.
+      You should land on the home screen and be asked to pick a name.
+- [ ] Check the sync indicator in the header reads **"Up to date"** and not
+      the red **"Not shared"**. Red means the device has no session and is
+      recording only to itself.
+- [ ] Tap **Log out**, then choose **Manager / Owner** and sign in with your
+      **owner** login. If it says the account has no role assigned, the
+      `staff_roles` step above hasn't run — it shows you the exact SQL.
+- [ ] Go to `/bookings` and confirm the page loads (no "not connected"
+      message, and no second login prompt — the station session covers it).
 - [ ] Under "Manage tables," add your real tables — table number + seat
       count for each. (This only needs doing once.)
 - [ ] Go to `/book` (the public page, no login) in a **different browser
