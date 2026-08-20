@@ -29,8 +29,12 @@ export function WhoIsWorking({ compact = false }: { compact?: boolean }) {
   // reading "checked by: (blank)" is the same as no check having happened. So
   // the shift can't start until someone is named: this opens on its own and,
   // below, refuses to close while the name is still empty.
+  // Tracks `unset` in both directions on purpose. The chip is mounted twice —
+  // sidebar and mobile header — so closing only the copy that was tapped would
+  // leave the other one's sheet open behind it. Only a change in `unset` runs
+  // this, so opening the sheet by hand to swap names still works.
   useEffect(() => {
-    if (unset) setOpen(true);
+    setOpen(unset);
   }, [unset]);
 
   if (!session) return null;
