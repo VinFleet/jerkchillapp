@@ -18,6 +18,8 @@ import {
 } from "./errors.ts";
 import { escapeMentions } from "./mentions.ts";
 import { toNfc, zaloLength, fitsZaloLimit, truncateForZalo } from "./text.ts";
+import { createPkce, challengeFor, createState } from "./pkce.ts";
+import { tierAllowsGroups, assessCapabilities } from "./capabilities.ts";
 
 // ---------- phone ----------
 
@@ -249,4 +251,84 @@ test("truncating never leaves a diacritic orphaned", () => {
   // A combining mark at the start would attach to whatever text follows it.
   assert.ok(!/^[\u0300-\u036f]/.test(cut), "must not begin with a combining mark");
   assert.equal(cut, "Nguyễn");
+});
+
+// ---------- PKCE ----------
+
+test("the verifier is exactly the 43 characters Zalo pins it to", () => {
+  // Zalo does not accept RFC 7636's 43-128 range — it wants 43.
+  for (let i = 0; i < 20; i += 1) {
+    const { verifier } = createPkce();
+    assert.equal(verifier.length, 43, `got ${verifier.length}`);
+    assert.match(verifier, /^[A-Za-z0-9_-]+$/, "base64url only, no padding");
+  }
+});
+
+test("the challenge hashes raw digest bytes, not the hex string", () => {
+  // Hashing the 64-char hex digest instead of the 32 raw bytes is the classic
+  // mistake here, and it fails silently with no useful error from Zalo.
+  const verifier = "a".repeat(43);
+  const challenge = challengeFor(verifier);
+
+  assert.match(challenge, /^[A-Za-z0-9_-]+$/, "base64url, unpadded");
+  // 32 raw bytes -> 43 base64url chars. A hex-string hash would give 86.
+  assert.equal(challenge.length, 43);
+  assert.equal(challengeFor(verifier), challenge, "deterministic");
+});
+
+test("each connect attempt gets a fresh verifier and state", () => {
+  const a = createPkce();
+  const b = createPkce();
+  assert.notEqual(a.verifier, b.verifier);
+  assert.notEqual(createState(), createState());
+});
+
+// ---------- OA capability gating ----------
+
+test("group messaging needs the right package, not just verification", () => {
+  assert.equal(tierAllowsGroups("Advanced"), true);
+  assert.equal(tierAllowsGroups("Premium"), true);
+  assert.equal(tierAllowsGroups("Basic"), false);
+  assert.equal(tierAllowsGroups(null), false);
+});
+
+test("a verified OA on the wrong package is told exactly what is missing", () => {
+  // The real case: verification done, everything else still outstanding.
+  const caps = assessCapabilities({
+    oaid: "1",
+    name: "Jerk & Chill",
+    isVerified: true,
+    packageName: "Basic",
+    packageValidThrough: null,
+    linkedZca: false,
+    followers: 12,
+  });
+
+  assert.equal(caps.groupMessaging.available, false);
+  assert.ok(
+    caps.groupMessaging.blockedBy.some((r) => r.includes("Advanced")),
+    "must name the package it needs"
+  );
+  assert.ok(
+    !caps.groupMessaging.blockedBy.some((r) => r.includes("not verified")),
+    "must not report verification as missing when it is done"
+  );
+
+  assert.equal(caps.bookingConfirmations.available, false);
+  assert.ok(caps.bookingConfirmations.blockedBy.some((r) => r.includes("Cloud Account")));
+});
+
+test("a fully provisioned OA reports everything ready", () => {
+  const caps = assessCapabilities({
+    oaid: "1",
+    name: "Jerk & Chill",
+    isVerified: true,
+    packageName: "Premium",
+    packageValidThrough: "2027-01-01",
+    linkedZca: true,
+    followers: 40,
+  });
+  assert.equal(caps.groupMessaging.available, true);
+  assert.equal(caps.bookingConfirmations.available, true);
+  assert.deepEqual(caps.groupMessaging.blockedBy, []);
 });

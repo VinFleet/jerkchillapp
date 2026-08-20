@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { useSession } from "@/lib/auth/RoleContext";
@@ -72,6 +72,20 @@ function SettingsContent() {
         </Card>
         <Link href="/changelog" className="block text-center text-xs text-muted mt-4">
           App version v{CURRENT_VERSION} · What&apos;s new · Có gì mới
+        </Link>
+      </div>
+      <div className="px-4 md:px-8 mt-3">
+        <Link
+          href="/settings/zalo"
+          className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light"
+        >
+          <span>
+            <span className="block font-semibold text-sm">Zalo connection</span>
+            <span className="block text-xs text-muted">
+              Kết nối Zalo — what the Official Account can send
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-muted shrink-0" />
         </Link>
       </div>
     </div>
