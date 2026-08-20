@@ -245,6 +245,15 @@ values ('${check.userId}', 'owner', 'Owner');`}
       </div>
     );
   }
+  if (check.reason === "lookup-failed") {
+    return (
+      <div className="rounded-2xl border-2 border-danger p-3">
+        <p className="text-sm font-semibold text-danger">Couldn&apos;t check your role.</p>
+        <p className="text-xs text-danger/80 mt-1">Không kiểm tra được vai trò.</p>
+        <p className="text-xs text-muted mt-2 font-mono break-words">{check.detail}</p>
+      </div>
+    );
+  }
   return (
     <div className="rounded-2xl border-2 border-danger p-3">
       <p className="text-sm font-semibold text-danger">Not signed in · Chưa đăng nhập</p>

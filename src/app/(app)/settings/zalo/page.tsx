@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/Button";
 type Capability = { available: boolean; blockedBy: string[] };
 type Status =
   | { status: "not_configured" }
+  | { status: "no_token_store" }
   | { status: "not_connected" }
   | { status: "error"; code: number; message: string; needsAttention: boolean }
   | {
@@ -154,6 +155,21 @@ function ZaloSettingsContent() {
               Add the App ID, secret and OA ID first — Part 6 of SETUP.md.
               <br />
               Cần thêm App ID, secret và OA ID trước.
+            </p>
+          </Card>
+        )}
+
+        {!loading && status?.status === "no_token_store" && (
+          <Card className="border-warning">
+            <p className="text-sm font-semibold text-warning">
+              Zalo keys are set, but the token store isn&apos;t reachable.
+            </p>
+            <p className="text-xs text-muted mt-2">
+              Add <span className="font-mono">SUPABASE_SERVICE_ROLE_KEY</span> in Vercel and run{" "}
+              <span className="font-mono">supabase/zalo-schema.sql</span>. Connecting won&apos;t work
+              until both are done — there would be nowhere to keep the grant.
+              <br />
+              Cần thêm khóa Supabase và chạy tệp SQL trước khi kết nối.
             </p>
           </Card>
         )}

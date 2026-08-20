@@ -27,7 +27,9 @@ export type ManagerCheck =
   | { ok: false; reason: "not-signed-in" }
   | { ok: false; reason: "not-a-manager" }
   | { ok: false; reason: "no-role-row"; userId: string }
-  | { ok: false; reason: "table-missing" };
+  | { ok: false; reason: "table-missing" }
+  /** Something else went wrong — the message is passed through verbatim. */
+  | { ok: false; reason: "lookup-failed"; detail: string };
 
 /**
  * Whether the account this device is signed in as may run the manager station.
@@ -54,10 +56,15 @@ export async function checkManagerAccess(): Promise<ManagerCheck> {
     .eq("user_id", userId)
     .maybeSingle();
 
-  // `staff_roles` lives in schema.sql, not sync-schema.sql, so a project set up
-  // for sync alone won't have it. That's a different problem from "this person
-  // has no role" and needs a different instruction, so don't collapse the two.
-  if (error) return { ok: false, reason: "table-missing" };
+  // Only PostgREST's "table not in the schema cache" means the migration is
+  // genuinely missing. Every other failure previously reported the same thing,
+  // which would have sent someone to re-run SQL that was already correct —
+  // so anything else is passed through with its real message instead.
+  if (error) {
+    const missing = error.code === "PGRST205" || /schema cache/i.test(error.message ?? "");
+    if (missing) return { ok: false, reason: "table-missing" };
+    return { ok: false, reason: "lookup-failed", detail: error.message ?? "Unknown error" };
+  }
   // RLS lets a person read only their own row, so an empty result means this
   // account has not been granted a role — not that it was denied one.
   if (!data) return { ok: false, reason: "no-role-row", userId };

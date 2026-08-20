@@ -72,6 +72,10 @@ export function zaloBookingConfirmationsConfigured(): boolean {
 }
 
 /** Service-role Supabase credentials, used only for the locked-down token table. */
+export function serviceRoleConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 export function getServiceRoleCredentials(): { url: string; key: string } | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -1,6 +1,6 @@
 import { unwrapZaloResponse, ZaloError } from "./errors";
 import { getValidAccessToken } from "./tokens";
-import { getZaloConfig } from "./config";
+import { getZaloConfig, serviceRoleConfigured } from "./config";
 // The pure gating logic lives on its own so it is testable without a network.
 import { assessCapabilities, type OaInfo, type OaCapabilities } from "./capabilities";
 
@@ -20,6 +20,8 @@ const OA_HOST = "https://openapi.zalo.me";
 
 export type OaStatus =
   | { status: "not_configured" }
+  /** Zalo keys are present but the token store can't be reached at all. */
+  | { status: "no_token_store" }
   | { status: "not_connected" }
   | { status: "error"; code: number; message: string; needsAttention: boolean }
   | { status: "ok"; info: OaInfo; capabilities: OaCapabilities };
@@ -35,6 +37,10 @@ export type OaStatus =
 export async function getOaStatus(): Promise<OaStatus> {
   const cfg = getZaloConfig();
   if (!cfg) return { status: "not_configured" };
+  // Checked before attempting a token read, so "we can't look" is never
+  // reported as "there's nothing there" — they need different fixes, and
+  // conflating them means clicking Connect and getting the same message back.
+  if (!serviceRoleConfigured()) return { status: "no_token_store" };
 
   let accessToken: string;
   try {
@@ -44,7 +50,8 @@ export async function getOaStatus(): Promise<OaStatus> {
     if (err instanceof ZaloError) {
       return { status: "error", code: err.code, message: err.zaloMessage, needsAttention: err.needsAttention };
     }
-    return { status: "not_connected" };
+    // A non-Zalo failure here is the store itself, not the grant.
+    return { status: "no_token_store" };
   }
 
   try {
