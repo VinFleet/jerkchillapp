@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { LogOut } from "lucide-react";
 import { useStaffAuth } from "@/lib/bookings/StaffAuthContext";
 import { supabaseConfigured } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
@@ -79,21 +78,25 @@ function StaffLoginForm() {
   );
 }
 
+/**
+ * Bookings used to hold the only Supabase login in the app, so it carried its
+ * own sign-in form and its own sign-out button. Station sign-in now provides
+ * that session for the whole device, so in normal use this gate simply passes
+ * through — the form is left in place only as the fallback for a device that
+ * somehow reaches this page without one.
+ *
+ * The sign-out button is deliberately gone. It used to log out of bookings;
+ * the same tap now ends the session every module syncs through, so a bartender
+ * tidying up after service could quietly cut the tablet off from the rest of
+ * the restaurant. Ending a session is a station-level decision, and it lives
+ * with the station controls in the sidebar.
+ */
 export function StaffLoginGate({ children }: { children: React.ReactNode }) {
-  const { session, ready, signOut } = useStaffAuth();
+  const { session, ready } = useStaffAuth();
 
   if (!supabaseConfigured) return <NotConfiguredNotice />;
   if (!ready) return null;
   if (!session) return <StaffLoginForm />;
 
-  return (
-    <div>
-      <div className="flex justify-end px-4 md:px-8 pt-2">
-        <button onClick={() => signOut()} className="flex items-center gap-1 text-xs text-muted font-semibold">
-          <LogOut size={12} /> Sign out of bookings device
-        </button>
-      </div>
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }
