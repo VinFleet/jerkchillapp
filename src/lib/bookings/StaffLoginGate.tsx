@@ -47,8 +47,8 @@ function StaffLoginForm() {
           <div className="flex justify-center mb-6">
             <Image src="/brand/logo-600.png" alt="Jerk & Chill" width={200} height={142} priority />
           </div>
-          <h1 className="text-center font-bold text-lg mb-1">Staff login for Bookings</h1>
-          <p className="text-center text-muted text-sm mb-6">Đăng nhập nhân viên cho Đặt Bàn</p>
+          <h1 className="text-center font-bold text-lg mb-1">Set this device up</h1>
+          <p className="text-center text-muted text-sm mb-6">Cài đặt thiết bị này</p>
           <input
             autoFocus
             type="email"
@@ -70,7 +70,10 @@ function StaffLoginForm() {
             {loading ? "Signing in…" : "Sign in / Đăng nhập"}
           </Button>
           <p className="text-center text-muted text-xs mt-4">
-            One shared login for this device — ask the owner if you don&apos;t have it.
+            The station login for this device — the manager enters it once. It covers
+            bookings and everything else the tablet shares.
+            <br />
+            Mật khẩu thiết bị — quản lý nhập một lần, dùng cho toàn bộ ứng dụng.
           </p>
         </div>
       </div>
