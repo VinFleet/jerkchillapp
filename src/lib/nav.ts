@@ -56,4 +56,6 @@ export const NAV_ITEMS: NavItem[] = [
  * "More" tab at /more. The desktop sidebar isn't space-constrained the same
  * way, so it always shows the full NAV_ITEMS list.
  */
-export const MOBILE_PRIMARY_MODULES: ModuleId[] = ["recipes", "stock", "checklists", "bookings"];
+// Notices sits here rather than behind "More": it replaces the group chat,
+// and an operational message nobody walks past is a message nobody reads.
+export const MOBILE_PRIMARY_MODULES: ModuleId[] = ["checklists", "stock", "notices", "recipes"];

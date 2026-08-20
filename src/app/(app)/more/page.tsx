@@ -8,6 +8,7 @@ import { useSession } from "@/lib/auth/RoleContext";
 import { canAccessModule } from "@/lib/auth/permissions";
 import { NAV_ITEMS, MOBILE_PRIMARY_MODULES } from "@/lib/nav";
 import { CURRENT_VERSION } from "@/lib/changelog";
+import { NotifyPermissionCard } from "@/components/NotifyPermissionCard";
 
 export default function MorePage() {
   const { session } = useSession();
@@ -24,6 +25,7 @@ export default function MorePage() {
     <div className="pb-6">
       <PageHeader title="More · Thêm" subtitle="Everything else · Các mục khác" />
       <div className="px-4 md:px-8">
+        <NotifyPermissionCard />
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {items.map((item) => {
             const Icon = item.icon;

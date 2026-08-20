@@ -17,6 +17,7 @@ import { getLicensesNeedingAttention } from "@/lib/repo/licensing";
 import { getReprintFlag } from "@/lib/repo/menu";
 import { getExpiringHealthCerts, getExpiringTraining } from "@/lib/repo/staff";
 import { getShoppingList } from "@/lib/repo/shopping";
+import { getEntry as getSalesEntry } from "@/lib/repo/sales";
 import { getBlockersCount } from "@/lib/repo/deliveryPerformance";
 import { getBookingsForDate } from "@/lib/bookings/repo";
 import { supabaseConfigured } from "@/lib/supabase/client";
@@ -46,6 +47,7 @@ export default function HomePage() {
   const [shoppingListCount, setShoppingListCount] = useState(0);
   const [deliveryBlockers, setDeliveryBlockers] = useState(0);
   const [bookingsToday, setBookingsToday] = useState(0);
+  const [salesMissing, setSalesMissing] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -72,6 +74,14 @@ export default function HomePage() {
       setTrainingDue(getExpiringTraining().length);
       setShoppingListCount(getShoppingList().length);
       setDeliveryBlockers(getBlockersCount("grab") + getBlockersCount("shopeefood"));
+      // Every other daily task nudges from here; end-of-day takings didn't,
+      // which is exactly the one it's easiest to walk out without doing.
+      // Only after close, so it isn't nagging through service.
+      const sales = getSalesEntry(todayIso());
+      const takingsEntered = Boolean(
+        sales && Object.values(sales.channelAmountsVnd).some((amount) => amount > 0)
+      );
+      setSalesMissing(new Date().getHours() >= 21 && !takingsEntered);
     }
   }, [session]);
 
@@ -81,6 +91,7 @@ export default function HomePage() {
     (item) => item.module !== "home" && canAccessModule(session.role, item.module)
   );
   const urgentUnread = unread.filter((n) => n.priority === "urgent");
+  const normalUnread = unread.filter((n) => n.priority !== "urgent");
   const checklistDone = checklist && checklist.total > 0 && checklist.done === checklist.total;
 
   return (
@@ -95,6 +106,28 @@ export default function HomePage() {
       </div>
 
       <div className="px-4 md:px-8 mt-3 space-y-3">
+        {/* Normal notices used to surface nowhere — "we're out of X" and "new
+            supplier price" are the spec's own examples of what replaces the
+            group chat, and they were invisible unless someone thought to open
+            the Notices tab. Urgent ones also interrupt via the banner; this is
+            the quieter half. */}
+        {normalUnread.length > 0 && (
+          <Link href="/notices">
+            <Card className="border-brand/40 bg-brand-light flex items-center gap-3">
+              <AlertCircle size={22} className="text-brand shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-brand">
+                  {normalUnread.length} unread notice{normalUnread.length > 1 ? "s" : ""} · thông báo chưa đọc
+                </p>
+                <p className="text-sm truncate text-brand/80">
+                  {normalUnread[0].title.en} · {normalUnread[0].title.vi}
+                </p>
+              </div>
+              <ChevronRight size={18} className="text-brand shrink-0" />
+            </Card>
+          </Link>
+        )}
+
         {urgentUnread.length > 0 && (
           <Link href="/notices">
             <Card className="border-danger/40 bg-danger-tint flex items-center gap-3">
@@ -106,6 +139,18 @@ export default function HomePage() {
                 <p className="text-sm truncate text-danger/80">{urgentUnread[0].title.en} · {urgentUnread[0].title.vi}</p>
               </div>
               <ChevronRight size={18} className="text-danger shrink-0" />
+            </Card>
+          </Link>
+        )}
+
+        {salesMissing && (
+          <Link href="/sales">
+            <Card className="border-warning/40 bg-warning-tint flex items-center justify-between">
+              <div>
+                <p className="font-bold text-warning">Today&apos;s takings not entered yet</p>
+                <p className="text-sm text-warning/80">Chưa nhập doanh thu hôm nay</p>
+              </div>
+              <ChevronRight size={18} className="text-warning shrink-0" />
             </Card>
           </Link>
         )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -7,15 +8,26 @@ import { LogOut, MoreHorizontal, Settings } from "lucide-react";
 import { NAV_ITEMS, MOBILE_PRIMARY_MODULES } from "@/lib/nav";
 import { canAccessModule } from "@/lib/auth/permissions";
 import { useSession } from "@/lib/auth/RoleContext";
+import { useSync } from "@/lib/sync/SyncProvider";
+import { getNavBadges, type NavBadges } from "@/lib/notify/badges";
 import { ROLE_LABEL } from "@/lib/roleLabels";
 import { Bi } from "@/components/Bi";
 import { StorageFullBanner } from "@/components/StorageFullBanner";
 import { SyncIndicator } from "@/components/SyncIndicator";
+import { UrgentNoticeBanner } from "@/components/UrgentNoticeBanner";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { session, logout } = useSession();
+  const { dataVersion } = useSync();
+  const [badges, setBadges] = useState<NavBadges>({});
+
+  // Recomputed when synced data lands, so a notice posted on another device
+  // shows up on this one's nav without anyone reloading.
+  useEffect(() => {
+    if (session) setBadges(getNavBadges(session.role, session.name));
+  }, [session, dataVersion, pathname]);
 
   if (!session) return null;
 
@@ -52,7 +64,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 <Icon size={22} />
-                <Bi value={item.label} className="text-sm leading-tight" />
+                <Bi value={item.label} className="text-sm leading-tight flex-1" />
+                {badges[item.module] ? (
+                  <span className={`min-w-6 h-6 px-1.5 rounded-full text-xs font-bold flex items-center justify-center ${active ? "bg-white text-brand" : "bg-danger text-white"}`}>
+                    {badges[item.module]}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -99,6 +116,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="flex-1 pb-24 md:pb-8 print:pb-0">
+        <UrgentNoticeBanner />
         <StorageFullBanner />
         {children}
       </main>
@@ -117,7 +135,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   active ? "text-brand" : "text-muted"
                 }`}
               >
-                <Icon size={22} strokeWidth={active ? 2.5 : 2} />
+                <span className="relative">
+                  <Icon size={22} strokeWidth={active ? 2.5 : 2} />
+                  {badges[item.module] ? (
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center">
+                      {badges[item.module]}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="text-[10px] font-medium leading-tight">{item.label.en}</span>
               </Link>
             );
