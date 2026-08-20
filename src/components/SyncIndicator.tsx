@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Cloud, CloudOff, RefreshCw, AlertTriangle, Check } from "lucide-react";
 import { useSync } from "@/lib/sync/SyncProvider";
 import { retrySync } from "@/lib/sync/engine";
@@ -14,6 +15,21 @@ export function SyncIndicator({ className = "" }: { className?: string }) {
   const { status, pendingCount, pendingPhotos, syncNow } = useSync();
 
   if (status === "off") return null;
+
+  // The one status worth a full-width warning rather than a discreet label:
+  // it needs the manager, and it needs them to go somewhere.
+  if (status === "signed_out") {
+    return (
+      <Link
+        href="/login"
+        className={`flex items-center gap-1.5 text-[11px] font-bold text-danger ${className}`}
+      >
+        <AlertTriangle size={13} className="shrink-0" />
+        <span className="hidden sm:inline">Not shared — tap to set up</span>
+        <span className="sm:hidden">Chưa chia sẻ</span>
+      </Link>
+    );
+  }
 
   // A photo that hasn't uploaded exists in exactly one place. Say so plainly
   // — losing the device before it syncs would lose the evidence with it.
@@ -35,6 +51,9 @@ export function SyncIndicator({ className = "" }: { className?: string }) {
     syncing: { icon: RefreshCw, spin: true, tone: "text-muted", en: "Syncing…", vi: "Đang đồng bộ…" },
     synced: { icon: Check, spin: false, tone: "text-success", en: "Up to date", vi: "Đã cập nhật" },
     not_set_up: { icon: Cloud, spin: false, tone: "text-muted", en: "This device only", vi: "Chỉ thiết bị này" },
+    // Loud on purpose. Nothing this device records is reaching anyone else,
+    // and unlike being offline it will not fix itself when the wifi returns.
+    signed_out: { icon: AlertTriangle, spin: false, tone: "text-danger", en: "Not shared — set this device up again", vi: "Chưa chia sẻ — cài đặt lại thiết bị" },
     offline: {
       icon: CloudOff,
       spin: false,

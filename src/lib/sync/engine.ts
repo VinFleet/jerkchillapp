@@ -35,7 +35,7 @@ const LAST_PULL_KEY = "sync_last_pull";
 const PUSHED_KEY_PREFIX = "sync_pushed:";
 const PULL_OVERLAP_MS = 30_000;
 
-export type SyncStatus = "off" | "not_set_up" | "offline" | "syncing" | "synced" | "error";
+export type SyncStatus = "off" | "not_set_up" | "signed_out" | "offline" | "syncing" | "synced" | "error";
 
 /**
  * PGRST205 = the table isn't in Supabase's schema cache, i.e. sync-schema.sql
@@ -310,11 +310,32 @@ function notifyDataChanged() {
 
 // ---------- lifecycle ----------
 
+/**
+ * Whether this device still holds a Supabase session.
+ *
+ * Worth checking explicitly, because the failure is otherwise invisible. Read
+ * policies filter rather than reject: a signed-out device asking for records
+ * gets `200 []` back, so the pull "succeeds", finds nothing new, and the
+ * indicator goes green while the device is in fact completely cut off. Only a
+ * write fails loudly — so a tablet with nothing pending could sit there for a
+ * week showing "Up to date" and receiving nobody else's work.
+ */
+async function hasAuthSession(): Promise<boolean> {
+  if (!supabase) return false;
+  const { data } = await supabase.auth.getSession();
+  return Boolean(data.session);
+}
+
 export async function syncNow(): Promise<void> {
   if (!supabase) return;
   // Once we know the table isn't there, stop hammering it every minute —
   // a manual tap on the indicator still retries, for right after the SQL runs.
   if (status === "not_set_up") return;
+  if (!(await hasAuthSession())) {
+    setStatus("signed_out");
+    emit();
+    return;
+  }
   await pushAll();
   // Photos go up before the records are pulled, so a record that arrives on
   // another device already has a Storage path to resolve rather than a gap.
@@ -326,6 +347,11 @@ export async function syncNow(): Promise<void> {
 export async function retrySync(): Promise<void> {
   if (!supabase) return;
   setStatus("syncing");
+  if (!(await hasAuthSession())) {
+    setStatus("signed_out");
+    emit();
+    return;
+  }
   await pushAll();
   await pullAll();
 }
