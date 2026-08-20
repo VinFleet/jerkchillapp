@@ -259,7 +259,7 @@ function ChecklistsPageContent() {
                   }}
                 />
                 {item.linkHref && (
-                  <Link href={item.linkHref} className="flex items-center gap-1 text-xs text-brand font-semibold mt-1 ml-1 print:hidden">
+                  <Link href={item.linkHref} className="min-h-11 flex items-center gap-1 text-xs text-brand font-semibold mt-1 ml-1 print:hidden">
                     Open log · Mở sổ ghi <ArrowRight size={12} />
                   </Link>
                 )}

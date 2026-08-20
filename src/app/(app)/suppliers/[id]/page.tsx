@@ -62,7 +62,9 @@ function ContactSection({ supplier, canEdit, onChanged }: { supplier: Supplier; 
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone · Số điện thoại"
+          type="tel"
+                inputMode="tel"
+                placeholder="Phone · Số điện thoại"
           className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
         />
         <input

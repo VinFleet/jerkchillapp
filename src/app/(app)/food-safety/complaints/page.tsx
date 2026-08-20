@@ -76,7 +76,9 @@ function AddForm({ onAdded, staffName }: { onAdded: () => void; staffName: strin
       <input
         value={guestContact}
         onChange={(e) => setGuestContact(e.target.value)}
-        placeholder="Guest contact (optional) · Liên hệ khách"
+        type="tel"
+                inputMode="tel"
+                placeholder="Guest contact (optional) · Liên hệ khách"
         className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
       />
       <div className="flex flex-wrap gap-2 mb-2">

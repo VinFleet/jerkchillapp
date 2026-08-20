@@ -35,13 +35,13 @@ function DateNav({ date, onChange }: { date: string; onChange: (d: string) => vo
   const isToday = date === todayIso();
   return (
     <div className="flex items-center gap-2 px-4 md:px-8 mb-4">
-      <button onClick={() => onChange(addDaysIso(date, -1))} className="p-2 text-brand" aria-label="Previous day">
+      <button onClick={() => onChange(addDaysIso(date, -1))} className="w-11 h-11 flex items-center justify-center text-brand" aria-label="Previous day">
         <ChevronLeft size={20} />
       </button>
       <span className="font-semibold text-sm flex-1 text-center">
         {date} {isToday && <span className="text-brand">· Today / Hôm nay</span>}
       </span>
-      <button onClick={() => onChange(addDaysIso(date, 1))} className="p-2 text-brand" aria-label="Next day">
+      <button onClick={() => onChange(addDaysIso(date, 1))} className="w-11 h-11 flex items-center justify-center text-brand" aria-label="Next day">
         <ChevronRight size={20} />
       </button>
     </div>
@@ -300,7 +300,9 @@ function BookingForm({
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone number · Số điện thoại"
+            type="tel"
+                inputMode="tel"
+                placeholder="Phone number · Số điện thoại"
             className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm"
           />
           <input

@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { BigCheckbox } from "@/components/ui/BigCheckbox";
+import { PassFail } from "@/components/ui/PassFail";
 import { PhotoField } from "@/components/ui/PhotoField";
 import { StoredPhoto } from "@/components/ui/StoredPhoto";
 import { SignaturePad } from "@/components/ui/SignaturePad";
@@ -94,9 +94,9 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
   const [items, setItems] = useState<DeliveryLogItem[]>([]);
   const [tempC, setTempC] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [tempOk, setTempOk] = useState(false);
-  const [packagingOk, setPackagingOk] = useState(false);
-  const [useByOk, setUseByOk] = useState(false);
+  const [tempOk, setTempOk] = useState<boolean | undefined>(undefined);
+  const [packagingOk, setPackagingOk] = useState<boolean | undefined>(undefined);
+  const [useByOk, setUseByOk] = useState<boolean | undefined>(undefined);
   const [reason, setReason] = useState("");
   const [invoicePhoto, setInvoicePhoto] = useState<PhotoRef[]>([]);
   const [productPhotos, setProductPhotos] = useState<PhotoRef[]>([]);
@@ -119,15 +119,18 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
   }
 
   const pickerItems = supplierId ? allSupplyItems.filter((i) => !i.supplierId || i.supplierId === supplierId) : allSupplyItems;
-  const accepted = tempOk && packagingOk && useByOk;
+  // Every check must be answered before this means anything — an unanswered
+  // check used to read as a fail and file a good delivery as rejected.
+  const allChecksAnswered = tempOk !== undefined && packagingOk !== undefined && useByOk !== undefined;
+  const accepted = tempOk === true && packagingOk === true && useByOk === true;
   const reset = () => {
     setSupplierId("");
     setItems([]);
     setTempC("");
     setInvoiceNumber("");
-    setTempOk(false);
-    setPackagingOk(false);
-    setUseByOk(false);
+    setTempOk(undefined);
+    setPackagingOk(undefined);
+    setUseByOk(undefined);
     setReason("");
     setInvoicePhoto([]);
     setProductPhotos([]);
@@ -199,24 +202,12 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
           className="flex-1 min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
         />
       </div>
-      <div className="space-y-2 mb-3">
-        <BigCheckbox
-          label={{ en: "Temperature OK", vi: "Nhiệt độ đạt" }}
-          checked={tempOk}
-          onToggle={() => setTempOk((v) => !v)}
-        />
-        <BigCheckbox
-          label={{ en: "Packaging OK", vi: "Bao bì đạt" }}
-          checked={packagingOk}
-          onToggle={() => setPackagingOk((v) => !v)}
-        />
-        <BigCheckbox
-          label={{ en: "Use-by date OK", vi: "Hạn sử dụng đạt" }}
-          checked={useByOk}
-          onToggle={() => setUseByOk((v) => !v)}
-        />
+      <div className="space-y-3 mb-3">
+        <PassFail label={{ en: "Temperature", vi: "Nhiệt độ" }} value={tempOk} onChange={setTempOk} />
+        <PassFail label={{ en: "Packaging", vi: "Bao bì" }} value={packagingOk} onChange={setPackagingOk} />
+        <PassFail label={{ en: "Use-by date", vi: "Hạn sử dụng" }} value={useByOk} onChange={setUseByOk} />
       </div>
-      {!accepted && (
+      {allChecksAnswered && !accepted && (
         <input
           value={reason}
           onChange={(e) => setReason(e.target.value)}
@@ -235,7 +226,7 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
         </Button>
         <Button
           className="flex-1"
-          disabled={!supplierId || items.length === 0 || !signature}
+          disabled={!supplierId || items.length === 0 || !allChecksAnswered || !signature}
           onClick={() => {
             logDelivery({
               supplierId,
@@ -243,9 +234,9 @@ function AddForm({ onAdded, staffName, suppliers }: { onAdded: () => void; staff
               items,
               tempC: tempC.trim() === "" ? undefined : Number(tempC),
               invoiceNumber: invoiceNumber.trim() || undefined,
-              tempOk,
-              packagingOk,
-              useByOk,
+              tempOk: tempOk === true,
+              packagingOk: packagingOk === true,
+              useByOk: useByOk === true,
               accepted,
               rejectionReason: accepted ? undefined : reason.trim() || undefined,
               supplierNotified: accepted ? undefined : false,

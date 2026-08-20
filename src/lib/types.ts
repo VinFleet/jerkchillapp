@@ -708,6 +708,12 @@ export type SupplyItem = {
   unit: string;
   par: number;
   onHand: number;
+  /**
+   * When someone last actually counted this. Null means `onHand` is a
+   * placeholder, not a measurement — an item nobody has counted isn't known
+   * to be low, and flagging it as "below par" buries the genuine shortages.
+   */
+  lastCountedAt?: string | null;
   lastOrderedAt: string | null;
 };
 

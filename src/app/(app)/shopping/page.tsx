@@ -87,7 +87,7 @@ function CountControl({ row, onChanged }: { row: ShoppingListRow; onChanged: () 
           setValue(String(row.onHand));
           setCounting(true);
         }}
-        className="text-xs text-brand font-semibold"
+        className="min-h-11 px-1 flex items-center text-xs text-brand font-semibold"
       >
         Count · Đếm
       </button>

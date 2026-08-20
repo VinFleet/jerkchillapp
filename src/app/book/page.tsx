@@ -212,6 +212,8 @@ export default function PublicBookingPage() {
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                type="tel"
+                inputMode="tel"
                 placeholder="Phone number · Số điện thoại"
                 className="w-full min-h-14 rounded-2xl border-2 border-border px-4 text-base"
               />

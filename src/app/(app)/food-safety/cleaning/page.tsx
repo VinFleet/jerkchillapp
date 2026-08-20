@@ -39,13 +39,13 @@ function WeekNav({ monday, onChange }: { monday: string; onChange: (m: string) =
   const dates = weekDatesFrom(monday);
   return (
     <div className="flex items-center gap-2 mb-4">
-      <button onClick={() => shift(-7)} className="p-2 text-brand" aria-label="Previous week">
+      <button onClick={() => shift(-7)} className="w-11 h-11 flex items-center justify-center text-brand" aria-label="Previous week">
         <ChevronLeft size={20} />
       </button>
       <span className="font-semibold text-sm flex-1 text-center">
         {dates[0]} – {dates[6]}
       </span>
-      <button onClick={() => shift(7)} className="p-2 text-brand" aria-label="Next week">
+      <button onClick={() => shift(7)} className="w-11 h-11 flex items-center justify-center text-brand" aria-label="Next week">
         <ChevronRight size={20} />
       </button>
     </div>

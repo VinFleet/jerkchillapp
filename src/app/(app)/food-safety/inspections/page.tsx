@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { BigCheckbox } from "@/components/ui/BigCheckbox";
+import { PassFail } from "@/components/ui/PassFail";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
 import { getInspectionsForDate, logBeforePrep, logDuringPrep, logBeforeServing, inspectionPassed } from "@/lib/repo/foodSafety";
@@ -153,7 +153,7 @@ function BeforePrepForm({ date, service, staffName, onLogged }: { date: string; 
   const [ingredient, setIngredient] = useState("");
   const [supplierSource, setSupplierSource] = useState("");
   const [qty, setQty] = useState("");
-  const [sensoryOk, setSensoryOk] = useState(false);
+  const [sensoryOk, setSensoryOk] = useState<boolean | undefined>(undefined);
   const [notes, setNotes] = useState("");
 
   const reset = () => {
@@ -170,14 +170,15 @@ function BeforePrepForm({ date, service, staffName, onLogged }: { date: string; 
       <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
       <input value={ingredient} onChange={(e) => setIngredient(e.target.value)} placeholder="Ingredient · Nguyên liệu" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={INGREDIENT_LIST_ID} />
       <input value={supplierSource} onChange={(e) => setSupplierSource(e.target.value)} placeholder="Supplier / source · Nhà cung cấp / nguồn gốc" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={SUPPLIER_LIST_ID} />
-      <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder="Qty · Số lượng" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
-      <BigCheckbox label={{ en: "Sensory OK", vi: "Cảm quan đạt" }} checked={sensoryOk} onToggle={() => setSensoryOk((v) => !v)} />
+      <input value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal"
+        placeholder="Qty · Số lượng" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
+      <PassFail label={{ en: "Sensory check", vi: "Kiểm tra cảm quan" }} value={sensoryOk} onChange={setSensoryOk} />
       <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional) · Ghi chú" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
       <Button
         className="w-full min-h-11 text-sm"
-        disabled={!meal.trim() || !ingredient.trim() || !qty.trim()}
+        disabled={!meal.trim() || !ingredient.trim() || !qty.trim() || sensoryOk === undefined}
         onClick={() => {
-          logBeforePrep({ date, service, meal: meal.trim(), ingredient: ingredient.trim(), supplierSource: supplierSource.trim(), qty: qty.trim(), sensoryOk, checkedBy: staffName, notes: notes.trim() || undefined });
+          logBeforePrep({ date, service, meal: meal.trim(), ingredient: ingredient.trim(), supplierSource: supplierSource.trim(), qty: qty.trim(), sensoryOk: sensoryOk === true, checkedBy: staffName, notes: notes.trim() || undefined });
           reset();
           onLogged();
         }}
@@ -190,8 +191,8 @@ function BeforePrepForm({ date, service, staffName, onLogged }: { date: string; 
 
 function DuringPrepForm({ date, service, staffName, onLogged }: { date: string; service: ServicePeriod; staffName: string; onLogged: () => void }) {
   const [meal, setMeal] = useState("");
-  const [areaHygieneOk, setAreaHygieneOk] = useState(false);
-  const [staffHygieneOk, setStaffHygieneOk] = useState(false);
+  const [areaHygieneOk, setAreaHygieneOk] = useState<boolean | undefined>(undefined);
+  const [staffHygieneOk, setStaffHygieneOk] = useState<boolean | undefined>(undefined);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [notes, setNotes] = useState("");
@@ -212,14 +213,14 @@ function DuringPrepForm({ date, service, staffName, onLogged }: { date: string; 
         <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
         <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
       </div>
-      <BigCheckbox label={{ en: "Area / equipment hygiene OK", vi: "Vệ sinh khu vực / thiết bị đạt" }} checked={areaHygieneOk} onToggle={() => setAreaHygieneOk((v) => !v)} />
-      <BigCheckbox label={{ en: "Staff hygiene OK", vi: "Vệ sinh nhân viên đạt" }} checked={staffHygieneOk} onToggle={() => setStaffHygieneOk((v) => !v)} />
+      <PassFail label={{ en: "Area / equipment hygiene", vi: "Vệ sinh khu vực / thiết bị" }} value={areaHygieneOk} onChange={setAreaHygieneOk} />
+      <PassFail label={{ en: "Staff hygiene", vi: "Vệ sinh nhân viên" }} value={staffHygieneOk} onChange={setStaffHygieneOk} />
       <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional) · Ghi chú" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
       <Button
         className="w-full min-h-11 text-sm"
-        disabled={!meal.trim() || !startTime || !endTime}
+        disabled={!meal.trim() || !startTime || !endTime || areaHygieneOk === undefined || staffHygieneOk === undefined}
         onClick={() => {
-          logDuringPrep({ date, service, meal: meal.trim(), areaHygieneOk, staffHygieneOk, startTime, endTime, checkedBy: staffName, notes: notes.trim() || undefined });
+          logDuringPrep({ date, service, meal: meal.trim(), areaHygieneOk: areaHygieneOk === true, staffHygieneOk: staffHygieneOk === true, startTime, endTime, checkedBy: staffName, notes: notes.trim() || undefined });
           reset();
           onLogged();
         }}
@@ -233,7 +234,7 @@ function DuringPrepForm({ date, service, staffName, onLogged }: { date: string; 
 function BeforeServingForm({ date, service, staffName, onLogged }: { date: string; service: ServicePeriod; staffName: string; onLogged: () => void }) {
   const [meal, setMeal] = useState("");
   const [dish, setDish] = useState("");
-  const [sensoryOk, setSensoryOk] = useState(false);
+  const [sensoryOk, setSensoryOk] = useState<boolean | undefined>(undefined);
   const [timeServed, setTimeServed] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -250,13 +251,13 @@ function BeforeServingForm({ date, service, staffName, onLogged }: { date: strin
       <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
       <input value={dish} onChange={(e) => setDish(e.target.value)} placeholder="Dish · Món ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
       <input type="time" value={timeServed} onChange={(e) => setTimeServed(e.target.value)} className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
-      <BigCheckbox label={{ en: "Sensory OK", vi: "Cảm quan đạt" }} checked={sensoryOk} onToggle={() => setSensoryOk((v) => !v)} />
+      <PassFail label={{ en: "Sensory check", vi: "Kiểm tra cảm quan" }} value={sensoryOk} onChange={setSensoryOk} />
       <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional) · Ghi chú" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
       <Button
         className="w-full min-h-11 text-sm"
-        disabled={!meal.trim() || !dish.trim() || !timeServed}
+        disabled={!meal.trim() || !dish.trim() || !timeServed || sensoryOk === undefined}
         onClick={() => {
-          logBeforeServing({ date, service, meal: meal.trim(), dish: dish.trim(), sensoryOk, timeServed, checkedBy: staffName, notes: notes.trim() || undefined });
+          logBeforeServing({ date, service, meal: meal.trim(), dish: dish.trim(), sensoryOk: sensoryOk === true, timeServed, checkedBy: staffName, notes: notes.trim() || undefined });
           reset();
           onLogged();
         }}

@@ -69,7 +69,9 @@ function AddContactForm({ onAdded }: { onAdded: () => void }) {
       <input
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
-        placeholder="Phone · Số điện thoại"
+        type="tel"
+                inputMode="tel"
+                placeholder="Phone · Số điện thoại"
         className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
       />
       <input
@@ -121,7 +123,9 @@ function ContactCard({ contact, canEdit, onChanged }: { contact: Contact; canEdi
             className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand" />
           <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Role · Vai trò"
             className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand" />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone · Điện thoại"
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel"
+                inputMode="tel"
+                placeholder="Phone · Điện thoại"
             className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand" />
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email"
             className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand" />

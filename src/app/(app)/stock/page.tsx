@@ -39,7 +39,7 @@ function DateNav({ date, onChange }: { date: string; onChange: (d: string) => vo
   const isToday = date === todayIso();
   return (
     <div className="flex items-center gap-2 px-4 md:px-8">
-      <button onClick={() => onChange(addDaysIso(date, -1))} className="p-2 text-brand" aria-label="Previous day">
+      <button onClick={() => onChange(addDaysIso(date, -1))} className="w-11 h-11 flex items-center justify-center text-brand" aria-label="Previous day">
         <ChevronLeft size={20} />
       </button>
       <span className="font-semibold text-sm flex-1 text-center">
@@ -48,7 +48,7 @@ function DateNav({ date, onChange }: { date: string; onChange: (d: string) => vo
       <button
         onClick={() => !isToday && onChange(addDaysIso(date, 1))}
         disabled={isToday}
-        className="p-2 text-brand disabled:opacity-30"
+        className="w-11 h-11 flex items-center justify-center text-brand disabled:opacity-30"
         aria-label="Next day"
       >
         <ChevronRight size={20} />
@@ -140,7 +140,7 @@ function WasteButton({
   return (
     <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-2">
       <div>{summary}</div>
-      <button onClick={() => setOpen(true)} className="flex items-center gap-1 text-xs font-semibold text-danger shrink-0">
+      <button onClick={() => setOpen(true)} className="min-h-11 px-1 flex items-center gap-1 text-xs font-semibold text-danger shrink-0">
         <Trash2 size={12} /> Log waste · Ghi hao hụt
       </button>
     </div>

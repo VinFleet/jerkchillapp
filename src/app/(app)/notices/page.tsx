@@ -57,7 +57,7 @@ function NoticeCard({ notice, staffName, isManager }: { notice: Notice; staffNam
             setAckNames(getAcks(notice.id).map((a) => a.staffName));
           }}
           disabled={acked}
-          className={`flex items-center gap-2 text-sm font-semibold ${
+          className={`flex items-center gap-2 text-sm font-semibold min-h-11 ${
             acked ? "text-success" : "text-brand"
           }`}
         >

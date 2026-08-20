@@ -102,7 +102,12 @@ export function markSupplyOrdered(id: string) {
 }
 
 export function setSupplyOnHand(id: string, onHand: number) {
-  updateSupplyItem(id, { onHand: Math.max(0, onHand) });
+  updateSupplyItem(id, { onHand: Math.max(0, onHand), lastCountedAt: todayIso() });
+}
+
+/** True once someone has actually counted it, so "below par" means something. */
+export function isCounted(item: SupplyItem): boolean {
+  return Boolean(item.lastCountedAt);
 }
 
 /**
@@ -114,7 +119,9 @@ export function setSupplyOnHand(id: string, onHand: number) {
 export function receiveSupply(id: string, qty: number) {
   const item = getSupplyItems().find((s) => s.id === id);
   if (!item || qty <= 0) return;
-  updateSupplyItem(id, { onHand: item.onHand + qty });
+  // A confirmed delivery is a real measurement of what arrived, so this also
+  // counts as knowing the level.
+  updateSupplyItem(id, { onHand: item.onHand + qty, lastCountedAt: todayIso() });
 }
 
 // ---------- Unified shopping list ----------

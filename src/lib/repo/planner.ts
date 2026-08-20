@@ -89,8 +89,11 @@ export function getReorderFlags(date: string): ReorderFlag[] {
     }))
     .filter((f) => f.onHand < f.par);
 
+  // Only items someone has actually counted. An uncounted item's onHand is a
+  // placeholder, not a measurement — flagging all ~75 of them on day one
+  // buries the two that are genuinely running out.
   const supplies: ReorderFlag[] = getSupplyItems()
-    .filter((s) => s.par > 0 && s.onHand < s.par)
+    .filter((s) => s.par > 0 && s.lastCountedAt && s.onHand < s.par)
     .map((s) => ({
       itemId: s.id,
       name: s.name,

@@ -189,7 +189,9 @@ export default function HomePage() {
           <Link href="/planner">
             <Card className="border-warning/40 bg-warning-tint flex items-center justify-between">
               <p className="text-sm font-semibold text-warning">
-                {reorderCount} bar item{reorderCount > 1 ? "s" : ""} below par · dưới định mức
+                {/* Not just bar any more — this now covers kitchen ingredients
+                    too, so the old "bar items" wording was actively wrong. */}
+                {reorderCount} item{reorderCount > 1 ? "s" : ""} below par · mặt hàng dưới định mức
               </p>
               <ChevronRight size={18} className="text-warning shrink-0" />
             </Card>

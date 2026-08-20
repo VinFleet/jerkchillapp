@@ -90,7 +90,9 @@ function AddCandidateForm({ onAdded }: { onAdded: () => void }) {
       <input
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
-        placeholder="Phone (optional) · Điện thoại"
+        type="tel"
+                inputMode="tel"
+                placeholder="Phone (optional) · Điện thoại"
         className="w-full min-h-12 rounded-xl border-2 border-border px-3 mb-2 text-sm focus:outline-none focus:border-brand"
       />
       <input
