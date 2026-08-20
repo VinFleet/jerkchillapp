@@ -42,9 +42,19 @@ function DateNav({ date, onChange }: { date: string; onChange: (d: string) => vo
       <button onClick={() => onChange(addDaysIso(date, -1))} className="w-11 h-11 flex items-center justify-center text-brand" aria-label="Previous day">
         <ChevronLeft size={20} />
       </button>
-      <span className="font-semibold text-sm flex-1 text-center">
-        {date} {isToday && <span className="text-brand">· Today / Hôm nay</span>}
-      </span>
+      <input
+        type="date"
+        value={date}
+        max={todayIso()}
+        onChange={(e) => e.target.value && onChange(e.target.value)}
+        className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm text-center focus:outline-none focus:border-brand"
+        aria-label="Pick a date"
+      />
+      {!isToday && (
+        <button onClick={() => onChange(todayIso())} className="min-h-11 px-2 text-xs text-brand font-semibold shrink-0">
+          Today · Hôm nay
+        </button>
+      )}
       <button
         onClick={() => !isToday && onChange(addDaysIso(date, 1))}
         disabled={isToday}
@@ -144,6 +154,36 @@ function WasteButton({
         <Trash2 size={12} /> Log waste · Ghi hao hụt
       </button>
     </div>
+  );
+}
+
+/**
+ * How many items still need counting. Checklists give a manager a live
+ * completion figure; the stock log gave none, so the only way to know whether
+ * tonight's counts were done was to open it and scroll every card.
+ */
+function CountProgress({ items, date }: { items: StockItem[]; date: string }) {
+  const counted = items.filter((i) => getOrCreateEntry(i.id, date, "system").closing !== null).length;
+  const total = items.length;
+  if (total === 0) return null;
+  const done = counted === total;
+
+  return (
+    <Card className={done ? "border-success/40 bg-success-tint" : "border-warning/40 bg-warning-tint"}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className={`font-bold text-sm ${done ? "text-success" : "text-warning"}`}>
+            {done ? "All items counted" : `${total - counted} still to count`}
+          </p>
+          <p className={`text-xs ${done ? "text-success/80" : "text-warning/80"}`}>
+            {done ? "Đã đếm hết" : `Còn ${total - counted} món chưa đếm`}
+          </p>
+        </div>
+        <span className={`text-2xl font-bold tabular-nums ${done ? "text-success" : "text-warning"}`}>
+          {counted}/{total}
+        </span>
+      </div>
+    </Card>
   );
 }
 
@@ -413,6 +453,7 @@ function StockPageContent() {
       {view === "log" && <DateNav date={date} onChange={setDate} />}
 
       <div className="px-4 md:px-8 mt-4 space-y-3">
+        {view === "log" && <CountProgress key={`count-${wasteRefreshKey}`} items={sectionItems} date={date} />}
         {view === "log" && <WasteSummary key={wasteRefreshKey} items={sectionItems} date={date} showCost={showCost} />}
         {view === "log" &&
           sectionItems.map((item) => (

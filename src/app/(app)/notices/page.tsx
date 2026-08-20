@@ -11,6 +11,7 @@ import { useSession } from "@/lib/auth/RoleContext";
 import { useSync } from "@/lib/sync/SyncProvider";
 import { canPostNotice } from "@/lib/auth/permissions";
 import { getNotices, postNotice, getAcks, isAckedBy, ackNotice } from "@/lib/repo/notices";
+import { getStaff } from "@/lib/repo/staff";
 import type { Notice, NoticePriority } from "@/lib/types";
 
 function timeAgo(iso: string): string {
@@ -25,13 +26,18 @@ function timeAgo(iso: string): string {
 function NoticeCard({ notice, staffName, isManager }: { notice: Notice; staffName: string; isManager: boolean }) {
   const [acked, setAcked] = useState(false);
   const [ackNames, setAckNames] = useState<string[]>([]);
+  const [notRead, setNotRead] = useState<string[]>([]);
   const [showWho, setShowWho] = useState(false);
   const { dataVersion } = useSync();
   const ackCount = ackNames.length;
 
   useEffect(() => {
     setAcked(isAckedBy(notice.id, staffName));
-    setAckNames(getAcks(notice.id).map((a) => a.staffName));
+    const read = getAcks(notice.id).map((a) => a.staffName);
+    setAckNames(read);
+    // Compared against the active staff directory, so someone who has left
+    // doesn't sit on the list forever as "hasn't read it".
+    setNotRead(getStaff().map((s) => s.name).filter((n) => !read.includes(n)));
   }, [notice.id, staffName, dataVersion]);
 
   return (
@@ -74,16 +80,144 @@ function NoticeCard({ notice, staffName, isManager }: { notice: Notice; staffNam
           </button>
         )}
       </div>
-      {/* "How many" isn't the useful question on a team this size — "who"
-          is, so a manager knows who still needs telling in person. */}
+      {/* "How many" isn't the useful question on a team this size — "who
+          hasn't" is, because that's the list of people who still need
+          telling in person. */}
       {isManager && showWho && (
-        <p className="text-xs text-muted mt-2 pt-2 border-t border-border">
-          {ackCount > 0 ? (
-            <>Read by · Đã đọc: {ackNames.join(", ")}</>
+        <div className="text-xs mt-2 pt-2 border-t border-border space-y-1">
+          {notRead.length > 0 ? (
+            <p className="text-warning font-semibold">
+              Not read yet · Chưa đọc: {notRead.join(", ")}
+            </p>
           ) : (
-            <>Nobody has read this yet · Chưa ai đọc</>
+            <p className="text-success font-semibold">Everyone has read this · Mọi người đã đọc</p>
           )}
-        </p>
+          {ackCount > 0 && <p className="text-muted">Read by · Đã đọc: {ackNames.join(", ")}</p>}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * The recurring notices this board exists to replace in the group chat.
+ * Posting "we're out of X" shouldn't mean writing four fields, two of them
+ * translations — that's slower than the chat it's meant to beat, so nobody
+ * would use it mid-shift. Each template fills both languages and leaves only
+ * the variable part to type.
+ */
+const QUICK_TEMPLATES: {
+  key: string;
+  chip: string;
+  priority: NoticePriority;
+  /** what the person fills in, e.g. the item that ran out */
+  fieldLabel: string;
+  build: (v: string) => { title: { en: string; vi: string }; body: { en: string; vi: string } };
+}[] = [
+  {
+    key: "out_of_stock",
+    chip: "Out of · Hết hàng",
+    priority: "urgent",
+    fieldLabel: "What ran out? · Hết món gì?",
+    build: (v) => ({
+      title: { en: `We're out of ${v}`, vi: `Đã hết ${v}` },
+      body: {
+        en: `${v} has run out — 86 it and tell guests before they order.`,
+        vi: `${v} đã hết — ngừng bán và báo khách trước khi họ gọi món.`,
+      },
+    }),
+  },
+  {
+    key: "running_low",
+    chip: "Running low · Sắp hết",
+    priority: "normal",
+    fieldLabel: "What's running low? · Món nào sắp hết?",
+    build: (v) => ({
+      title: { en: `${v} running low`, vi: `${v} sắp hết` },
+      body: { en: `Go easy on ${v} until the next delivery.`, vi: `Hạn chế dùng ${v} đến khi có hàng mới.` },
+    }),
+  },
+  {
+    key: "price_change",
+    chip: "New price · Giá mới",
+    priority: "normal",
+    fieldLabel: "Which supplier or item? · Nhà cung cấp / mặt hàng nào?",
+    build: (v) => ({
+      title: { en: `New price — ${v}`, vi: `Giá mới — ${v}` },
+      body: { en: `${v} pricing has changed. Check before ordering.`, vi: `Giá của ${v} đã thay đổi. Kiểm tra trước khi đặt hàng.` },
+    }),
+  },
+  {
+    key: "allergy",
+    chip: "Allergy · Dị ứng",
+    priority: "urgent",
+    fieldLabel: "Table and allergy · Bàn và loại dị ứng",
+    build: (v) => ({
+      title: { en: `Allergy — ${v}`, vi: `Dị ứng — ${v}` },
+      body: {
+        en: `${v}. Check every component before it leaves the pass.`,
+        vi: `${v}. Kiểm tra mọi thành phần trước khi lên món.`,
+      },
+    }),
+  },
+];
+
+function QuickPost({ onPosted }: { onPosted: () => void }) {
+  const { session } = useSession();
+  const [active, setActive] = useState<string | null>(null);
+  const [value, setValue] = useState("");
+  if (!session) return null;
+
+  const template = QUICK_TEMPLATES.find((t) => t.key === active);
+
+  return (
+    <Card className="mb-3">
+      <p className="font-semibold text-sm mb-2">Quick post · Đăng nhanh</p>
+      <div className="flex flex-wrap gap-2">
+        {QUICK_TEMPLATES.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => {
+              setActive(active === t.key ? null : t.key);
+              setValue("");
+            }}
+            className={`min-h-11 px-3 rounded-full text-xs font-semibold border-2 ${
+              active === t.key ? "bg-brand text-white border-brand" : "border-border text-muted"
+            }`}
+          >
+            {t.chip}
+          </button>
+        ))}
+      </div>
+
+      {template && (
+        <div className="mt-3">
+          <input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={template.fieldLabel}
+            className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
+          />
+          {template.priority === "urgent" && (
+            <p className="text-xs text-danger font-semibold mt-1.5">
+              Posts as urgent — everyone must acknowledge it · Đăng dạng khẩn — mọi người phải xác nhận
+            </p>
+          )}
+          <Button
+            className="w-full min-h-12 text-sm mt-2"
+            disabled={!value.trim()}
+            onClick={() => {
+              const { title, body } = template.build(value.trim());
+              postNotice(title, body, session.name, session.role, template.priority);
+              setActive(null);
+              setValue("");
+              onPosted();
+            }}
+          >
+            Post · Đăng
+          </Button>
+        </div>
       )}
     </Card>
   );
@@ -103,7 +237,7 @@ function PostNoticeForm({ onPosted }: { onPosted: () => void }) {
   if (!open) {
     return (
       <Button className="w-full mb-4" onClick={() => setOpen(true)}>
-        <Plus size={18} /> Post notice · Đăng thông báo
+        <Plus size={18} /> Write a different notice · Viết thông báo khác
       </Button>
     );
   }
@@ -209,7 +343,12 @@ function NoticesPageContent() {
     <div className="pb-6">
       <PageHeader title="Notice Board · Bảng Thông Báo" subtitle="Read and acknowledge · Đọc và xác nhận" />
       <div className="px-4 md:px-8">
-        {canPostNotice(session.role) && <PostNoticeForm onPosted={refresh} />}
+        {canPostNotice(session.role) && (
+          <>
+            <QuickPost onPosted={refresh} />
+            <PostNoticeForm onPosted={refresh} />
+          </>
+        )}
         <div className="space-y-3">
           {notices.map((n) => (
             <NoticeCard key={n.id} notice={n} staffName={session.name} isManager={isManager} />

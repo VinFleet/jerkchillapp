@@ -20,9 +20,19 @@ export default function AppGroupLayout({ children }: { children: React.ReactNode
   }, []);
 
   if (!ready || !session) {
+    // A skeleton rather than a bare word: this is the first thing anyone sees
+    // when the tablet wakes up, and a blank screen with one line of text reads
+    // as "broken" for the second it's there.
     return (
-      <div className="min-h-dvh flex items-center justify-center text-muted">
-        Loading… / Đang tải…
+      <div className="min-h-dvh p-4 md:p-8" aria-busy="true" aria-label="Loading · Đang tải">
+        <div className="animate-pulse space-y-3 max-w-2xl">
+          <div className="h-6 w-40 rounded-lg bg-black/10 dark:bg-white/10" />
+          <div className="h-4 w-56 rounded bg-black/10 dark:bg-white/10" />
+          <div className="h-24 rounded-2xl bg-black/10 dark:bg-white/10 mt-6" />
+          <div className="h-24 rounded-2xl bg-black/10 dark:bg-white/10" />
+          <div className="h-24 rounded-2xl bg-black/10 dark:bg-white/10" />
+        </div>
+        <span className="sr-only">Loading · Đang tải</span>
       </div>
     );
   }

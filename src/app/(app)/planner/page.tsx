@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PackageSearch, CheckCircle2, Users, ChevronRight, Printer } from "lucide-react";
+import { PackageSearch, CheckCircle2, Users, ChevronRight, Printer, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
@@ -57,6 +57,20 @@ function PlannerRow({
         <p className="text-xs text-muted mt-1 print:hidden">
           Suggested · Gợi ý: {decision.suggestedQty} {item.unit}
         </p>
+        {/* Undo a mis-tapped confirmation without having to remember what the
+            original suggestion was. */}
+        {isConfirmed && canConfirm && qty !== decision.suggestedQty && (
+          <button
+            onClick={() => {
+              const updated = confirmDecision(item.id, date, decision.suggestedQty, enteredBy);
+              setDecision(updated);
+              onChanged();
+            }}
+            className="min-h-11 flex items-center gap-1 text-xs text-brand font-semibold print:hidden"
+          >
+            <RotateCcw size={12} /> Back to suggested · Về mức gợi ý
+          </button>
+        )}
       </div>
       <div className="flex items-center gap-3 shrink-0 print:hidden">
         <Stepper

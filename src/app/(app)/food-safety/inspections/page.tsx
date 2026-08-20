@@ -25,6 +25,13 @@ const STAGE_LABEL: Record<InspectionStage, { en: string; vi: string }> = {
   before_serving: { en: "Step 3 — Before serving", vi: "Bước 3 — Trước khi phục vụ" },
 };
 
+/** Short form for the step switcher, where three labels share one phone-width row. */
+const STAGE_SHORT: Record<InspectionStage, BiValue> = {
+  before: { en: "Before prep", vi: "Trước chế biến" },
+  during: { en: "During prep", vi: "Trong chế biến" },
+  before_serving: { en: "Before serving", vi: "Trước phục vụ" },
+};
+
 const STAGE_ORDER: InspectionStage[] = ["before", "during", "before_serving"];
 
 const DISH_LIST_ID = "insp-dish-names";
@@ -148,8 +155,38 @@ function EntryList({ entries }: { entries: ThreeStepInspection[] }) {
   );
 }
 
-function BeforePrepForm({ date, service, staffName, onLogged }: { date: string; service: ServicePeriod; staffName: string; onLogged: () => void }) {
-  const [meal, setMeal] = useState("");
+/**
+ * Says out loud what a greyed-out Save is still waiting for. A disabled button
+ * with no reason attached is a dead end for anyone who doesn't already know
+ * which fields this form treats as required.
+ */
+function MissingHint({ missing }: { missing: BiValue[] }) {
+  if (missing.length === 0) return null;
+  return (
+    <p className="text-xs text-warning text-center leading-snug">
+      Still needed: {missing.map((m) => m.en).join(", ")}
+      <br />
+      Còn thiếu: {missing.map((m) => m.vi).join(", ")}
+    </p>
+  );
+}
+
+/**
+ * The three steps are legally distinct records with their own Save — a chef who
+ * only does the before-prep check still files a complete entry. `meal` is the
+ * one field they share, so it's entered once per service upstream and passed in.
+ */
+type StageFormProps = {
+  date: string;
+  service: ServicePeriod;
+  meal: string;
+  staffName: string;
+  onLogged: () => void;
+};
+
+const MEAL_MISSING: BiValue = { en: "meal", vi: "bữa ăn" };
+
+function BeforePrepForm({ date, service, meal, staffName, onLogged }: StageFormProps) {
   const [ingredient, setIngredient] = useState("");
   const [supplierSource, setSupplierSource] = useState("");
   const [qty, setQty] = useState("");
@@ -157,17 +194,22 @@ function BeforePrepForm({ date, service, staffName, onLogged }: { date: string; 
   const [notes, setNotes] = useState("");
 
   const reset = () => {
-    setMeal("");
     setIngredient("");
     setSupplierSource("");
     setQty("");
-    setSensoryOk(false);
+    setSensoryOk(undefined);
     setNotes("");
   };
 
+  const missing: BiValue[] = [
+    ...(!meal.trim() ? [MEAL_MISSING] : []),
+    ...(!ingredient.trim() ? [{ en: "ingredient", vi: "nguyên liệu" }] : []),
+    ...(!qty.trim() ? [{ en: "quantity", vi: "số lượng" }] : []),
+    ...(sensoryOk === undefined ? [{ en: "sensory check", vi: "kiểm tra cảm quan" }] : []),
+  ];
+
   return (
     <div className="space-y-2">
-      <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
       <input value={ingredient} onChange={(e) => setIngredient(e.target.value)} placeholder="Ingredient · Nguyên liệu" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={INGREDIENT_LIST_ID} />
       <input value={supplierSource} onChange={(e) => setSupplierSource(e.target.value)} placeholder="Supplier / source · Nhà cung cấp / nguồn gốc" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={SUPPLIER_LIST_ID} />
       <input value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal"
@@ -175,8 +217,8 @@ function BeforePrepForm({ date, service, staffName, onLogged }: { date: string; 
       <PassFail label={{ en: "Sensory check", vi: "Kiểm tra cảm quan" }} value={sensoryOk} onChange={setSensoryOk} />
       <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional) · Ghi chú" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
       <Button
-        className="w-full min-h-11 text-sm"
-        disabled={!meal.trim() || !ingredient.trim() || !qty.trim() || sensoryOk === undefined}
+        className="w-full"
+        disabled={missing.length > 0}
         onClick={() => {
           logBeforePrep({ date, service, meal: meal.trim(), ingredient: ingredient.trim(), supplierSource: supplierSource.trim(), qty: qty.trim(), sensoryOk: sensoryOk === true, checkedBy: staffName, notes: notes.trim() || undefined });
           reset();
@@ -185,12 +227,12 @@ function BeforePrepForm({ date, service, staffName, onLogged }: { date: string; 
       >
         Log check · Ghi nhận
       </Button>
+      <MissingHint missing={missing} />
     </div>
   );
 }
 
-function DuringPrepForm({ date, service, staffName, onLogged }: { date: string; service: ServicePeriod; staffName: string; onLogged: () => void }) {
-  const [meal, setMeal] = useState("");
+function DuringPrepForm({ date, service, meal, staffName, onLogged }: StageFormProps) {
   const [areaHygieneOk, setAreaHygieneOk] = useState<boolean | undefined>(undefined);
   const [staffHygieneOk, setStaffHygieneOk] = useState<boolean | undefined>(undefined);
   const [startTime, setStartTime] = useState("");
@@ -198,27 +240,39 @@ function DuringPrepForm({ date, service, staffName, onLogged }: { date: string; 
   const [notes, setNotes] = useState("");
 
   const reset = () => {
-    setMeal("");
-    setAreaHygieneOk(false);
-    setStaffHygieneOk(false);
+    setAreaHygieneOk(undefined);
+    setStaffHygieneOk(undefined);
     setStartTime("");
     setEndTime("");
     setNotes("");
   };
 
+  const missing: BiValue[] = [
+    ...(!meal.trim() ? [MEAL_MISSING] : []),
+    ...(!startTime ? [{ en: "start time", vi: "giờ bắt đầu" }] : []),
+    ...(!endTime ? [{ en: "end time", vi: "giờ kết thúc" }] : []),
+    ...(areaHygieneOk === undefined ? [{ en: "area hygiene", vi: "vệ sinh khu vực" }] : []),
+    ...(staffHygieneOk === undefined ? [{ en: "staff hygiene", vi: "vệ sinh nhân viên" }] : []),
+  ];
+
   return (
     <div className="space-y-2">
-      <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
       <div className="flex gap-2">
-        <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
-        <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
+        <div className="flex-1">
+          <p className="text-xs text-muted mb-1">Start · Bắt đầu</p>
+          <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
+        </div>
+        <div className="flex-1">
+          <p className="text-xs text-muted mb-1">End · Kết thúc</p>
+          <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
+        </div>
       </div>
       <PassFail label={{ en: "Area / equipment hygiene", vi: "Vệ sinh khu vực / thiết bị" }} value={areaHygieneOk} onChange={setAreaHygieneOk} />
       <PassFail label={{ en: "Staff hygiene", vi: "Vệ sinh nhân viên" }} value={staffHygieneOk} onChange={setStaffHygieneOk} />
       <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional) · Ghi chú" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
       <Button
-        className="w-full min-h-11 text-sm"
-        disabled={!meal.trim() || !startTime || !endTime || areaHygieneOk === undefined || staffHygieneOk === undefined}
+        className="w-full"
+        disabled={missing.length > 0}
         onClick={() => {
           logDuringPrep({ date, service, meal: meal.trim(), areaHygieneOk: areaHygieneOk === true, staffHygieneOk: staffHygieneOk === true, startTime, endTime, checkedBy: staffName, notes: notes.trim() || undefined });
           reset();
@@ -227,35 +281,43 @@ function DuringPrepForm({ date, service, staffName, onLogged }: { date: string; 
       >
         Log check · Ghi nhận
       </Button>
+      <MissingHint missing={missing} />
     </div>
   );
 }
 
-function BeforeServingForm({ date, service, staffName, onLogged }: { date: string; service: ServicePeriod; staffName: string; onLogged: () => void }) {
-  const [meal, setMeal] = useState("");
+function BeforeServingForm({ date, service, meal, staffName, onLogged }: StageFormProps) {
   const [dish, setDish] = useState("");
   const [sensoryOk, setSensoryOk] = useState<boolean | undefined>(undefined);
   const [timeServed, setTimeServed] = useState("");
   const [notes, setNotes] = useState("");
 
   const reset = () => {
-    setMeal("");
     setDish("");
-    setSensoryOk(false);
+    setSensoryOk(undefined);
     setTimeServed("");
     setNotes("");
   };
 
+  const missing: BiValue[] = [
+    ...(!meal.trim() ? [MEAL_MISSING] : []),
+    ...(!dish.trim() ? [{ en: "dish", vi: "món ăn" }] : []),
+    ...(!timeServed ? [{ en: "time served", vi: "giờ phục vụ" }] : []),
+    ...(sensoryOk === undefined ? [{ en: "sensory check", vi: "kiểm tra cảm quan" }] : []),
+  ];
+
   return (
     <div className="space-y-2">
-      <input value={meal} onChange={(e) => setMeal(e.target.value)} placeholder="Meal · Bữa ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
       <input value={dish} onChange={(e) => setDish(e.target.value)} placeholder="Dish · Món ăn" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" list={DISH_LIST_ID} />
-      <input type="time" value={timeServed} onChange={(e) => setTimeServed(e.target.value)} className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
+      <div>
+        <p className="text-xs text-muted mb-1">Time served · Giờ phục vụ</p>
+        <input type="time" value={timeServed} onChange={(e) => setTimeServed(e.target.value)} className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
+      </div>
       <PassFail label={{ en: "Sensory check", vi: "Kiểm tra cảm quan" }} value={sensoryOk} onChange={setSensoryOk} />
       <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional) · Ghi chú" className="w-full min-h-11 rounded-xl border-2 border-border px-3 text-sm" />
       <Button
-        className="w-full min-h-11 text-sm"
-        disabled={!meal.trim() || !dish.trim() || !timeServed || sensoryOk === undefined}
+        className="w-full"
+        disabled={missing.length > 0}
         onClick={() => {
           logBeforeServing({ date, service, meal: meal.trim(), dish: dish.trim(), sensoryOk: sensoryOk === true, timeServed, checkedBy: staffName, notes: notes.trim() || undefined });
           reset();
@@ -264,6 +326,7 @@ function BeforeServingForm({ date, service, staffName, onLogged }: { date: strin
       >
         Log check · Ghi nhận
       </Button>
+      <MissingHint missing={missing} />
     </div>
   );
 }
@@ -272,6 +335,8 @@ function InspectionsContent() {
   const { session } = useSession();
   const [date, setDate] = useState(todayIso());
   const [service, setService] = useState<ServicePeriod>("lunch");
+  const [stage, setStage] = useState<InspectionStage>("before");
+  const [meal, setMeal] = useState("");
   const [entries, setEntries] = useState<ThreeStepInspection[]>([]);
   const [dishes, setDishes] = useState<BiValue[]>([]);
   const [ingredients, setIngredients] = useState<BiValue[]>([]);
@@ -292,8 +357,11 @@ function InspectionsContent() {
   if (!session) return null;
   const canEnter = canEnterFoodSafetyLog(session.role, "inspections");
 
-  const entriesFor = (stage: InspectionStage) =>
-    entries.filter((e) => e.service === service && e.stage === stage).sort((a, b) => (a.checkedAt < b.checkedAt ? 1 : -1));
+  const entriesFor = (s: InspectionStage) =>
+    entries.filter((e) => e.service === service && e.stage === s).sort((a, b) => (a.checkedAt < b.checkedAt ? 1 : -1));
+
+  const stageIndex = STAGE_ORDER.indexOf(stage);
+  const nextStage = STAGE_ORDER[stageIndex + 1];
 
   return (
     <div className="pb-6">
@@ -336,23 +404,72 @@ function InspectionsContent() {
             </button>
           ))}
         </div>
-        <div className="space-y-4">
-          {STAGE_ORDER.map((stage) => (
-            <Card key={stage}>
-              <p className="font-semibold text-sm mb-3">
-                {STAGE_LABEL[stage].en} · {STAGE_LABEL[stage].vi}
-              </p>
-              {canEnter && (
-                <div className="mb-3">
-                  {stage === "before" && <BeforePrepForm date={date} service={service} staffName={session.name} onLogged={refresh} />}
-                  {stage === "during" && <DuringPrepForm date={date} service={service} staffName={session.name} onLogged={refresh} />}
-                  {stage === "before_serving" && <BeforeServingForm date={date} service={service} staffName={session.name} onLogged={refresh} />}
-                </div>
-              )}
-              <EntryList entries={entriesFor(stage)} />
-            </Card>
-          ))}
+        {canEnter && (
+          <div className="mb-4">
+            <p className="text-xs text-muted mb-1">Meal · Bữa ăn</p>
+            <input
+              value={meal}
+              onChange={(e) => setMeal(e.target.value)}
+              placeholder="e.g. Jerk Chicken"
+              className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm focus:outline-none focus:border-brand"
+              list={DISH_LIST_ID}
+            />
+            <p className="text-xs text-muted mt-1">Entered once, used by all 3 steps · Nhập một lần, dùng cho cả 3 bước</p>
+          </div>
+        )}
+        {/* One step at a time — the other two forms are a tap away, not a scroll past. */}
+        <div className="mb-4">
+          <p className="text-xs text-muted mb-1">
+            Step {stageIndex + 1} of 3 · Bước {stageIndex + 1}/3
+          </p>
+          <div className="flex gap-2">
+            {STAGE_ORDER.map((s, i) => {
+              const active = s === stage;
+              const logged = entriesFor(s).length;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setStage(s)}
+                  aria-pressed={active}
+                  className={`flex-1 min-h-16 rounded-xl border-2 px-1 py-2 flex flex-col items-center justify-center gap-0.5 ${
+                    active ? "bg-brand text-white border-brand" : "border-border text-foreground"
+                  }`}
+                >
+                  <span className="flex items-center gap-1 font-bold text-sm">
+                    {i + 1}
+                    {logged > 0 && <CheckCircle2 size={12} className={active ? "" : "text-success"} />}
+                  </span>
+                  <span className="text-[11px] font-semibold leading-tight text-center">{STAGE_SHORT[s].en}</span>
+                  <span className={`text-[11px] leading-tight text-center ${active ? "text-white/80" : "text-muted"}`}>
+                    {STAGE_SHORT[s].vi}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+        <Card>
+          <p className="font-semibold text-sm mb-3">
+            {STAGE_LABEL[stage].en} · {STAGE_LABEL[stage].vi}
+          </p>
+          {canEnter && (
+            <div className="mb-3">
+              {stage === "before" && <BeforePrepForm date={date} service={service} meal={meal} staffName={session.name} onLogged={refresh} />}
+              {stage === "during" && <DuringPrepForm date={date} service={service} meal={meal} staffName={session.name} onLogged={refresh} />}
+              {stage === "before_serving" && <BeforeServingForm date={date} service={service} meal={meal} staffName={session.name} onLogged={refresh} />}
+            </div>
+          )}
+          <EntryList entries={entriesFor(stage)} />
+        </Card>
+        {nextStage && (
+          <button
+            onClick={() => setStage(nextStage)}
+            className="mt-3 w-full min-h-12 rounded-xl border-2 border-border font-semibold text-sm flex items-center justify-center gap-1"
+          >
+            Next: {STAGE_SHORT[nextStage].en} · Tiếp: {STAGE_SHORT[nextStage].vi}
+            <ChevronRight size={16} />
+          </button>
+        )}
       </div>
     </div>
   );

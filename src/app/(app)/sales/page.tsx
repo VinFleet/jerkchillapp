@@ -32,9 +32,19 @@ function DateNav({ date, onChange }: { date: string; onChange: (d: string) => vo
       <button onClick={() => onChange(addDaysIso(date, -1))} className="w-11 h-11 flex items-center justify-center text-brand" aria-label="Previous day">
         <ChevronLeft size={20} />
       </button>
-      <span className="font-semibold text-sm flex-1 text-center">
-        {date} {isToday && <span className="text-brand">· Today / Hôm nay</span>}
-      </span>
+      <input
+        type="date"
+        value={date}
+        max={todayIso()}
+        onChange={(e) => e.target.value && onChange(e.target.value)}
+        className="flex-1 min-h-11 rounded-xl border-2 border-border px-3 text-sm text-center focus:outline-none focus:border-brand"
+        aria-label="Pick a date"
+      />
+      {!isToday && (
+        <button onClick={() => onChange(todayIso())} className="min-h-11 px-2 text-xs text-brand font-semibold shrink-0">
+          Today · Hôm nay
+        </button>
+      )}
       <button
         onClick={() => !isToday && onChange(addDaysIso(date, 1))}
         disabled={isToday}
