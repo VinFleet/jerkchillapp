@@ -16,6 +16,7 @@ import type {
 } from "@/lib/types";
 import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
 import { SEED_FRIDGE_UNITS, SEED_CLEANING_TASKS } from "@/lib/seed/foodSafety";
+import { raiseAlert } from "@/lib/push/alert";
 
 // v2: real units on site replaced the earlier placeholder names — bumping
 // the key forces a fresh seed for anyone whose browser already stored the
@@ -520,6 +521,16 @@ export function logComplaint(
   const all = readList<ComplaintLog>(COMPLAINTS_KEY);
   all.push(entry);
   writeList(COMPLAINTS_KEY, all);
+  raiseAlert({
+    category: "issues",
+    title: { en: `Complaint logged — ${severity}`, vi: `Khiếu nại mới — ${severity}` },
+    // The guest's own words, so this is the untrusted half; the server escapes
+    // Zalo mention patterns before it reaches the group.
+    body: { en: `${category}: ${description}`, vi: `${category}: ${description}` },
+    url: "/food-safety/complaints",
+    urgent: severity === "high",
+  });
+
   return entry;
 }
 

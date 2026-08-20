@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
+import { raiseAlert } from "@/lib/push/alert";
 import { TENANT_ID, POS_MIN, POS_MAX } from "@/lib/bookings/types";
 import type { RestaurantTable, Booking, BookingStatus, TableShape } from "@/lib/bookings/types";
 
@@ -129,6 +130,19 @@ export async function createStaffBooking(input: NewBookingInput): Promise<Bookin
 export async function updateBookingStatus(id: string, status: BookingStatus) {
   const { error } = await requireClient().from("bookings").update({ status }).eq("id", id);
   if (error) throw error;
+  // Cancellations are the ones that change what the kitchen preps and what the
+  // floor expects, so they're worth telling people about; a confirmation isn't.
+  if (status === "cancelled" || status === "no_show") {
+    raiseAlert({
+      category: "bookings",
+      title: { en: "Booking cancelled", vi: "Đặt bàn đã hủy" },
+      body: {
+        en: "A booking was cancelled — check the covers for tonight.",
+        vi: "Một đặt bàn đã hủy — kiểm tra lại số khách tối nay.",
+      },
+      url: "/bookings",
+    });
+  }
 }
 
 export async function updateBooking(id: string, patch: Partial<NewBookingInput>) {

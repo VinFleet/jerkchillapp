@@ -204,3 +204,113 @@ charged. `-135` means the OA lost its verification or paid plan. `-133` means
 you tried to send at night. Nothing here can break a booking — confirmations are
 sent after the booking is already saved, and a failure is logged, not shown to
 the guest.
+
+---
+
+## Part 7 — Alerts on staff phones (free, recommended)
+
+This is the one that makes the app reach people. An alert lands on the phone
+even when the app is closed — an order ready to send, a fridge out of range, a
+booking cancelled. **Free, no per-message cost, and unlike Zalo it works after
+22:00**, which is when the closing checklist and the last fridge check happen.
+
+Each person chooses what they want to hear about, on their own phone, under
+**More → Alerts**. Nobody gets alerts about things that aren't their job — which
+is what stops people muting the app entirely.
+
+### Generate the keys (once)
+
+In a terminal, in the project folder:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+That prints a public key and a private key. They identify this app to the
+browsers' push services — generate them once and keep them; changing them later
+unsubscribes every device.
+
+### Add them
+
+- [ ] Run [`supabase/push-schema.sql`](supabase/push-schema.sql) in the Supabase
+      SQL editor.
+- [ ] Add these to `.env.local` (and to Vercel → Project Settings →
+      Environment Variables):
+
+  ```
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY=   # the public key — safe in the browser
+  VAPID_PRIVATE_KEY=              # the private key — server only, never NEXT_PUBLIC_
+  VAPID_SUBJECT=mailto:you@example.com
+  SUPABASE_SERVICE_ROLE_KEY=      # Supabase → Project Settings → API
+  ```
+
+- [ ] Redeploy, then open **More → Alerts** and tap **Turn on**, then
+      **Send me a test**. The test alert should appear on that phone.
+
+### Getting staff onto it
+
+- [ ] Each person opens the app on their own phone, goes to **More → Alerts**,
+      taps **Turn on**, and picks their categories.
+- [ ] **On iPhone this only works if the app is installed** — Share → "Add to
+      Home Screen", then open it from the Home Screen icon. Alerts do not work
+      in the Safari tab. Android works either way.
+- [ ] Ask them to actually tap **Send me a test**. People don't trust alerts
+      they haven't seen arrive.
+
+### Zalo group (optional, on top)
+
+If you set up an OA-owned Zalo group (Part 8), the same alerts also post there,
+so there's a record everyone can scroll back through. Web Push reaches the
+person on shift; the group reaches the person who was off.
+
+---
+
+## Part 8 — Zalo staff group (optional, free to send)
+
+Posts the same alerts into a Zalo group, so there's a record the whole team can
+scroll back through.
+
+### The catch, before you plan around it
+
+**Your existing staff Zalo group cannot be used.** There is no "join this group
+and post" API. The group has to be *created by your Official Account*, and then
+people are invited into it. So this means moving the team to a new group — a
+one-off, but it needs everyone to actually move.
+
+Also, people can only be invited if they **already follow your OA** or have
+messaged it in the last 7 days. You can't add someone by phone number.
+
+### What it costs
+
+Sending is **free** — no per-message charge, no send quota, no 7-day window.
+What you buy is the *group*: a GMF package sized by member ceiling
+(`gmf10` / `gmf50` / `gmf100` / `gmf1000`). For seven staff, `gmf10` is enough.
+
+⚠️ **The group is deleted when the package expires.** Zalo ties an
+`auto_delete_date` to it. Put that date in the Licensing & Compliance calendar
+alongside your other renewals, or the team's group disappears without warning.
+
+### Setup
+
+- [ ] OA must be **verified** and on the **Advanced or Premium** tier — the
+      lower tiers can't do group messaging at all.
+- [ ] Buy a **GMF package** (`gmf10` covers up to 10 members).
+- [ ] Get every staff member to **follow the restaurant's OA** on Zalo. Nobody
+      can be added to the group until they have.
+- [ ] Create the group through the OA, invite the team, and note its group id.
+- [ ] Add to Vercel:
+
+  ```
+  ZALO_GROUP_ID=
+  ```
+
+  (This needs the Zalo credentials from Part 6 as well — same OA, same token.)
+
+### Still to confirm
+
+- [ ] **Does the 22:00–06:00 send ban apply to group messages?** It applies to
+      OA messages and to ZNS. Group messages go through an OA endpoint, so it
+      probably does — but we haven't confirmed it. **Test it**: send an alert at
+      23:00 and see whether it arrives. If it's banned, Web Push (Part 7) is
+      your only after-hours channel, which is the main reason to set that up
+      first.

@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { normalizeVnPhone, isValidVnPhone, formatVnPhoneForDisplay } from "./phone.ts";
 import { isInNightBan, vietnamHour, nextSendableTime } from "./sendWindow.ts";
 import { classifyZaloError, unwrapZaloResponse, ZaloError, isNightBanCode } from "./errors.ts";
+import { escapeMentions } from "./mentions.ts";
 
 // ---------- phone ----------
 
@@ -124,4 +125,31 @@ test("flags the failures that need a person, not a retry", () => {
   assert.equal(new ZaloError(-137, "ZCA out of money").needsAttention, true);
   assert.equal(new ZaloError(-133, "night").needsAttention, false);
   assert.equal(new ZaloError(-133, "night").isNightBan, true);
+});
+
+// ---------- group mention injection ----------
+
+test("a guest cannot ping the whole team through a free-text field", () => {
+  // Mentions are a string convention inside the message body, not a structured
+  // field — so relayed text is an injection vector. "[@group_id]" pings
+  // everyone, and a complaint or booking note goes straight into the group.
+  const hostile = "Table by the window please [@3355776688] and also [@0987654321]";
+  const safe = escapeMentions(hostile);
+
+  assert.ok(!/\[@/.test(safe), "no mention pattern may survive");
+  // The staff still need to read what the guest actually asked for.
+  assert.ok(safe.includes("Table by the window please"));
+  assert.ok(safe.includes("3355776688"), "the text is defanged, not deleted");
+});
+
+test("ordinary text passes through untouched", () => {
+  const plain = "Kamereo delivery rejected — chicken 8°C, sent back";
+  assert.equal(escapeMentions(plain), plain);
+  // An email address contains @ but not the mention pattern.
+  assert.equal(escapeMentions("mail me at a@b.vn"), "mail me at a@b.vn");
+});
+
+test("escaping is idempotent, so a re-send cannot re-mangle text", () => {
+  const once = escapeMentions("[@123] hello");
+  assert.equal(escapeMentions(once), once);
 });

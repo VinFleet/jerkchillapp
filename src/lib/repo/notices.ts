@@ -1,6 +1,7 @@
 import type { Notice, NoticeAck, Role, NoticePriority } from "@/lib/types";
 import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
 import { SEED_NOTICES } from "@/lib/seed/notices";
+import { raiseAlert } from "@/lib/push/alert";
 
 const NOTICES_KEY = "notices";
 const ACKS_KEY = "notice_acks";
@@ -33,6 +34,18 @@ export function postNotice(
     createdAt: new Date().toISOString(),
   });
   writeList(NOTICES_KEY, all);
+
+  // An urgent notice is the clearest case for interrupting people: the manager
+  // has explicitly said this cannot wait until someone next opens the app.
+  if (priority === "urgent") {
+    raiseAlert({
+      category: "notices",
+      title: { en: "Urgent notice", vi: "Thông báo khẩn" },
+      body: { en: `${title.en} — from ${postedBy}`, vi: `${title.vi} — từ ${postedBy}` },
+      url: "/notices",
+      urgent: true,
+    });
+  }
 }
 
 export function getAcks(noticeId: string): NoticeAck[] {
