@@ -29,6 +29,7 @@ const HEALTH_KEY = "staff_health_certs";
 const CANDIDATES_KEY = "hiring_candidates";
 const QUESTIONS_KEY = "hiring_questions";
 const SCORECARDS_KEY = "hiring_scorecards";
+const ROSTER_BACKFILL_KEY = "staff_roster_backfill_v1";
 
 export function ensureStaffSeeded() {
   if (!isSeeded(QUESTIONS_KEY)) {
@@ -39,6 +40,33 @@ export function ensureStaffSeeded() {
     writeList(STAFF_KEY, SEED_STAFF_MEMBERS);
     markSeeded(STAFF_KEY);
   }
+  backfillRoster();
+}
+
+/**
+ * The first roster seeded three kitchen placeholders and nobody else, from
+ * before the real team shape was confirmed: four kitchen, two FOH, one
+ * manager/owner. An empty FOH list breaks the "who's working" picker on the
+ * bar tablet, which is the whole point of station sign-in.
+ *
+ * Staff records are user-editable — names get filled in — so this can't just
+ * rewrite the list. It adds a missing placeholder only when nothing already
+ * covers that slot, and never touches an existing record.
+ */
+function backfillRoster() {
+  if (isSeeded(ROSTER_BACKFILL_KEY)) return;
+  const all = readList<StaffMember>(STAFF_KEY);
+  const byId = new Set(all.map((s) => s.id));
+  const hasRole = (role: StaffRole) => all.some((s) => s.role === role && s.active);
+  const additions = SEED_STAFF_MEMBERS.filter((seeded) => {
+    if (byId.has(seeded.id)) return false;
+    // Someone who already set up their own FOH or manager people shouldn't get
+    // placeholders on top; only a genuinely empty slot gets filled.
+    if (seeded.role !== "Chef / Kitchen" && hasRole(seeded.role)) return false;
+    return true;
+  });
+  if (additions.length > 0) writeList(STAFF_KEY, [...all, ...additions]);
+  markSeeded(ROSTER_BACKFILL_KEY);
 }
 
 // ---------- Staff directory ----------
@@ -80,6 +108,19 @@ export function updateStaffMember(id: string, patch: Partial<Omit<StaffMember, "
  */
 export function setStaffActive(id: string, active: boolean) {
   updateStaffMember(id, { active });
+}
+
+/**
+ * A 4-digit personal PIN, set by the manager.
+ *
+ * This is an accountability check, not a security boundary — it proves the
+ * right person tapped "I accept", on a tablet the whole kitchen already shares.
+ * Anything genuinely sensitive (wages, costs) sits behind the manager station's
+ * real password instead.
+ */
+export function setStaffPin(id: string, pin: string) {
+  if (!/^\d{4}$/.test(pin)) return;
+  updateStaffMember(id, { pin });
 }
 
 /** Reminders should stop when someone leaves, so they're scoped to active staff. */

@@ -2,9 +2,10 @@
 
 import { useEffect, useState, use as usePromise } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, CheckCircle2, Plus, UserMinus, RotateCcw } from "lucide-react";
+import { ChevronLeft, CheckCircle2, Plus, UserMinus, RotateCcw, Lock } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { Bi } from "@/components/Bi";
+import { PinGate } from "@/components/PinGate";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -26,6 +27,7 @@ import {
   updateHealthCert,
   getDisciplinaryEntries,
   logDisciplinary,
+  setStaffPin,
 } from "@/lib/repo/staff";
 import {
   INDUCTION_STEP_LABEL,
@@ -197,8 +199,18 @@ function InductionSection({ staffId, staffName }: { staffId: string; staffName: 
   );
 }
 
-function ConductSection({ staffId }: { staffId: string }) {
+/**
+ * The one place a shared station isn't good enough.
+ *
+ * "Who counted the stock" is fine to attribute by picking a name off a list.
+ * "I have read and accept this policy" is not — if anyone on the tablet can
+ * tick it for anyone else, the record proves nothing the day it's needed. So
+ * this one asks for the person's own PIN.
+ */
+function ConductSection({ staff }: { staff: StaffMember }) {
+  const staffId = staff.id;
   const [, setTick] = useState(0);
+  const [asking, setAsking] = useState(false);
   const ack = getConductAck(staffId);
 
   return (
@@ -217,16 +229,91 @@ function ConductSection({ staffId }: { staffId: string }) {
           <CheckCircle2 size={16} /> Acknowledged · Đã xác nhận {new Date(ack.ackedAt).toLocaleDateString()}
         </p>
       ) : (
-        <Button
-          variant="secondary"
-          className="min-h-11 text-sm"
-          onClick={() => {
+        <>
+          <Button variant="secondary" className="min-h-11 text-sm" onClick={() => setAsking(true)}>
+            <Lock size={15} className="mr-1.5" />
+            I accept — enter my PIN · Tôi đồng ý — nhập mã PIN
+          </Button>
+          <p className="text-xs text-muted mt-2">
+            Only {staff.name} can accept this, so the record holds up.
+            <br />
+            Chỉ {staff.name} mới xác nhận được, để hồ sơ có giá trị pháp lý.
+          </p>
+        </>
+      )}
+      {asking && (
+        <PinGate
+          member={staff}
+          title={{ en: "Accept the Code of Conduct", vi: "Xác nhận Quy Tắc Ứng Xử" }}
+          onVerified={() => {
             ackConduct(staffId);
+            setAsking(false);
             setTick((t) => t + 1);
           }}
-        >
-          Mark acknowledged · Đánh dấu đã xác nhận
-        </Button>
+          onCancel={() => setAsking(false)}
+        />
+      )}
+    </Card>
+  );
+}
+
+/** Manager sets each person's PIN. Shown only to whoever can edit staff. */
+function PinSection({ staff, onChanged }: { staff: StaffMember; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const valid = /^\d{4}$/.test(value);
+
+  return (
+    <Card>
+      <p className="font-semibold text-sm mb-1">Personal PIN · Mã PIN cá nhân</p>
+      <p className="text-xs text-muted mb-3">
+        Used for things only this person can do — accepting the Code of Conduct.
+        <br />
+        Dùng cho việc chỉ người này làm được — xác nhận Quy Tắc Ứng Xử.
+      </p>
+      {editing ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={4}
+            value={value}
+            onChange={(e) => setValue(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="4 digits"
+            className="w-28 min-h-11 rounded-xl border-2 border-border px-3 text-lg tracking-[0.4em] tabular-nums text-center"
+          />
+          <Button
+            className="min-h-11 text-sm"
+            disabled={!valid}
+            onClick={() => {
+              setStaffPin(staff.id, value);
+              setValue("");
+              setEditing(false);
+              onChanged();
+            }}
+          >
+            Save · Lưu
+          </Button>
+          <button
+            onClick={() => {
+              setValue("");
+              setEditing(false);
+            }}
+            className="min-h-11 px-2 text-sm text-muted font-semibold"
+          >
+            Cancel · Hủy
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold">
+            {staff.pin ? "PIN set · Đã đặt mã" : "No PIN yet · Chưa có mã"}
+          </span>
+          <button onClick={() => setEditing(true)} className="min-h-11 px-2 text-xs text-brand font-semibold">
+            {staff.pin ? "Change · Đổi" : "Set PIN · Đặt mã"}
+          </button>
+        </div>
       )}
     </Card>
   );
@@ -532,9 +619,10 @@ function StaffDetailContent({ id }: { id: string }) {
         )}
 
         <InductionSection staffId={staff.id} staffName={session.name} />
-        <ConductSection staffId={staff.id} />
+        <ConductSection staff={staff} />
         <TrainingSection staffId={staff.id} staffName={session.name} />
         <HealthCertSection staffId={staff.id} />
+        {canEdit && <PinSection staff={staff} onChanged={refreshStaff} />}
         {canEdit && <DisciplinarySection staffId={staff.id} staffName={session.name} />}
         {canEdit && <EmploymentSection staff={staff} onChanged={refreshStaff} />}
       </div>

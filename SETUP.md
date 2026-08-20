@@ -21,11 +21,30 @@ restaurant.
 - [ ] Open **SQL Editor → New query**, paste the entire contents of
       [`supabase/schema.sql`](supabase/schema.sql), and run it.
       (Safe to re-run any time — every statement is idempotent.)
-- [ ] Go to **Authentication → Users → Add user** and create ONE staff
-      login (an email + password). This is what the tablet signs into —
-      not a per-person login, just proof "this device is the restaurant."
-      Write the password down somewhere safe (a password manager, not a
-      sticky note).
+- [ ] Open **SQL Editor → New query** again, paste the contents of
+      [`supabase/sync-schema.sql`](supabase/sync-schema.sql), and run it.
+      This is what makes the tablets share data with each other.
+      **✅ Already done — 20 Aug 2026.**
+- [ ] Go to **Authentication → Users → Add user** and create **TWO**
+      logins (email + password each). Write both down somewhere safe (a
+      password manager, not a sticky note):
+  - **A station login**, e.g. `station@jerkandchill.vn` — this is what
+    the kitchen tablet and the bar tablet sign into. Not per-person: it
+    just proves "this device is the restaurant." Staff enter it once,
+    when the tablet is set up, and never again.
+  - **Your own owner login**, e.g. your real email — this is the only
+    one that can open the Manager / Owner station, where wages and cost
+    margins live.
+- [ ] Give your owner login the owner role. In **SQL Editor**, run:
+      ```sql
+      insert into staff_roles (user_id, role, full_name)
+      select id, 'owner', 'Manny' from auth.users
+      where email = 'your-owner-email@example.com'
+      on conflict (user_id) do update set role = 'owner';
+      ```
+      Replace the email with your real one. **Do not do this for the
+      station login** — that's exactly what stops the shared tablet from
+      reaching wages and costs.
 - [ ] Go to **Project Settings → API** and copy two values:
   - **Project URL**
   - **anon public** key (NOT the `service_role` key — never use that one

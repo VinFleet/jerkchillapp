@@ -14,6 +14,10 @@ export const SEED_STAFF_MEMBERS: SeededStaff[] = [
   { id: "staff_head_chef", name: "Head Chef (add name)", role: "Chef / Kitchen", dayOff: "mon", active: true },
   { id: "staff_kitchen_1", name: "Kitchen Assistant 1 (add name)", role: "Chef / Kitchen", dayOff: "tue", active: true },
   { id: "staff_kitchen_2", name: "Kitchen Assistant 2 (add name)", role: "Chef / Kitchen", dayOff: "wed", active: true },
+  { id: "staff_kitchen_3", name: "Kitchen Assistant 3 (add name)", role: "Chef / Kitchen", dayOff: "thu", active: true },
+  { id: "staff_foh_1", name: "FOH 1 (add name)", role: "Bartender / FOH", dayOff: "mon", active: true },
+  { id: "staff_foh_2", name: "FOH 2 (add name)", role: "Bartender / FOH", dayOff: "tue", active: true },
+  { id: "staff_manager", name: "Manager / Owner (add name)", role: "Manager", dayOff: "sun", active: true },
 ];
 
 // A starter question bank per role — reusable, tailor per candidate. Not

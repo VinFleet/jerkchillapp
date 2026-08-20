@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canAccessModule } from "@/lib/auth/permissions";
 import { NAV_ITEMS } from "@/lib/nav";
-import { ROLE_LABEL } from "@/lib/roleLabels";
+import { STATION_LABEL } from "@/lib/auth/RoleContext";
 import { getCompletion } from "@/lib/repo/checklists";
 import { getNotices, isAckedBy } from "@/lib/repo/notices";
 import { getReorderFlags } from "@/lib/repo/planner";
@@ -98,8 +98,8 @@ export default function HomePage() {
     <div className="pb-6">
       <div className="px-4 md:px-8 pt-5 pb-2">
         <p className="text-muted text-sm">
-          Hi {session.name} ·{" "}
-          <Bi value={ROLE_LABEL[session.role]} mode="inline" className="inline" />
+          {session.name ? `Hi ${session.name} · ` : ""}
+          <Bi value={STATION_LABEL[session.station]} mode="inline" className="inline" />
         </p>
         <h1 className="text-xl font-bold">What do I need to do right now?</h1>
         <p className="text-muted text-sm">Tôi cần làm gì bây giờ?</p>

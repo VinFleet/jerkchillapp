@@ -522,6 +522,12 @@ export type StaffMember = {
   dayOff?: Weekday;
   /** VND per hour — Owner-only visibility, enforced in the UI, not just hidden. */
   hourlyRateVnd?: number;
+  /**
+   * 4 digits, for the few actions that are personally theirs. Not a security
+   * boundary — the device is — but it stops one person acknowledging a policy
+   * or opening a disciplinary record on someone else's behalf.
+   */
+  pin?: string;
   active: boolean;
 };
 
@@ -752,7 +758,24 @@ export type DishSalesCount = {
 
 // ---------- Session ----------
 
+/**
+ * Where the app is being used, not who is using it.
+ *
+ * The kitchen tablet lives on the pass and four chefs share it through a
+ * service — logging in and out per person would be unusable mid-shift. So the
+ * device signs in once as a station and stays there; who *did* a given thing
+ * is recorded separately by picking a name, and only genuinely personal
+ * actions (acknowledging the Code of Conduct, opening your own record) ask
+ * for a PIN.
+ */
+export type Station = "kitchen" | "foh" | "manager";
+
 export type Session = {
+  station: Station;
+  /** Permissions role the station carries. Derived — never chosen by the user. */
   role: Role;
+  /** Who is currently working at this station. This is what gets logged. */
   name: string;
+  /** Their staff record, so attribution survives a name being edited later. */
+  activeStaffId: string | null;
 };
