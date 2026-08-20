@@ -1,0 +1,1532 @@
+{
+  "$comment": "Generated from ZALO_API.md by gen_errors.py — do not hand-edit.",
+  "generated_from": "ZALO_API.md",
+  "compiled": "2026-08-20",
+  "retry_classes": {
+    "success": "error == 0",
+    "auth_refresh": "refresh token, retry once, then escalate — never loop",
+    "transient": "exponential backoff with jitter, cap ~5 attempts",
+    "quota": "reschedule to the next quota window, do not retry today",
+    "night_ban": "reschedule to 06:05 Asia/Ho_Chi_Minh with jitter",
+    "needs_human": "stop and alert — config change or re-consent required",
+    "permanent": "dead-letter with the payload, do not retry"
+  },
+  "notes": [
+    "Non-zero error codes arrive with HTTP 200. Never branch on HTTP status.",
+    "Codes flagged overloaded:true carry more than one meaning on the same surface — branch on the message string, not the code alone.",
+    "Zalo Shop, the call-consent check, and ZaloPay each have their own error tables that are not reproduced here.",
+    "Typos in message strings (Unkown, exits, banded, weeky, Offical) are Zalo's own and are preserved verbatim so string matching works."
+  ],
+  "errors": [
+    {
+      "code": -2002,
+      "surface": "miniapp",
+      "surface_label": "Mini App",
+      "message": "User previously denied and does not want to be asked again",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1408,
+      "surface": "miniapp",
+      "surface_label": "Mini App",
+      "message": "Request timeout",
+      "meaning": null,
+      "retry_class": "transient",
+      "action": "exponential backoff with jitter, max ~5 attempts",
+      "overloaded": false
+    },
+    {
+      "code": -1404,
+      "surface": "miniapp",
+      "surface_label": "Mini App",
+      "message": "API not supported in this Zalo version",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1403,
+      "surface": "miniapp",
+      "surface_label": "Mini App",
+      "message": "Permission not granted — request it in the App Management page",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1401,
+      "surface": "miniapp",
+      "surface_label": "Mini App",
+      "message": "User authentication required before requesting user permission",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1400,
+      "surface": "miniapp",
+      "surface_label": "Mini App",
+      "message": "Bad request — invalid API parameters",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -202,
+      "surface": "miniapp",
+      "surface_label": "Mini App",
+      "message": "User denied and chose \"don't ask again\"",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -201,
+      "surface": "miniapp",
+      "surface_label": "Mini App",
+      "message": "User denied the permission request",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1341,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Official Account has no access to this form",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1340,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Cannot find this form",
+      "meaning": "Zalo Ads form",
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -403,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "OA is not in group",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -321,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Zalo Cloud Account out of money or unable to be charged",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -320,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Your app needs to connect with Zalo Cloud Account",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -249,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Template does not support send via UID",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -248,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Violates our platform standards",
+      "meaning": "Content policy violation",
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -244,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "User has restricted this message type from your OA",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -242,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Invalid appsecret_proof provided in the API argument",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -241,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "asset_id is already used",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "re-upload the asset, then retry",
+      "overloaded": false
+    },
+    {
+      "code": -240,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "MessageV2 API has been shut down, please switch to MessageV3",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -238,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "asset_id is already used / disabled",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "re-upload the asset, then retry",
+      "overloaded": false
+    },
+    {
+      "code": -237,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "The group is disabled",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -235,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "This API does not support this type of OA",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -234,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "This message cannot be sent at night (10:00PM - 6:00AM)",
+      "meaning": "Night ban",
+      "retry_class": "night_ban",
+      "action": "reschedule to 06:05 Asia/Ho_Chi_Minh with jitter",
+      "overloaded": false
+    },
+    {
+      "code": -233,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "message type is invalid or not support",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -232,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "User has not interacted, or last interaction expired",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -230,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "User has not interacted with the OA in the past 7 days",
+      "meaning": "7-day window violated",
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -227,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "User is banned or has been inactive for more than 45 days",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -224,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "The OA needs to upgrade OA Tier Package",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -223,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Official Account has not authorized this API",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": true
+    },
+    {
+      "code": -223,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Your OA has reach the limit quota create article",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": true
+    },
+    {
+      "code": -221,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "The OA needs to be verified to use this feature",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -220,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "access_token is expired or removed",
+      "meaning": "Refresh",
+      "retry_class": "auth_refresh",
+      "action": "refresh the token, retry exactly once, then escalate",
+      "overloaded": false
+    },
+    {
+      "code": -219,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "App is removed or disabled",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -218,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Out of quota receive",
+      "meaning": "Per-recipient send limit exceeded",
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": -217,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "User has blocked invitation from OA",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -216,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Access token is invalid",
+      "meaning": "Refresh",
+      "retry_class": "auth_refresh",
+      "action": "refresh the token, retry exactly once, then escalate",
+      "overloaded": false
+    },
+    {
+      "code": -214,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Article is being processed",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -213,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "User has not followed OA",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -212,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "App has not registed this api",
+      "meaning": "OA has not registered this API",
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -211,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Out of quota",
+      "meaning": "Feature usage quota exceeded",
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": -210,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Parameter exceeds allowable limit",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -209,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Not supported this api",
+      "meaning": "App not activated for this API",
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -205,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Offical Account is not exist",
+      "meaning": "OA does not exist",
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -204,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Offical Account is disable",
+      "meaning": "OA deleted (sic — Zalo's typo)",
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -201,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "<field> is invalid!",
+      "meaning": "Invalid parameter (field name interpolated)",
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -200,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Send message failed",
+      "meaning": "Generic send failure",
+      "retry_class": "transient",
+      "action": "exponential backoff with jitter, max ~5 attempts",
+      "overloaded": false
+    },
+    {
+      "code": -100,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "attachment_id was expired",
+      "meaning": "Asset older than 7 days",
+      "retry_class": "permanent",
+      "action": "re-upload the asset and retry once",
+      "overloaded": false
+    },
+    {
+      "code": -32,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Your application reached limit call api",
+      "meaning": "App exceeded requests/minute",
+      "retry_class": "transient",
+      "action": "exponential backoff with jitter, max ~5 attempts",
+      "overloaded": true
+    },
+    {
+      "code": -32,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Your OA reached limit call api",
+      "meaning": "OA exceeded its rate limit",
+      "retry_class": "transient",
+      "action": "exponential backoff with jitter, max ~5 attempts",
+      "overloaded": true
+    },
+    {
+      "code": 0,
+      "surface": "oa",
+      "surface_label": "Official Account API",
+      "message": "Success",
+      "meaning": null,
+      "retry_class": "success",
+      "action": "none",
+      "overloaded": false
+    },
+    {
+      "code": 100,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Invalid parameter",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 110,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Invalid user id",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 111,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Can't resolve to a valid user ID",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 112,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Your app don't link with any Official Account",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": 210,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "User not visible",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 289,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Accessing friend requests requires the extended permission read_requests (dead — see §11.5)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 452,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Session key invalid (bad format or user revoked access) — most common runtime failure",
+      "meaning": null,
+      "retry_class": "auth_refresh",
+      "action": "refresh the token, retry exactly once, then escalate",
+      "overloaded": false
+    },
+    {
+      "code": 2004,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Sending of requests has been temporarily disabled for this application",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": 2500,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Syntax error",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 10000,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Call fail",
+      "meaning": null,
+      "retry_class": "transient",
+      "action": "exponential backoff with jitter, max ~5 attempts",
+      "overloaded": false
+    },
+    {
+      "code": 10001,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Method is not support for this api",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 10002,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Unkown exception (sic)",
+      "meaning": null,
+      "retry_class": "transient",
+      "action": "exponential backoff with jitter, max ~5 attempts",
+      "overloaded": false
+    },
+    {
+      "code": 10003,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Item not exits (sic)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 11004,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "App Id in use is disabled or banded (sic)",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": 12000,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Quota for your app is limited",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": 12001,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Limit of friends list is too large. Maximum: 50 (dead)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 12002,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Quota daily for your app is limited",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": 12003,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Quota weeky for your app is limited (sic)",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": 12004,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Quota monthly for your app is limited",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": 12006,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "User has not played game for 30 days ago",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 12007,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Do not disturb user (no contact for 30 days)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 12008,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Recipient reached quota for messages (1 per 3 days)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 12009,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Sender and Recipient is not friend (dead)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 12010,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Quota daily per user for your app is limited",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": 12011,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Your friend is not using app (dead)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": 12012,
+      "surface": "social",
+      "surface_label": "Social API",
+      "message": "Your friend is using app (dead)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1491,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Journey token type incompatible",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1472,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "OA exceeded daily promotion limit for this user",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": -1471,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "OA exceeded monthly follow-up limit for this user",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": -1441,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "OA exceeded monthly promotion quota",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": -1381,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "OA has not granted the Extension ZCA permission",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -1351,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "System blocked OA from sending ZNS (violation)",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -1241,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "appsecret_proof invalid",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1202,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "OA has no permission to use media resources",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -1201,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "OA cannot create tag-3 (promotion) templates",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -1131,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Invalid button content/link format",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1124,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Parameter has invalid format",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1123,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "QR code generation failed",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1122,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Missing template parameter",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1121,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Parameter data exceeds max length",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -1091,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Cannot edit this template (not REJECT status, or Admin-tool-created)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -162,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "sending_mode = 3 does not support tag 1 / tag 2 messages",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -161,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "sending_mode has a disallowed value",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -160,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Daily quota for template create/edit or upload exceeded",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": -159,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Upload file format not allowed",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -158,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "File size exceeds limit",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -153,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Data violates specification",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -152,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Failed to get E2EE key",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -151,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Not an E2EE template",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -150,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Journey token expired",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -149,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Journey token invalid",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -148,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Journey token not found",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -147,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Template exceeded its daily sending limit",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": -146,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Template disabled due to low sending quality",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "template must be fixed and re-approved; alert template owner",
+      "overloaded": false
+    },
+    {
+      "code": -145,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "OA not allowed to send this ZNS content type",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -144,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "OA exceeded daily ZNS sending limit",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": -143,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "RSA key already exists → call key-get",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -142,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "RSA key does not exist → call key-gen",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -141,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "User refused ZNS from this OA",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -140,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "User ineligible for this ZNS type per delivery policy",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -139,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "User refused this ZNS content type",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -138,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "App has no permission for this feature",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -137,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "ZCA charge failure / insufficient balance",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -136,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "ZCA connection required",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -135,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "OA has no permission to send ZNS (needs verification + paid plan)",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -134,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "User has not responded to ZNS opt-in (no longer used)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -133,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Cannot send at night (22:00–06:00)",
+      "meaning": null,
+      "retry_class": "night_ban",
+      "action": "reschedule to 06:05 Asia/Ho_Chi_Minh with jitter",
+      "overloaded": false
+    },
+    {
+      "code": -132,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Parameter invalid",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -131,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "ZNS template not approved",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "template must be fixed and re-approved; alert template owner",
+      "overloaded": false
+    },
+    {
+      "code": -130,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Character limit exceeded (content > 100k chars)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -129,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "RSA key generation failed",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -128,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Encoding key does not exist",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -127,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Test template can only be sent to administrators",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -126,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Out of quota (development-mode wallet)",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": -125,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Official Account ID invalid",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -124,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Access token invalid",
+      "meaning": null,
+      "retry_class": "auth_refresh",
+      "action": "refresh the token, retry exactly once, then escalate",
+      "overloaded": false
+    },
+    {
+      "code": -123,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "RSA message decode failed",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -122,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Body request is not valid JSON",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -121,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Body data empty",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -120,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "OA has no permission for this feature",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -119,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Account cannot receive message",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -118,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Zalo account does not exist or is deactivated",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -117,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "No permission to access template (App/OA/template mismatch)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -116,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Text/param content invalid",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -115,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Out of quota / insufficient ZNS balance",
+      "meaning": null,
+      "retry_class": "quota",
+      "action": "reschedule to the next quota window; do not retry today",
+      "overloaded": false
+    },
+    {
+      "code": -114,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "User cannot receive message (account status, ZNS opt-out, old app version)",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -113,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Button invalid",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -112,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Template data type not defined",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -111,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Template data empty",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -110,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Zalo app version unsupported — user must update",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -109,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Template ID invalid",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -108,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Phone number invalid — use 84… / +84…",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -107,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Message ID invalid",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -106,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Method unsupported",
+      "meaning": null,
+      "retry_class": "permanent",
+      "action": "dead-letter with the full payload; do not retry",
+      "overloaded": false
+    },
+    {
+      "code": -105,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Application not linked to any OA",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -104,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "App secret key invalid",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -103,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Application not activated",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -102,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Application does not exist",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -101,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Application invalid",
+      "meaning": null,
+      "retry_class": "needs_human",
+      "action": "stop and alert; config change or re-consent required",
+      "overloaded": false
+    },
+    {
+      "code": -100,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Unknown error, retry later",
+      "meaning": null,
+      "retry_class": "transient",
+      "action": "backoff and retry",
+      "overloaded": false
+    },
+    {
+      "code": 0,
+      "surface": "zbs",
+      "surface_label": "ZBS Template Message / ZNS",
+      "message": "Success",
+      "meaning": null,
+      "retry_class": "success",
+      "action": "none",
+      "overloaded": false
+    }
+  ]
+}

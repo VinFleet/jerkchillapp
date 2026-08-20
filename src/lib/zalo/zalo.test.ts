@@ -9,8 +9,15 @@ import assert from "node:assert/strict";
 
 import { normalizeVnPhone, isValidVnPhone, formatVnPhoneForDisplay } from "./phone.ts";
 import { isInNightBan, vietnamHour, nextSendableTime } from "./sendWindow.ts";
-import { classifyZaloError, unwrapZaloResponse, ZaloError, isNightBanCode } from "./errors.ts";
+import {
+  classifyZaloError,
+  unwrapZaloResponse,
+  ZaloError,
+  isNightBanCode,
+  isOverloadedCode,
+} from "./errors.ts";
 import { escapeMentions } from "./mentions.ts";
+import { toNfc, zaloLength, fitsZaloLimit, truncateForZalo } from "./text.ts";
 
 // ---------- phone ----------
 
@@ -67,26 +74,76 @@ test("blocks exactly the hours Zalo blocks", () => {
 });
 
 test("a booking taken after close waits for morning, not forever", () => {
-  const queued = nextSendableTime(vnTime(23, 30));
+  const queued = nextSendableTime(vnTime(23, 30), 0);
   assert.equal(isInNightBan(queued), false);
-  assert.equal(vietnamHour(queued), 6, "should resume at 06:00 Vietnam time");
+  assert.equal(vietnamHour(queued), 6, "should resume in the 06:00 hour");
 
   // Already open — returns the same instant so callers need no special case.
   const noon = vnTime(12);
   assert.equal(nextSendableTime(noon).getTime(), noon.getTime());
 });
 
+test("the overnight queue does not all fire at 06:00 exactly", () => {
+  // Everything deferred overnight releasing on the same tick is how one
+  // blocked send becomes a burst of -32 rate-limit errors. Zalo's guidance is
+  // 06:05 with jitter.
+  const minuteIn = (d: Date) =>
+    Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ho_Chi_Minh", minute: "2-digit" }).format(d));
+
+  const earliest = nextSendableTime(vnTime(2), 0);
+  assert.equal(minuteIn(earliest), 5, "floor is 06:05, never 06:00");
+
+  const latest = nextSendableTime(vnTime(2), 0.999);
+  assert.ok(minuteIn(latest) >= 5 && minuteIn(latest) <= 20, `spread stays in the hour, got :${minuteIn(latest)}`);
+
+  // Different callers must land on different minutes, or the jitter is useless.
+  const spread = new Set([0, 0.25, 0.5, 0.75, 0.99].map((j) => minuteIn(nextSendableTime(vnTime(3), j))));
+  assert.ok(spread.size > 1, "jitter must actually spread the release");
+
+  // And it never lands back inside the ban.
+  for (const j of [0, 0.5, 0.999]) {
+    assert.equal(isInNightBan(nextSendableTime(vnTime(23, 59), j)), false);
+  }
+});
+
 // ---------- errors ----------
 
 test("sorts errors into the action you take", () => {
+  // These classes come from zalo-errors.json via the generator. An earlier
+  // hand-written table had -133 and -144 as plain "transient", which would
+  // have retried a night-banned send in a tight loop and hammered a daily
+  // quota that only resets tomorrow.
   assert.equal(classifyZaloError(-216), "auth_refresh", "stale token");
   assert.equal(classifyZaloError(-220), "auth_refresh", "expired token");
-  assert.equal(classifyZaloError(-135), "auth_human", "OA not permitted to send ZNS");
-  assert.equal(classifyZaloError(-137), "auth_human", "ZCA out of money");
-  assert.equal(classifyZaloError(-133), "transient", "night ban is retryable tomorrow");
-  assert.equal(classifyZaloError(-144), "transient", "daily quota resets");
+  assert.equal(classifyZaloError(-135), "needs_human", "OA not permitted to send ZNS");
+  assert.equal(classifyZaloError(-137), "needs_human", "ZCA out of money");
+  assert.equal(classifyZaloError(-133), "night_ban", "reschedule past 06:00, don't retry");
+  assert.equal(classifyZaloError(-144), "quota", "daily limit — not today");
+  assert.equal(classifyZaloError(-211), "quota", "feature quota, not a transient blip");
+  assert.equal(classifyZaloError(-1441), "quota", "monthly promotion quota");
   assert.equal(classifyZaloError(-108), "permanent", "bad phone number");
   assert.equal(classifyZaloError(-1122), "permanent", "missing template param");
+});
+
+test("a quota error is rescheduled, never retried into the wall", () => {
+  const quota = new ZaloError(-144, "OA exceeded daily ZNS sending limit");
+  assert.equal(quota.retryable, false, "retrying today cannot succeed");
+  assert.equal(quota.reschedulable, true);
+  assert.equal(quota.needsAttention, false, "a quota reset is not a human's job");
+});
+
+test("an expired group asset is a billing problem, not a send failure", () => {
+  // Zalo reports a lapsed GMF package as -237 "The group is disabled". Read as
+  // an ordinary send error, nobody finds out until the group is deleted.
+  const expired = new ZaloError(-237, "The group is disabled");
+  assert.equal(expired.isGroupExpired, true);
+  assert.equal(expired.retryable, false);
+});
+
+test("overloaded codes are flagged so callers read the message", () => {
+  // -32 is both "app hit its rate limit" and "OA hit its rate limit".
+  assert.equal(isOverloadedCode(-32), true);
+  assert.equal(isOverloadedCode(-108), false);
 });
 
 test("an unknown code retries rather than losing the message", () => {
@@ -152,4 +209,44 @@ test("ordinary text passes through untouched", () => {
 test("escaping is idempotent, so a re-send cannot re-mangle text", () => {
   const once = escapeMentions("[@123] hello");
   assert.equal(escapeMentions(once), once);
+});
+
+// ---------- Unicode normalisation ----------
+
+test("the same Vietnamese name measures the same however it was typed", () => {
+  // Exactly the failure the spec describes: iOS can hand us the decomposed
+  // form, which renders identically but is materially longer. A guest name
+  // that passes validation here and fails at Zalo looks like a flaky API.
+  const composed = "Nguyễn Thị Hoàng Anh";
+  const decomposed = composed.normalize("NFD");
+
+  assert.notEqual(composed.length, decomposed.length, "the two forms differ in length");
+  assert.equal(zaloLength(decomposed), zaloLength(composed), "but Zalo counts them the same");
+  assert.equal(toNfc(decomposed), composed);
+});
+
+test("a length check gives the same verdict for both forms", () => {
+  const composed = "Xin chào, đơn hàng của bạn đã được xác nhận";
+  const decomposed = composed.normalize("NFD");
+  const limit = composed.length;
+
+  assert.equal(fitsZaloLimit(composed, limit), true);
+  assert.equal(
+    fitsZaloLimit(decomposed, limit),
+    true,
+    "the decomposed form must not be falsely rejected"
+  );
+  // Measured raw, the decomposed string would have blown the limit.
+  assert.ok(decomposed.length > limit);
+});
+
+test("truncating never leaves a diacritic orphaned", () => {
+  const decomposed = "Nguyễn Thị Hoàng Anh".normalize("NFD");
+  const cut = truncateForZalo(decomposed, 6);
+
+  assert.equal(cut.length, 6);
+  assert.equal(cut, cut.normalize("NFC"), "output is composed");
+  // A combining mark at the start would attach to whatever text follows it.
+  assert.ok(!/^[\u0300-\u036f]/.test(cut), "must not begin with a combining mark");
+  assert.equal(cut, "Nguyễn");
 });

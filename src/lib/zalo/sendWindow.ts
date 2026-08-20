@@ -15,6 +15,10 @@
 export const NIGHT_BAN_START_HOUR = 22;
 export const NIGHT_BAN_END_HOUR = 6;
 
+/** Zalo's guidance is 06:05, not 06:00 — see nextSendableTime. */
+const RELEASE_OFFSET_MINUTES = 5;
+const JITTER_WINDOW_MINUTES = 15;
+
 /**
  * The hour of day in Vietnam, 0–23.
  *
@@ -40,32 +44,43 @@ export function isInNightBan(at: Date = new Date()): boolean {
 }
 
 /**
- * The next moment a send would be accepted.
+ * When to retry a send that the night ban blocked.
+ *
+ * Deliberately NOT 06:00. Everything deferred overnight would fire in the same
+ * instant the window opens and trip the rate limit — turning one blocked send
+ * into a burst of -32s. Zalo's own guidance is 06:05 with jitter, so this lands
+ * in a spread across 06:05–06:20.
  *
  * Returns `at` itself when the window is already open, so callers can compare
  * without special-casing.
  */
-export function nextSendableTime(at: Date = new Date()): Date {
+export function nextSendableTime(at: Date = new Date(), jitter = Math.random()): Date {
   if (!isInNightBan(at)) return at;
 
-  // Step forward hour by hour rather than doing date arithmetic in a zone that
-  // isn't the server's — one of these hours is 06:00 in Vietnam, whatever the
-  // host's clock says.
-  const next = new Date(at.getTime());
+  // Walk forward to the first hour that is outside the ban, then position
+  // within it. Stepping by the hour keeps the arithmetic in the server's own
+  // clock while the *decision* stays in Vietnam's.
+  const cursor = new Date(at.getTime());
   for (let i = 0; i < 24; i += 1) {
-    next.setTime(next.getTime() + 3600_000);
-    if (!isInNightBan(next)) {
-      // Land on the top of the hour so queued sends don't cluster on a minute
-      // determined by whenever the booking happened to be made.
-      const minute = Number(
-        new Intl.DateTimeFormat("en-GB", {
-          timeZone: "Asia/Ho_Chi_Minh",
-          minute: "2-digit",
-        }).format(next)
-      );
-      next.setTime(next.getTime() - minute * 60_000);
-      return next;
-    }
+    cursor.setTime(cursor.getTime() + 3600_000);
+    if (!isInNightBan(cursor)) break;
   }
-  return next;
+
+  // Trim to the top of that hour, then add the offset and jitter.
+  const minute = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      minute: "2-digit",
+    }).format(cursor)
+  );
+  const second = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      second: "2-digit",
+    }).format(cursor)
+  );
+  cursor.setTime(cursor.getTime() - minute * 60_000 - second * 1000);
+
+  const offsetMs = RELEASE_OFFSET_MINUTES * 60_000 + Math.floor(jitter * JITTER_WINDOW_MINUTES * 60_000);
+  return new Date(cursor.getTime() + offsetMs);
 }

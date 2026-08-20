@@ -2,6 +2,7 @@ import { unwrapZaloResponse, ZaloError } from "./errors";
 import { getValidAccessToken } from "./tokens";
 import { getZaloConfig } from "./config";
 import { escapeMentions } from "./mentions";
+import { toNfc } from "./text";
 
 export { escapeMentions };
 
@@ -25,6 +26,8 @@ const OA_HOST = "https://openapi.zalo.me";
 export type GroupSendResult =
   | { status: "sent"; messageId: string | null }
   | { status: "skipped"; reason: "not_configured" }
+  /** The GMF package lapsed. The group is on its way to being deleted. */
+  | { status: "expired"; message: string }
   | { status: "failed"; code: number; message: string; retryable: boolean };
 
 export type GroupMessageInput = {
@@ -60,7 +63,7 @@ export async function sendGroupMessage(input: GroupMessageInput): Promise<GroupS
         status: "failed",
         code: err.code,
         message: err.message,
-        retryable: err.kind === "transient" || err.kind === "auth_refresh",
+        retryable: err.retryable,
       };
     }
     return { status: "failed", code: -1, message: String(err), retryable: false };
@@ -68,8 +71,8 @@ export async function sendGroupMessage(input: GroupMessageInput): Promise<GroupS
 
   const parts: string[] = [];
   if (input.mentionEveryone) parts.push(`[@${groupId}]`);
-  parts.push(input.headline);
-  if (input.untrustedBody) parts.push(escapeMentions(input.untrustedBody));
+  parts.push(toNfc(input.headline));
+  if (input.untrustedBody) parts.push(escapeMentions(toNfc(input.untrustedBody)));
 
   try {
     const res = await fetch(`${OA_HOST}/v3.0/oa/group/message`, {
@@ -90,11 +93,21 @@ export async function sendGroupMessage(input: GroupMessageInput): Promise<GroupS
     return { status: "sent", messageId: data?.message_id ?? null };
   } catch (err) {
     if (err instanceof ZaloError) {
+      // Zalo reports a lapsed GMF package as -237 "The group is disabled" — a
+      // billing condition wearing a message error's clothes. Surfaced on its
+      // own so it can't be read as a transient send failure and ignored until
+      // the group actually disappears.
+      if (err.isGroupExpired) {
+        return {
+          status: "expired",
+          message: "The Zalo group's package has expired — the group will be deleted.",
+        };
+      }
       return {
         status: "failed",
         code: err.code,
         message: err.message,
-        retryable: err.kind === "transient" || err.kind === "auth_refresh",
+        retryable: err.retryable,
       };
     }
     return { status: "failed", code: -1, message: String(err), retryable: true };

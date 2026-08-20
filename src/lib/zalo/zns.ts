@@ -1,5 +1,6 @@
 import { unwrapZaloResponse, ZaloError } from "./errors";
 import { normalizeVnPhone } from "./phone";
+import { toNfc } from "./text";
 import { isInNightBan, nextSendableTime } from "./sendWindow";
 import { getValidAccessToken } from "./tokens";
 import { getZaloConfig } from "./config";
@@ -74,7 +75,7 @@ export async function sendBookingConfirmation(
         status: "failed",
         code: err.code,
         message: err.message,
-        retryable: err.kind === "transient" || err.kind === "auth_refresh",
+        retryable: err.retryable,
       };
     }
     return { status: "failed", code: -1, message: String(err), retryable: false };
@@ -83,9 +84,13 @@ export async function sendBookingConfirmation(
   const body: Record<string, unknown> = {
     phone,
     template_id: cfg.bookingTemplateId,
+    // Normalised to NFC before sending. A guest name typed on an iPhone can
+    // arrive decomposed — visually identical, ~28% longer — and blow the
+    // template's maxLength as -1121, which presents as an intermittent failure
+    // tied to one particular guest rather than as a bug.
     template_data: {
-      customer: input.guestName,
-      time: input.bookingTime,
+      customer: toNfc(input.guestName),
+      time: toNfc(input.bookingTime),
       guests: String(input.partySize),
     },
     tracking_id: trackingIdFor(input.bookingRef),
@@ -126,7 +131,7 @@ export async function sendBookingConfirmation(
         status: "failed",
         code: err.code,
         message: err.message,
-        retryable: err.kind === "transient" || err.kind === "auth_refresh",
+        retryable: err.retryable,
       };
     }
     return { status: "failed", code: -1, message: String(err), retryable: true };

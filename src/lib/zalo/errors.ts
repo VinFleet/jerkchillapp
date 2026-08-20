@@ -1,41 +1,36 @@
+import { ZALO_ERROR_CLASS, ZALO_OVERLOADED_CODES, type ZaloRetryClass } from "./errorTable.ts";
+
 /**
  * Zalo's errors, sorted into what you actually do about them.
  *
- * Two things make this necessary rather than incidental:
+ * The classification is generated from `zalo-errors.json`, never transcribed by
+ * hand — an earlier hand-written table filed -211 and -1441 as "transient" when
+ * both are quota conditions that will not clear by retrying today, so the retry
+ * loop would have burned attempts against a wall until the daily reset.
+ *
+ * Two things make this layer necessary rather than incidental:
  *
  * 1. Every Zalo API returns HTTP 200 even when it failed. The failure is a
  *    non-zero `error` inside the body. Code that trusts the status code sees
- *    success forever — this is the single most common way these integrations
- *    fail silently.
- * 2. There are ~90 error codes. Branching on them individually spreads Zalo's
- *    quirks through the whole codebase, so they collapse into four buckets and
- *    the caller switches on the bucket.
+ *    success forever — the single most common silent failure in these
+ *    integrations.
+ * 2. There are ~146 codes across four surfaces. Branching on them individually
+ *    spreads Zalo's quirks through the whole codebase.
  */
 
-export type ZaloErrorClass =
-  /** Token is stale. Refresh once and retry the same call. */
-  | "auth_refresh"
-  /** Config or consent is wrong. A person has to fix it; retrying never will. */
-  | "auth_human"
-  /** Worth trying again later — rate limits, the night ban, transient faults. */
-  | "transient"
-  /** This exact payload will never succeed. Log it, don't retry it. */
-  | "permanent";
+export type { ZaloRetryClass };
 
-const AUTH_REFRESH = new Set([-216, -220, -124, 452]);
-const AUTH_HUMAN = new Set([-101, -102, -103, -104, -105, -219, -135, -1351, 112, -320, -321, -136, -137, -1381]);
-const TRANSIENT = new Set([-32, -100, -144, -133, -234, -211, -1441]);
-const PERMANENT = new Set([-201, -108, -1121, -1122, -230, -131, -114, -119, -117, -118, -139, -140, -141, -1124]);
-
-export function classifyZaloError(code: number): ZaloErrorClass {
-  if (AUTH_REFRESH.has(code)) return "auth_refresh";
-  if (AUTH_HUMAN.has(code)) return "auth_human";
-  if (TRANSIENT.has(code)) return "transient";
-  if (PERMANENT.has(code)) return "permanent";
-  // An unknown code is treated as transient rather than permanent: a retry
-  // that turns out to be pointless costs one call, whereas dead-lettering a
-  // recoverable error loses a guest's confirmation for good.
+export function classifyZaloError(code: number): ZaloRetryClass {
+  const known = ZALO_ERROR_CLASS.get(code);
+  if (known) return known;
+  // An unknown code retries rather than dead-letters: a pointless retry costs
+  // one call, whereas dead-lettering a recoverable error loses the message.
   return "transient";
+}
+
+/** True when this code means more than one thing and the message must be read. */
+export function isOverloadedCode(code: number): boolean {
+  return ZALO_OVERLOADED_CODES.has(code);
 }
 
 /** Codes that mean specifically "not now, because of the hour". */
@@ -43,16 +38,30 @@ export function isNightBanCode(code: number): boolean {
   return code === -133 || code === -234;
 }
 
+/**
+ * The GMF asset behind a staff group has expired.
+ *
+ * Worth its own check because Zalo presents a *billing* condition as a
+ * *message* error — the group hasn't been disabled by anyone, the package
+ * lapsed and the group is on its way to being deleted. Reading this as a
+ * transient send failure would mean nobody finds out until the group vanishes.
+ */
+export function isGroupExpiredCode(code: number): boolean {
+  return code === -237;
+}
+
 export class ZaloError extends Error {
   readonly code: number;
-  readonly kind: ZaloErrorClass;
+  readonly kind: ZaloRetryClass;
   readonly payload: unknown;
+  readonly zaloMessage: string;
 
   constructor(code: number, message: string, payload?: unknown) {
     super(`Zalo ${code}: ${message}`);
     this.name = "ZaloError";
     this.code = code;
     this.kind = classifyZaloError(code);
+    this.zaloMessage = message;
     this.payload = payload;
   }
 
@@ -60,9 +69,23 @@ export class ZaloError extends Error {
     return isNightBanCode(this.code);
   }
 
-  /** Whether a human needs to be told, as opposed to a queue retrying. */
+  get isGroupExpired(): boolean {
+    return isGroupExpiredCode(this.code);
+  }
+
+  /** Whether a human must act, as opposed to a queue retrying or rescheduling. */
   get needsAttention(): boolean {
-    return this.kind === "auth_human";
+    return this.kind === "needs_human";
+  }
+
+  /** Whether retrying the identical payload could ever succeed. */
+  get retryable(): boolean {
+    return this.kind === "transient" || this.kind === "auth_refresh";
+  }
+
+  /** Whether this should be tried again later today, or only after a reset. */
+  get reschedulable(): boolean {
+    return this.kind === "quota" || this.kind === "night_ban";
   }
 }
 
