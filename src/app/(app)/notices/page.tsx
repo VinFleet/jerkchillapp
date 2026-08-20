@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { ShareButton } from "@/components/ui/ShareButton";
 import { useSession } from "@/lib/auth/RoleContext";
 import { useSync } from "@/lib/sync/SyncProvider";
 import { canPostNotice } from "@/lib/auth/permissions";
@@ -80,6 +81,27 @@ function NoticeCard({ notice, staffName, isManager }: { notice: Notice; staffNam
           </button>
         )}
       </div>
+      {/* Some people will always be reached faster on Zalo than by opening
+          the app — pushing the same notice there costs one tap. */}
+      {isManager && (
+        <ShareButton
+          className="mt-2"
+          variant="ghost"
+          title={notice.title.en}
+          label={{ en: "Also send to Zalo", vi: "Gửi thêm qua Zalo" }}
+          buildText={() =>
+            [
+              `${notice.priority === "urgent" ? "⚠ URGENT · KHẨN CẤP\n" : ""}${notice.title.en}`,
+              notice.title.vi,
+              "",
+              notice.body.en,
+              notice.body.vi,
+              "",
+              `— ${notice.postedBy}, Jerk & Chill`,
+            ].join("\n")
+          }
+        />
+      )}
       {/* "How many" isn't the useful question on a team this size — "who
           hasn't" is, because that's the list of people who still need
           telling in person. */}

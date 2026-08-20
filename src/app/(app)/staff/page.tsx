@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { ShareButton } from "@/components/ui/ShareButton";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canSeeWages, canEditStaff } from "@/lib/auth/permissions";
@@ -292,15 +293,27 @@ function SendRotaButton({ staff, dates }: { staff: StaffMember[]; dates: string[
   };
 
   return (
-    <div className="mb-4">
-      <Button variant="secondary" className="w-full min-h-12 text-sm" disabled={staff.length === 0} onClick={send}>
-        <Mail size={16} /> Send rota · Gửi lịch
-      </Button>
-      <p className="text-xs text-muted mt-1 text-center">
-        {recipients.length > 0
-          ? `To ${recipients.length} staff email${recipients.length > 1 ? "s" : ""} · Gửi tới ${recipients.length} email nhân viên`
-          : "No staff emails on file — add them on each staff member · Chưa có email nhân viên — thêm trong hồ sơ từng người"}
-      </p>
+    <div className="mb-4 space-y-2">
+      {/* Zalo first — it's where this team actually talks. Email is kept for
+          anyone who wants a copy in writing, but it isn't the default. */}
+      <ShareButton
+        title={`Rota ${dates[0]} – ${dates[6]} · Lịch làm việc`}
+        buildText={() => buildRotaText(staff, dates)}
+        label={{ en: "Send rota to Zalo", vi: "Gửi lịch qua Zalo" }}
+        disabled={staff.length === 0}
+      />
+      <button
+        onClick={send}
+        disabled={staff.length === 0 || recipients.length === 0}
+        className="w-full min-h-11 flex items-center justify-center gap-1.5 text-xs text-muted font-semibold disabled:opacity-40"
+      >
+        <Mail size={14} /> Or email it · Hoặc gửi email
+      </button>
+      {recipients.length === 0 && (
+        <p className="text-xs text-muted text-center">
+          No staff emails on file — Zalo works without them · Chưa có email nhân viên — Zalo vẫn gửi được
+        </p>
+      )}
     </div>
   );
 }

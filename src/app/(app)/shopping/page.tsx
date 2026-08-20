@@ -8,6 +8,7 @@ import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { ShareButton } from "@/components/ui/ShareButton";
 import {
   getShoppingList,
   getUnconfirmedPricingCount,
@@ -20,6 +21,7 @@ import {
   type ShoppingListRow,
 } from "@/lib/repo/shopping";
 import { getSuppliers } from "@/lib/repo/suppliers";
+import { todayIso } from "@/lib/storage";
 import type { Supplier } from "@/lib/types";
 
 function EditMetaForm({ row, suppliers, onSaved }: { row: ShoppingListRow; suppliers: Supplier[]; onSaved: () => void }) {
@@ -313,6 +315,26 @@ function ShoppingContent() {
                 <ShoppingRow key={r.key} row={r} suppliers={suppliers} onChanged={refresh} />
               ))}
             </div>
+            {/* Orders go to suppliers over Zalo, so the list should leave the
+                app the same way rather than being copied out by hand. */}
+            <ShareButton
+              className="mt-2"
+              variant="ghost"
+              title={`Order · Đặt hàng — ${supplier}`}
+              label={{ en: "Send this order to Zalo", vi: "Gửi đơn này qua Zalo" }}
+              buildText={() =>
+                [
+                  `Jerk & Chill — order · đặt hàng`,
+                  supplier,
+                  todayIso(),
+                  "",
+                  ...items.map((r) => {
+                    const need = Math.max(0, r.par - r.onHand);
+                    return `• ${r.name.en} · ${r.name.vi} — ${need} ${r.unit}${r.packSize ? ` (${r.packSize})` : ""}`;
+                  }),
+                ].join("\n")
+              }
+            />
           </div>
         ))}
 
