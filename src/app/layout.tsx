@@ -19,6 +19,14 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "J&C Ops",
   },
+  // Zalo verifies ownership of a domain or URL prefix by fetching the page and
+  // looking for this tag. Emitting it site-wide means any prefix under this
+  // domain verifies, rather than needing a separate file per URL — and the
+  // /api/zalo/callback prefix in particular is an API route that answers with a
+  // redirect, so a crawler would never find a tag there otherwise.
+  other: {
+    "zalo-platform-site-verification": "KkI46RAL1nXiuhOKYySC7NxIkI6If6DuC30m",
+  },
 };
 
 export const viewport: Viewport = {

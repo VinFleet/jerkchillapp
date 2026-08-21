@@ -22,11 +22,34 @@ function done(request: Request, params: Record<string, string>) {
   return response;
 }
 
+/**
+ * Zalo verifies ownership of a URL prefix by fetching that exact URL and
+ * looking for its verification meta tag. This route normally answers with a
+ * redirect, which a crawler can't read a tag out of — so a bare GET, with no
+ * query string at all, serves a minimal HTML page carrying the tag instead.
+ *
+ * Safe to distinguish this way: a real OAuth return always carries at least
+ * `code` or `state`, so nothing with query parameters is ever treated as a
+ * verification probe.
+ */
+const VERIFICATION_TOKEN = "KkI46RAL1nXiuhOKYySC7NxIkI6If6DuC30m";
+
+function verificationPage(): Response {
+  return new Response(
+    `<!DOCTYPE html><html lang="en"><head><meta name="zalo-platform-site-verification" content="${VERIFICATION_TOKEN}" /></head><body>Jerk &amp; Chill — Zalo callback</body></html>`,
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
+  );
+}
+
 export async function GET(request: Request) {
+  const url = new URL(request.url);
+  // No parameters at all — this is the ownership check, not a user coming back
+  // from consent.
+  if ([...url.searchParams.keys()].length === 0) return verificationPage();
+
   const cfg = getZaloConfig();
   if (!cfg) return done(request, { connected: "0", reason: "not_configured" });
 
-  const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const returnedState = url.searchParams.get("state");
   const oaId = url.searchParams.get("oa_id");
