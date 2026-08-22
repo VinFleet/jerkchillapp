@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ChevronRight } from "lucide-react";
+import { AlertCircle, ChevronRight, ClipboardCheck } from "lucide-react";
 import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canAccessModule } from "@/lib/auth/permissions";
 import { NAV_ITEMS } from "@/lib/nav";
 import { STATION_LABEL } from "@/lib/auth/RoleContext";
+import { getDueToday, type DueTask } from "@/lib/repo/dueToday";
 import { getCompletion } from "@/lib/repo/checklists";
 import { getNotices, isAckedBy } from "@/lib/repo/notices";
 import { getReorderFlags } from "@/lib/repo/planner";
@@ -48,6 +49,7 @@ export default function HomePage() {
   const [deliveryBlockers, setDeliveryBlockers] = useState(0);
   const [bookingsToday, setBookingsToday] = useState(0);
   const [salesMissing, setSalesMissing] = useState(false);
+  const [due, setDue] = useState<DueTask[]>([]);
 
   useEffect(() => {
     if (!session) return;
@@ -56,6 +58,7 @@ export default function HomePage() {
     setShift(s);
     setChecklist(getCompletion(area, s, todayIso()));
     setUnread(getNotices().filter((n) => !isAckedBy(n.id, session.name)));
+    setDue(getDueToday(session.role));
     if (session.role === "owner" || session.role === "manager" || session.role === "chef") {
       setReorderCount(getReorderFlags(todayIso()).length);
       setFoodSafetyIssues(
@@ -106,6 +109,51 @@ export default function HomePage() {
       </div>
 
       <div className="px-4 md:px-8 mt-3 space-y-3">
+        {/* The checks you still owe, before anything else on the screen.
+            Everything below this reports a *problem* — an out-of-range reading,
+            an overdue sample. A check nobody has done yet is not a problem
+            anywhere: it is a gap in a legally-required record that surfaces
+            weeks later, at an inspection. So it goes first, and it goes at the
+            top. */}
+        {due.length > 0 && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-muted mb-2">
+              To do now · Cần làm ngay
+            </p>
+            <div className="space-y-2">
+              {due.map((task) => (
+                <Link key={task.id} href={task.href}>
+                  <Card
+                    className={`flex items-center gap-3 ${
+                      task.urgency === 0 ? "border-danger bg-danger-tint" : "border-warning bg-warning-tint"
+                    }`}
+                  >
+                    <ClipboardCheck
+                      size={22}
+                      className={`shrink-0 ${task.urgency === 0 ? "text-danger" : "text-warning"}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className={`font-bold ${task.urgency === 0 ? "text-danger" : "text-warning"}`}>
+                        {task.label.en}
+                      </p>
+                      <p className={`text-sm ${task.urgency === 0 ? "text-danger/80" : "text-warning/80"}`}>
+                        {task.label.vi}
+                      </p>
+                      <p className="text-xs text-muted mt-0.5">
+                        {task.detail.en} · {task.detail.vi}
+                      </p>
+                    </div>
+                    <ChevronRight
+                      size={18}
+                      className={`shrink-0 ${task.urgency === 0 ? "text-danger" : "text-warning"}`}
+                    />
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Normal notices used to surface nowhere — "we're out of X" and "new
             supplier price" are the spec's own examples of what replaces the
             group chat, and they were invisible unless someone thought to open

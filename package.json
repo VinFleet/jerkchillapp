@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test:zalo": "node --experimental-strip-types --test src/lib/zalo/zalo.test.ts",
     "gen:zalo-errors": "node scripts/gen-zalo-errors.mjs",
-    "zalo:pkce": "node scripts/zalo-pkce.mjs"
+    "zalo:pkce": "node scripts/zalo-pkce.mjs",
+    "test:due": "node --experimental-strip-types --test src/lib/repo/dueToday.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
