@@ -8,7 +8,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { normalizeVnPhone, isValidVnPhone, formatVnPhoneForDisplay } from "./phone.ts";
-import { isInNightBan, vietnamHour, nextSendableTime } from "./sendWindow.ts";
+import {
+  isNightHours,
+  isSendBlockedNow,
+  pushSuppressedNow,
+  vietnamHour,
+  nextSendableTime,
+} from "./sendWindow.ts";
 import {
   classifyZaloError,
   unwrapZaloResponse,
@@ -64,20 +70,42 @@ test("reads the hour in Vietnam, not the server's zone", () => {
   assert.equal(vietnamHour(vnTime(13)), 13);
 });
 
-test("blocks exactly the hours Zalo blocks", () => {
-  // The boundaries are what the pre-launch checklist says to test.
-  assert.equal(isInNightBan(vnTime(21, 59)), false, "21:59 must be allowed");
-  assert.equal(isInNightBan(vnTime(22, 0)), true, "22:00 must be banned");
-  assert.equal(isInNightBan(vnTime(5, 59)), true, "05:59 must be banned");
-  assert.equal(isInNightBan(vnTime(6, 0)), false, "06:00 must be allowed");
-
-  assert.equal(isInNightBan(vnTime(2)), true);
-  assert.equal(isInNightBan(vnTime(12)), false);
+test("knows which hours are restricted", () => {
+  assert.equal(isNightHours(vnTime(21, 59)), false, "21:59 is daytime");
+  assert.equal(isNightHours(vnTime(22, 0)), true, "22:00 is night");
+  assert.equal(isNightHours(vnTime(5, 59)), true, "05:59 is night");
+  assert.equal(isNightHours(vnTime(6, 0)), false, "06:00 is daytime");
 });
 
-test("a booking taken after close waits for morning, not forever", () => {
+test("group and CS messages are never blocked, at any hour", () => {
+  // This is the correction that matters most. Treating the restriction as a
+  // blanket ban would defer exactly the staff-group alerts the integration
+  // exists for, at exactly the hours the restaurant needs them — closing
+  // checklist, last fridge check, end-of-day problems.
+  for (const at of [vnTime(23, 30), vnTime(2), vnTime(5, 59), vnTime(13)]) {
+    assert.equal(isSendBlockedNow("group", at), false, "group must always send");
+    assert.equal(isSendBlockedNow("cs", at), false, "CS must always send");
+  }
+});
+
+test("only promotional sends are actually refused at night", () => {
+  assert.equal(isSendBlockedNow("promotional", vnTime(23)), true);
+  assert.equal(isSendBlockedNow("promotional", vnTime(13)), false);
+});
+
+test("a transaction message sends at night but arrives silently", () => {
+  // Deferring it would mean a guest booking at 22:30 hears nothing until
+  // morning. Sending it means the confirmation is waiting when they look.
+  assert.equal(isSendBlockedNow("transaction", vnTime(22, 30)), false, "must still send");
+  assert.equal(pushSuppressedNow("transaction", vnTime(22, 30)), true, "but won't buzz");
+  assert.equal(pushSuppressedNow("transaction", vnTime(13)), false);
+  // Only transaction messages have this quirk.
+  assert.equal(pushSuppressedNow("group", vnTime(2)), false);
+});
+
+test("a deferred send waits for morning, not forever", () => {
   const queued = nextSendableTime(vnTime(23, 30), 0);
-  assert.equal(isInNightBan(queued), false);
+  assert.equal(isNightHours(queued), false);
   assert.equal(vietnamHour(queued), 6, "should resume in the 06:00 hour");
 
   // Already open — returns the same instant so callers need no special case.
@@ -92,19 +120,16 @@ test("the overnight queue does not all fire at 06:00 exactly", () => {
   const minuteIn = (d: Date) =>
     Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ho_Chi_Minh", minute: "2-digit" }).format(d));
 
-  const earliest = nextSendableTime(vnTime(2), 0);
-  assert.equal(minuteIn(earliest), 5, "floor is 06:05, never 06:00");
+  assert.equal(minuteIn(nextSendableTime(vnTime(2), 0)), 5, "floor is 06:05, never 06:00");
 
-  const latest = nextSendableTime(vnTime(2), 0.999);
-  assert.ok(minuteIn(latest) >= 5 && minuteIn(latest) <= 20, `spread stays in the hour, got :${minuteIn(latest)}`);
+  const latest = minuteIn(nextSendableTime(vnTime(2), 0.999));
+  assert.ok(latest >= 5 && latest <= 20, `spread stays in the hour, got :${latest}`);
 
-  // Different callers must land on different minutes, or the jitter is useless.
   const spread = new Set([0, 0.25, 0.5, 0.75, 0.99].map((j) => minuteIn(nextSendableTime(vnTime(3), j))));
   assert.ok(spread.size > 1, "jitter must actually spread the release");
 
-  // And it never lands back inside the ban.
   for (const j of [0, 0.5, 0.999]) {
-    assert.equal(isInNightBan(nextSendableTime(vnTime(23, 59), j)), false);
+    assert.equal(isNightHours(nextSendableTime(vnTime(23, 59), j)), false);
   }
 });
 
@@ -120,6 +145,8 @@ test("sorts errors into the action you take", () => {
   assert.equal(classifyZaloError(-135), "needs_human", "OA not permitted to send ZNS");
   assert.equal(classifyZaloError(-137), "needs_human", "ZCA out of money");
   assert.equal(classifyZaloError(-133), "night_ban", "reschedule past 06:00, don't retry");
+  assert.equal(classifyZaloError(-14003), "needs_human", "console callback not registered");
+  assert.equal(classifyZaloError(-14002), "needs_human", "app not activated");
   assert.equal(classifyZaloError(-144), "quota", "daily limit — not today");
   assert.equal(classifyZaloError(-211), "quota", "feature quota, not a transient blip");
   assert.equal(classifyZaloError(-1441), "quota", "monthly promotion quota");

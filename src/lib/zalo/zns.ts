@@ -1,7 +1,7 @@
 import { unwrapZaloResponse, ZaloError } from "./errors";
 import { normalizeVnPhone } from "./phone";
 import { toNfc } from "./text";
-import { isInNightBan, nextSendableTime } from "./sendWindow";
+import { isSendBlockedNow, pushSuppressedNow, nextSendableTime } from "./sendWindow";
 import { getValidAccessToken } from "./tokens";
 import { getZaloConfig } from "./config";
 
@@ -18,7 +18,7 @@ import { getZaloConfig } from "./config";
 const ZNS_HOST = "https://business.openapi.zalo.me";
 
 export type ZnsSendResult =
-  | { status: "sent"; messageId: string; remainingQuota: number | null }
+  | { status: "sent"; messageId: string; remainingQuota: number | null; pushSuppressed: boolean }
   | { status: "skipped"; reason: "not_configured" | "invalid_phone" }
   | { status: "deferred"; retryAfter: Date; reason: "night_ban" }
   | { status: "failed"; code: number; message: string; retryable: boolean };
@@ -63,9 +63,12 @@ export async function sendBookingConfirmation(
   const phone = normalizeVnPhone(input.phone);
   if (!phone) return { status: "skipped", reason: "invalid_phone" };
 
-  // Checked before the call rather than after the -133, so the queue doesn't
-  // fill overnight with attempts that were never going to land.
-  if (isInNightBan(now)) {
+  // A booking confirmation is a transaction message: Zalo accepts it at any
+  // hour, and only the push notification is suppressed overnight. Deferring it
+  // to 06:05 would mean a guest who books at 22:30 hears nothing until morning,
+  // which is worse than a message that waits quietly in their Zalo. So it is
+  // sent regardless, and only a -133 from Zalo itself causes a deferral.
+  if (isSendBlockedNow("transaction", now)) {
     return { status: "deferred", retryAfter: nextSendableTime(now), reason: "night_ban" };
   }
 
@@ -123,6 +126,9 @@ export async function sendBookingConfirmation(
       status: "sent",
       messageId: data.msg_id,
       remainingQuota: data.quota?.remainingQuota ? Number(data.quota.remainingQuota) : null,
+      // Sent, but it won't buzz until morning — worth logging so a guest saying
+      // "I never got a confirmation" can be explained rather than guessed at.
+      pushSuppressed: pushSuppressedNow("transaction", now),
     };
   } catch (err) {
     if (err instanceof ZaloError) {

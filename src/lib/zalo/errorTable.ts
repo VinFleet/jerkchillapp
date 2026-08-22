@@ -6,6 +6,10 @@
 // Codes flagged overloaded:true carry more than one meaning on the same surface — branch on the message string, not the code alone.
 // Zalo Shop, the call-consent check, and ZaloPay each have their own error tables that are not reproduced here.
 // Typos in message strings (Unkown, exits, banded, weeky, Offical) are Zalo's own and are preserved verbatim so string matching works.
+// The night window is per message type, not global: consultation (CS) and group messages send 24/24; only promotional sends are blocked (-234). Transaction messages send at any hour but their push is suppressed outside 06:00-21:59.
+// -133 does not appear in the new ZBS error table and may be retired.
+// The -14xxx family (surface: oauth) is NOT published by Zalo in any error table. It is reconstructed from community reports and is incomplete — only -14002 and -14003 are attested. Log the full error body: error_name is the only reliable signal that endpoint returns.
+// OA consent is console-configured: redirect_uri and code_challenge are saved settings, not request parameters. Building your own authorize URL returns -14003 regardless of domain verification.
 
 export type ZaloRetryClass =
   | "success"
@@ -19,6 +23,8 @@ export type ZaloRetryClass =
 // A Map rather than an object: almost every Zalo code is negative, and
 // negative numeric keys are not valid object-literal syntax.
 export const ZALO_ERROR_CLASS: ReadonlyMap<number, ZaloRetryClass> = new Map([
+  [-14003, "needs_human"],
+  [-14002, "needs_human"],
   [-2002, "permanent"],
   [-1491, "permanent"],
   [-1472, "quota"],
@@ -174,4 +180,4 @@ export const ZALO_OVERLOADED_CODES: ReadonlySet<number> = new Set([
   -32,
 ]);
 
-export const ZALO_ERROR_COUNT = 146;
+export const ZALO_ERROR_COUNT = 148;

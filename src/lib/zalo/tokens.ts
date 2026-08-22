@@ -132,6 +132,8 @@ async function tokenRequest(
 export async function exchangeAuthorizationCode(
   cfg: ZaloConfig,
   code: string,
+  /** The FIXED verifier from ZALO_PKCE_VERIFIER, whose challenge is saved in
+   *  the Zalo console. Not a per-request value on the OA flow. */
   codeVerifier: string,
   /** The `oa_id` Zalo returns on the callback — the authoritative answer to
    *  which Official Account was actually authorised. */

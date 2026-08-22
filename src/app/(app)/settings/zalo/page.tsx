@@ -129,11 +129,12 @@ function ZaloSettingsContent() {
                 {
                   not_configured: "The Zalo keys aren't set — see Part 6 of SETUP.md.",
                   no_code: "Zalo didn't send an authorisation code back.",
-                  bad_state: "The request didn't match the one that started — try again from this page.",
                   expired: "It took longer than 10 minutes — start again.",
                   wrong_oa: "That's a different Official Account from the one configured here.",
                   no_oa_id: "Zalo didn't say which Official Account was approved. Set ZALO_OA_ID and try again.",
-                  exchange_failed: "Zalo rejected the code. Check the App ID and secret.",
+                  exchange_failed: "Zalo rejected the code. Check the App ID and secret, and that ZALO_PKCE_VERIFIER matches the Code Challenge saved in the console.",
+                  no_consent_url: "ZALO_CONSENT_URL isn't set. Zalo generates the consent link in the console — copy it into that variable.",
+                  no_verifier: "ZALO_PKCE_VERIFIER isn't set. It must be the verifier whose challenge is saved in the Zalo console.",
                 }[failureReason ?? ""] ?? "Try again."
               }
             </p>

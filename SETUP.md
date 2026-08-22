@@ -182,35 +182,53 @@ since it varies by template.
 
 ### Turning it on
 
+The OA consent flow is **console-configured** — Zalo generates the consent link
+from settings you save, rather than the app building one. Getting this order
+wrong is what produces `-14003 Invalid redirect uri`, which says nothing useful.
+
 - [ ] Run [`supabase/zalo-schema.sql`](supabase/zalo-schema.sql) in the Supabase
-      SQL editor. Creates the token table, locked so only the server can read it.
-- [ ] In Vercel, add these environment variables (**Project Settings →
-      Environment Variables**). None of them start with `NEXT_PUBLIC_`, which is
-      what keeps them out of the browser:
+      SQL editor.
+- [ ] **Activate the app**: Quản lý ứng dụng → Cài đặt → switch *"Chưa kích hoạt"*
+      to *"Đang hoạt động"*. Missing this gives `-14002` or `-209` — and `-209`
+      is labelled "Not supported this api", which sounds like something else
+      entirely.
+- [ ] **Register the OA API product**: Quản lý ứng dụng → Đăng ký sử dụng API →
+      Official Account API. Missing this gives `-212`.
+- [ ] Generate the fixed PKCE pair:
+
+      ```bash
+      npm run zalo:pkce
+      ```
+
+- [ ] **Save the callback and challenge**: Sản phẩm → Official Account →
+      Thiết lập chung
+      - `Official Account Callback Url`: `https://jerkchillapp.vercel.app/api/zalo/callback`
+      - `Code Challenge`: the challenge printed above
+      - **Tick every permission group you will ever need.** Changing the callback
+        URL *or* the permission set invalidates the grant and forces the OA admin
+        to consent again.
+      - Lưu (Save)
+- [ ] Copy the **consent link the console generates**. Do not build your own.
+- [ ] In Vercel, add:
 
   ```
-  ZALO_APP_ID                   # required
-  ZALO_APP_SECRET               # required
-  SUPABASE_SERVICE_ROLE_KEY     # required — Supabase → Project Settings → API
-  ZALO_REDIRECT_URI             # the callback URL you registered above
-  ZALO_BOOKING_TEMPLATE_ID      # only for guest booking confirmations
-  ZALO_OA_ID                    # optional — learned from the connect callback
+  ZALO_APP_ID
+  ZALO_APP_SECRET
+  ZALO_PKCE_VERIFIER      # the verifier from npm run zalo:pkce
+  ZALO_CONSENT_URL        # the link the console generated
+  SUPABASE_SERVICE_ROLE_KEY
+  ZALO_BOOKING_TEMPLATE_ID  # only for guest booking confirmations
   ```
 
-  You do **not** need to hunt for the OA ID. Zalo returns it when you approve
-  the app, and it's stored then. Set it only if you want the app to refuse a
-  connection to any other Official Account.
+- [ ] Redeploy, then **Settings → Zalo connection → Connect Zalo**.
 
-- [ ] Go to **Settings → Zalo connection → Connect Zalo** and approve the app.
-      One tap, once. The page then reports what your Official Account can
-      actually do — whether the package covers group messaging, and whether a
-      Cloud Account is linked for paid guest messages.
-- [ ] Set `ZALO_DEVELOPMENT_MODE=true` for the first test. In development mode
-      Zalo only delivers to OA administrators, so you can prove the whole path
-      without messaging a real guest. Remove it when you're happy.
-- [ ] Make a test booking on `/book` using **your own** phone number and confirm
-      the Zalo message arrives.
-- [ ] Set `ZALO_DEVELOPMENT_MODE=false` (or delete it) to go live.
+### Shortcut if you just want it working
+
+**Tools & Support → API Explorer** → pick the app → token type **"OA Access
+Token"** → pick the OA → Allow → copy **both** the access token and the refresh
+token. Seed the `zalo_tokens` table with that pair and the whole send path works
+immediately, without the consent flow at all. There is no Zalo sandbox, so this
+is the most useful testing tool on the platform. OA admins and app admins only.
 
 ### If it stops working
 

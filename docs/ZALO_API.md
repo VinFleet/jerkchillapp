@@ -137,7 +137,7 @@ Note that this applies to the **message** API specifically. Several other v2.0 p
 
 ## 2. Non-negotiable invariants
 
-These nine items cause the overwhelming majority of Zalo integration failures. Encode them structurally, not as comments.
+These ten items cause the overwhelming majority of Zalo integration failures. Encode them structurally, not as comments.
 
 1. **Auth is a bare `access_token:` header — never `Authorization: Bearer`.**
    ```
@@ -161,9 +161,11 @@ These nine items cause the overwhelming majority of Zalo integration failures. E
 
 7. **Webhooks must return HTTP 200 within 2 seconds.** Enqueue and acknowledge; never process inline. Zalo retries at 30s, 5m, 15m, 30m, 1h — so handlers must be **idempotent**, keyed on `message.msg_id`.
 
-8. **Nothing sends between 22:00 and 06:00 Vietnam time (GMT+7).** OA returns `-234`, ZNS/ZBS returns `-133`. Your scheduler must respect this window or your queue will fill with permanent failures overnight. Compute it in `Asia/Ho_Chi_Minh`, not in the server's local zone (§17.3).
+8. **The night window is per message type — it is NOT a blanket ban.** Customer-service replies and group messages send 24/24. Promotional messages are blocked 22:00–05:59 (`-234`). Transaction messages send at any hour but their **push notification is suppressed** outside 06:00–21:59, so they arrive silently. Your scheduler must branch on message type, not block everything (§15.3).
 
-9. **Normalize Vietnamese text to NFC before every length check.** The same visible string can be 43 or 55 characters depending on encoding form. Against Zalo's character limits this silently produces both false rejections and real `-1121` errors. One line, applied everywhere (§23).
+9. **OA consent is console-configured, not request-built.** `redirect_uri` and `code_challenge` are saved in the console (Sản phẩm → Official Account → Thiết lập chung) and Zalo generates the consent link. Building your own authorize URL returns `-14003`, and a per-request PKCE pair fails the later token exchange. The Social flow is the opposite — per-request is correct there (§4.1).
+
+10. **Normalize Vietnamese text to NFC before every length check.** The same visible string can be 43 or 55 characters depending on encoding form. Against Zalo's character limits this silently produces both false rejections and real `-1121` errors. One line, applied everywhere (§23).
 ---
 
 ## 3. Prerequisites, accounts, and concepts
@@ -232,51 +234,83 @@ There are **two separate OAuth flows** with confusingly similar URLs. Getting th
 
 Note the `/oa/` path segment — that is the *only* difference in the URL.
 
-### 4.1 OA authorization flow
+### 4.1 OA authorization flow — console-configured, NOT a dynamic redirect
 
-**Step 1 — send the OA admin to the consent screen:**
+> **This is the single most misunderstood part of the platform, and the most common cause of a blocked integration.** The OA flow does **not** work like the Social flow or like standard OAuth 2.0. You do not build the authorize URL at request time. `redirect_uri` and `code_challenge` are **saved settings in the developer console**, and Zalo **generates** the permission link from them. Constructing your own URL with an invented `redirect_uri` returns **`-14003 Invalid redirect uri`** no matter how thoroughly you have verified the domain.
+
+**Step 1 — generate ONE PKCE pair, not one per request.**
+
+Because the challenge is stored in the console (Step 2), the verifier that matches it is a **long-lived configuration value**, not a per-request secret. Generate one pair, put the challenge in the console, and keep the verifier in your secret store.
 
 ```
-https://oauth.zaloapp.com/v4/oa/permission
-  ?app_id=<APP_ID>
-  &redirect_uri=<URL-ENCODED CALLBACK>
-  &state=<CSRF_NONCE>
-  &code_challenge=<PKCE_CHALLENGE>
+code_verifier  = base64url_nopad(32 random bytes)   → 43 chars → ZALO_PKCE_VERIFIER
+code_challenge = base64url_nopad(SHA256_raw(ASCII(verifier)))
 ```
 
-**Step 2 — Zalo redirects back:**
+⚠️ **A per-request PKCE pair is the wrong shape here.** Standard RFC 7636 practice — mint a verifier, stash it in a cookie, exchange it once — is correct for the Social flow (§11.2) and **fails on the OA flow**, because the console holds a fixed challenge that your per-request verifier will never match. The failure surfaces later, at `/v4/oa/access_token`, after `-14003` is already fixed — so it looks like a second, unrelated bug.
+
+**Step 2 — register the callback URL and challenge in the console.**
+
+```
+developers.zalo.me → [your app] → Sản phẩm → Official Account → Thiết lập chung
+    → Official Account Callback Url   [your callback URL]
+    → Code Challenge                  [the challenge from Step 1]
+    → tick the permission groups you need
+    → Lưu
+```
+
+Zalo's own words (`bat-dau/xac-thuc-va-uy-quyen-cho-ung-dung-new`, Bước 2):
+
+> *"Truy cập Zalo for Developers để thiết lập đường dẫn yêu cầu cấp quyền. Tại bước này, bạn cần thiết lập callback URL và tham số code challenge vừa được tạo ở bước 1."*
+> (Go to Zalo for Developers to set up the authorization request path. At this step you must set the callback URL and the code challenge parameter just created in step 1.)
+
+> *"Callback URL là nơi bạn sẽ phải thực hiện xử lý để nhận được authorization code."*
+> (The Callback URL is where you must implement handling to receive the authorization code.)
+
+**This screen is documented only as screenshots with no alt text**, which is why it is invisible to search engines and to anyone reading the JS-rendered docs site. The page that used to explain it (`official-account-api/phu-luc/official-account-callback-url`) has been **deleted** — it is still cited in community threads but is absent from the current sitemap.
+
+**Tick every permission group you will eventually need, now.** Changing the callback URL *or* the permission set **invalidates the existing grant** and forces the OA admin to re-consent. The nine groups offered are: gửi tin và thông báo qua OA · quản lý tin nhắn người dùng · quản lý thông tin OA · quản lý ads · quản lý bài viết · quản lý cửa hàng, đơn hàng · sử dụng chức năng gọi thoại · nhận sự kiện quản lý tin nhắn · nhận sự kiện quản lý người dùng. ZBS adds its own groups (§7) — if you plan to send templates, tick those too.
+
+**Step 3 — send the generated link to the OA admin.**
+
+> *"Sao chép đường dẫn yêu cầu cấp quyền và gửi đến admin của OA để bắt đầu quá trình nhận authorization code."*
+> (Copy the authorization request link and send it to the OA admin to begin obtaining the authorization code.)
+
+> *"Admin chọn tài khoản OA cần cấp quyền và chọn 'Cho phép' để xác nhận cấp quyền."*
+
+The link Zalo emits has this shape, but **treat it as opaque and copy it verbatim** rather than reconstructing it:
+
+```
+https://oauth.zaloapp.com/v4/oa/permission?app_id=<APP_ID>&redirect_uri=<ENCODED>&code_challenge=<CHALLENGE>
+```
+
+This is a one-time human step per OA, not something your application performs. Your `/connect` route, if you have one, should *display* the stored link — not build one.
+
+**Step 4 — Zalo redirects back:**
 
 ```
 https://yourdomain.com/zalo/callback?code=<AUTHORIZATION_CODE>&oa_id=<OA_ID>
 ```
 
-Note that `oa_id` comes back on the callback — this is how you learn *which* OA was authorized. Persist it alongside the token pair.
+`oa_id` comes back on the callback — this is how you learn *which* OA was authorized. Persist it alongside the token pair. The authorization code is **valid for 10 minutes and single-use**.
 
-The authorization code is **valid for 10 minutes and is single-use**.
-
-**Step 3 — exchange:**
+**Step 5 — exchange:**
 
 ```http
 POST https://oauth.zaloapp.com/v4/oa/access_token
 Content-Type: application/x-www-form-urlencoded
 secret_key: <APP_SECRET>
 
-code=<AUTHORIZATION_CODE>&app_id=<APP_ID>&grant_type=authorization_code&code_verifier=<VERIFIER>
+code=<AUTHORIZATION_CODE>&app_id=<APP_ID>&grant_type=authorization_code&code_verifier=<THE STORED VERIFIER>
 ```
 
-Response:
-
 ```json
-{
-  "access_token": "...",
-  "refresh_token": "...",
-  "expires_in": "90000"
-}
+{ "access_token": "...", "refresh_token": "...", "expires_in": "90000" }
 ```
 
 `expires_in` is a **string**, not a number. `90000` seconds = 25 hours.
 
-**Step 4 — refresh (same URL, same header):**
+**Step 6 — refresh (same URL, same header):**
 
 ```http
 POST https://oauth.zaloapp.com/v4/oa/access_token
@@ -287,6 +321,40 @@ refresh_token=<CURRENT_REFRESH_TOKEN>&app_id=<APP_ID>&grant_type=refresh_token
 ```
 
 Returns a **new access token and a new refresh token**. The old refresh token is dead the instant this succeeds.
+
+### 4.1.1 Prerequisite chain — each link has its own error code
+
+Authorization fails opaquely if any of these is missing. Verify them in order before debugging anything else.
+
+| # | Requirement | Console path | Error if missing |
+|---|---|---|---|
+| 1 | App **activated** | Quản lý ứng dụng → Cài đặt → toggle *"Chưa kích hoạt"* → *"Đang hoạt động"* | `-209 Not supported this api` — and `-14002` at the permission endpoint |
+| 2 | **Official Account API** product registered | Quản lý ứng dụng → Đăng ký sử dụng API → Official Account API | `-212 App has not registed this api` |
+| 3 | Domain or URL prefix **verified** | Quản lý ứng dụng → Xác thực domain | — |
+| 4 | **Official Account Callback Url** saved | Sản phẩm → Official Account → Thiết lập chung | **`-14003 Invalid redirect uri`** |
+| 5 | OA admin has **granted** the app | the consent link from Step 3 | `-223 Official Account has not authorized this API` |
+| 6 | App ↔ OA **linked** | app settings | `112 Your app don't link with any Official Account` |
+
+`-209` is badly named: *"Not supported this api"* does not mean the endpoint is unsupported, it means **your app is not activated**.
+
+### 4.1.2 The `-14xxx` family — authorize-endpoint errors
+
+`oauth.zaloapp.com` has its **own error family**, entirely separate from the runtime tables in §14. Do not look for these in the OA or Social error appendices; they are not there, and no `-14xxx` table is published anywhere.
+
+| Code | `error_name` | Meaning |
+|---|---|---|
+| `-14002` | `Invalid appId` | `error_reason: "App is not active but user is not admin"` — the app is not activated, and the person clicking is not an app admin. Activate the app, or run the flow as an admin |
+| `-14003` | `Invalid redirect uri` | The `redirect_uri` does not match the **Official Account Callback Url** saved in the console. `error_reason` comes back **empty** |
+
+Two diagnostic notes. First, the JSON body carries an `error_name` string and a `ref_doc` link — **log the whole body**, because `error_name` is the only real signal Zalo gives. Second, `ref_doc` on `-14003` points at the **Social API** docs even for the OA endpoint, which suggests `oauth.zaloapp.com` validates redirect URIs in one shared layer across `/v4/permission` and `/v4/oa/permission`. Do not let that link send you to the wrong console screen.
+
+`⚠️ UNVERIFIED` — whether the console compares the saved callback to `redirect_uri` by exact string or by prefix. Since the console *generates* the link, echo the saved value byte-for-byte and the question does not arise.
+
+### 4.1.3 Shortcut: skip OAuth entirely while you build
+
+**Tools & Support → API Explorer** → select your app → token type **"OA Access Token"** → select the OA → review permissions → **Allow** → copy the access token **and the refresh token**.
+
+Seed your token store with that pair and the whole integration — sends, webhooks, quota — is testable immediately, with the consent flow still broken. Given that there is no sandbox (§1.3), this is the single most useful unblocking tool on the platform, and it is buried in a menu. Available to OA admins and app admins only.
 
 ### 4.2 Token lifetimes
 
@@ -339,6 +407,8 @@ CREATE TABLE zalo_tokens (
 Note `refresh_expires` is computed from the **first** grant for Social, not from the last rotation (§4.2).
 
 ### 4.4 PKCE
+
+> **Scope note.** What follows is the mechanics of computing a valid challenge. **When** you compute it differs by flow: the Social flow (§11.2) uses a fresh pair per login, while the OA flow uses **one fixed pair** registered in the console (§4.1). Getting this backwards is a documented failure mode.
 
 Zalo's prose describes the challenge as:
 
@@ -456,7 +526,7 @@ This is the part that determines whether your product concept is even possible o
 
 | Window | Effect |
 |---|---|
-| **≤ 48 hours** since last interaction | Message is **free** — draws on the `cs_reply` quota |
+| **≤ 48 hours** since last interaction | Message is **free**. Historically capped at 8 free messages per window; **unlimited from 2026-01-01**. Read `cs_reply.remain` rather than assuming either model |
 | **48 hours – 7 days** | Message is **billable** |
 | **> 7 days** | Message is **rejected** with `-230` |
 
@@ -1823,7 +1893,7 @@ Lifecycle: `create_group` · `user_join_group` · `user_request_join_group` · `
 
 **Zalo Shop (§14):** order events under `phu-luc/su-kien-don-hang`. The canonical commerce loop is *order event → ZBS template by UID* (§5.4).
 
-**ZBS quick-reply (§7.9.5):** `su-kien-nguoi-dung-phan-hoi-template-phan-hoi-nhanh`.
+**ZBS quick-reply (§7.10):** `su-kien-nguoi-dung-phan-hoi-template-phan-hoi-nhanh`.
 
 **Interaction-permission widget:** `su-kien-nguoi-dung-dong-y-cap-quyen-tuong-tac` and `su-kien-dong-bo-user_external_id-that-bai`. There is **no API to trigger a follow invitation** — growth runs through Zalo's website widget, and consent arrives here.
 
@@ -2098,7 +2168,9 @@ Three surfaces carry **their own error tables** whose codes do not map onto the 
 ---
 ---
 
-## 15. Rate limits
+## 15. Rate limits and sending schedules
+
+### 15.1 Rate limits
 
 **Application level:**
 
@@ -2119,7 +2191,7 @@ Read and log these. The window resets each minute. Exceeding returns `-32`.
 
 **OA level:** limits vary by **OA package tier**. The concrete numbers live in Zalo's pricing material, not the developer docs — `⚠️ not publicly enumerated`. ZBS Template Message is **excluded** from OA-level rate-limit accounting.
 
-**Endpoint-specific:**
+### 15.2 Endpoint-specific quotas
 
 | Endpoint | Quota |
 |---|---|
@@ -2129,8 +2201,80 @@ Read and log these. The window resets each minute. Exceeding returns `-32`.
 | ZNS image upload | 5,000/month/app |
 | ZNS daily send | dynamic tier — see §7.11 |
 
----
----
+### 15.3 Time-based sending restrictions
+
+Two distinct mechanisms, frequently conflated: a **clock schedule** (what hour it is) and **elapsed-time windows** (how long since something happened).
+
+#### The clock schedule — per message type
+
+| Message type | Send window | Out-app push window | Blocked with |
+|---|---|---|---|
+| **Tin Tư vấn** — consultation / CS (`/v3.0/oa/message/cs`) | **24/24** | **24/24** | never |
+| **Tin Giao dịch** — transaction (ZBS UID, Tag 1 / Tag 2) | **24/24** | **06:00 → 21:59** | never blocked, but push suppressed |
+| **Tin Truyền thông** — promotional / broadcast (Tag 3) | **06:00 → 21:59** | 06:00 → 21:59 | `-234` |
+| **Group chat (GMF)** | **24/24** | 24/24 | never |
+| **ZBS/ZNS by phone** | per-template night flag | — | `-133` |
+
+Sources: `official-account/tin-nhan/tin-tu-van/dieu-kien-gui-tin-tu-van` · `.../tin-giao-dich/dieu-kien-gui-tin-giao-dich` · `.../tin-truyen-thong/dieu-kien-gui-tin-truyen-thong` · `.../nhom-chat-gmf/tin-nhan/condition`.
+
+**You can reply to a customer at 3am.** Consultation messages are documented `24/24` for both sending and push. A blanket night guard over all outbound traffic is wrong and will damage your support responsiveness.
+
+**The transaction row is the subtle one.** A transaction message sent at 02:00 is accepted (`error: 0`) and delivered to the conversation, but the recipient's device shows **no notification** until the 06:00 window opens. It is not a failure and no error tells you about it — the message simply sits unseen. If timely arrival matters, schedule transaction sends inside 06:00–21:59 even though the API would accept them earlier.
+
+**Error text vs conditions page.** `-234` reads *"10:00PM - 6:00AM"*; the linked conditions page states the allowed window as *"Từ 6h00 -> 21h59"*. These agree: blocked from 22:00:00 to 05:59:59.
+
+> `⚠️ UNVERIFIED — timezone.` **No Zalo page states a timezone for the night window.** Every reference is a bare `22h–6h` / `6h00 -> 21h59`. Vietnam time (`Asia/Ho_Chi_Minh`, UTC+7, no DST) is the only sensible operational reading and is what §17.3 implements — but treat it as an assumption, and confirm with a boundary-time send before relying on it.
+
+> `⚠️ UNVERIFIED — is -133 still live?` `-133` **does not appear in the new ZBS error table at all** (it jumps `-132` → `-1351`). The night restriction may have been dropped in the ZBS merge. Note also the wording difference: `-234` says *"Loại tin nhắn này"* (this message **type**) while `-133` says *"Mẫu ZNS này"* (**this template**) — implying the ZNS restriction is a per-template flag rather than an API-wide rule. Do not hard-code either assumption; handle `-133` as a reschedule and log whether it ever fires.
+
+> `⚠️ OTP at night is unresolved.` No page grants authentication templates (`template_type: 2`) a night exemption, and none denies one either. An OTP that cannot be sent at 23:00 breaks login. **Test this explicitly with your own OTP template before shipping a nighttime auth flow** — and have an SMS fallback path ready if it fails.
+
+#### Elapsed-time windows
+
+| Window | Applies to | Expiry behaviour |
+|---|---|---|
+| **48 hours** | Free CS reply window from last interaction | Beyond it, CS sends are billable |
+| **7 days** | CS eligibility from last interaction | `-230` |
+| **1 year** | Interaction requirement for transaction messages | much longer than the CS window |
+| **45 days** | User offline **on Zalo entirely** (not just with your OA) | `-227` — unreachable by anyone |
+| **7 days** | Uploaded `attachment_id` / file `token` | `-100` |
+| **10 minutes** | OAuth authorization code (single use) | re-authorize |
+| **25 hours** | OA access token | refresh |
+| **3 months** | OA refresh token | re-consent |
+| **1 hour** | Social access token | refresh |
+| **30 days** | Social refresh token (inherited TTL, §4.2) | re-authorize interactively |
+| **2 minutes** | Mini App `getPhoneNumber()` token (single use) | re-request |
+| **48 hours** | Voice call link `ttl: 172800` | mint a new link |
+| **7 or 30 days** | ZNS journey tokens (`token_logistics_7` / `_30`, `token_coach_bus_7` / `_30`) | `-150` |
+
+**Note the 8-free-CS-messages change.** The 48-hour window historically granted *8 free* consultation messages, reset by each new interaction. **From 2026-01-01 that became unlimited within the 48-hour window.** Read `cs_reply.remain` from the quota endpoint rather than assuming either model.
+
+#### Frequency caps with a time component
+
+| Cap | Value | Error |
+|---|---|---|
+| Promotional messages per user, per OA, per day | **1** | `-1472` |
+| Promotional messages per user, per month | disputed — see below | `-1441` |
+| Follow-up (hậu mãi) per user, per month | OA-level limit | `-1471` |
+| Daily send requests, OA with ≤10,000 followers | **500/day** | `-144` |
+| Daily send requests, OA with >10,000 followers | **5% of follower count per day** | `-144` |
+| Per-template daily quota (when `applyTemplateQuota`) | varies | `-147` |
+| API rate limit | 4,000 req/min, resets each minute | `-32` |
+
+> `⚠️ CONFLICT` — the per-user monthly promotional cap is documented as **4/month** in one Zalo source and **30/month (1/day)** in another. Both are Zalo-affiliated. Do not build tight scheduling on either figure; treat `-1441` / `-1472` as authoritative at runtime.
+
+The 5%-of-followers rule is the one that surprises growing accounts: **your daily send allowance scales with follower count**, so a campaign sized against last quarter's follower base can exceed today's cap.
+
+#### Quality evaluation schedule
+
+- **Evaluated hourly**, measured over the window *from the start of the day to now*
+- Automatic penalty (reports > 2% of daily quota) applies **at most once per 00:00–24:00 day**
+- Tier **increase**: 7 days at good quality **and** successful sends ≥ 2× current daily quota
+- Tier **decrease**: 7 days at poor quality
+- After any tier change there is a **7-day cooldown**; a brand-new OA is first evaluated on **day 8**
+- Quota reset hour is **not documented** — midnight Vietnam time is the reasonable assumption
+
+Because evaluation is hourly but penalties are daily-capped, a bad morning can cost you a tier by lunchtime and there is nothing you can do until tomorrow. Front-load your riskiest sends late in the day, not early.
 
 ## 16. Vietnamese text handling
 
@@ -2241,32 +2385,66 @@ Map §14.1's four buckets to concrete behaviour:
 | Auth-refreshable (`-216`, `-220`, `-124`, `452`) | Refresh once, retry once, then escalate. **Never loop** — a refresh loop against a revoked grant will get the app rate-limited |
 | Transient (`-32`, `-100`, `-211`) | Exponential backoff with jitter, cap ~5 attempts |
 | Quota (`-144`, `-147`, `-1441`) | Reschedule to the next quota window (tomorrow), do not retry today |
-| Night ban (`-133`, `-234`) | Reschedule to 06:05 Asia/Ho_Chi_Minh |
+| Night ban (`-133`, `-234`) | Reschedule to 06:05 Asia/Ho_Chi_Minh with jitter. Should only ever fire for promotional sends — if you see it on a CS message, your message-type routing is wrong |
 | Permanent (`-201`, `-108`, `-230`, `-131`, `-114`, `-119`) | Dead-letter immediately with the full payload. Retrying is pure waste |
 
 Jitter matters: without it, a night-ban backlog releases as a thundering herd at 06:00 and trips `-32` instantly.
 
 ### 17.3 The night window, correctly
 
+The guard is **per message type** (§15.3) — a blanket block over all outbound traffic is wrong and suppresses customer-service replies that Zalo permits 24/24.
+
 ```python
+from datetime import datetime, time as dtime, timedelta
+from enum import Enum
 from zoneinfo import ZoneInfo
-from datetime import datetime, time
 
-VN = ZoneInfo("Asia/Ho_Chi_Minh")
+VN = ZoneInfo("Asia/Ho_Chi_Minh")   # ASSUMPTION: Zalo never states the zone (§15.3)
+OPEN, CLOSE = dtime(6, 0), dtime(22, 0)
 
-def is_sendable(now=None) -> bool:
+
+class Kind(Enum):
+    CS = "cs"                    # consultation — 24/24, never blocked
+    GROUP = "group"              # GMF — 24/24
+    TRANSACTION = "transaction"  # sends 24/24, but push suppressed outside the window
+    PROMOTION = "promotion"      # blocked outside the window (-234)
+    TEMPLATE_PHONE = "zns"       # per-template night flag (-133), treat as PROMOTION
+
+
+ALWAYS_OK = {Kind.CS, Kind.GROUP}
+PUSH_ONLY = {Kind.TRANSACTION}       # accepted at night, but arrives silently
+
+
+def in_window(now=None) -> bool:
     t = (now or datetime.now(VN)).astimezone(VN).time()
-    return time(6, 0) <= t < time(22, 0)
+    return OPEN <= t < CLOSE
 
-def next_send_window(now=None) -> datetime:
+
+def can_send(kind: Kind, now=None) -> bool:
+    """Will Zalo accept this send right now?"""
+    return kind in ALWAYS_OK or kind in PUSH_ONLY or in_window(now)
+
+
+def will_notify(kind: Kind, now=None) -> bool:
+    """Will the recipient actually get a push? Transaction messages sent at
+    night are accepted and delivered, but silently — no error tells you."""
+    return kind in ALWAYS_OK or in_window(now)
+
+
+def next_window(now=None) -> datetime:
     now = (now or datetime.now(VN)).astimezone(VN)
-    if is_sendable(now):
+    if in_window(now):
         return now
     target = now.replace(hour=6, minute=5, second=0, microsecond=0)
-    return target if now.time() < time(6, 0) else target.replace(day=now.day) + timedelta(days=1)
+    return target if now.time() < OPEN else target + timedelta(days=1)
 ```
 
-Compute in `Asia/Ho_Chi_Minh` explicitly. Vietnam does not observe DST, but your server might, and a UTC-offset constant will drift twice a year if your infrastructure is elsewhere.
+Two rules that follow from the table:
+
+1. **Never defer a CS reply or a group message.** They are permitted around the clock; delaying them is self-inflicted.
+2. **Defer transaction messages by policy, not by necessity.** `can_send()` returns `True` at 02:00, but `will_notify()` returns `False` — the message lands unseen. If arrival time matters, queue to `next_window()` anyway.
+
+Compute in `Asia/Ho_Chi_Minh` explicitly. Vietnam does not observe DST, but your infrastructure might, and a hardcoded UTC offset will drift twice a year if your servers are elsewhere.
 
 ### 17.4 Idempotency and deduplication
 
@@ -3662,7 +3840,13 @@ Because there is no sandbox (§1.3), account provisioning is on the critical pat
 - [ ] OA package purchased at the tier your features need — **Advanced or Premium if you want group chat (§7)**
 - [ ] Zalo Cloud Account created, linked to the OA, and **funded** (required for any ZBS send)
 - [ ] App ↔ OA linked in the console
-- [ ] Callback URL and webhook URL registered (HTTPS **domain**, not `host:port`)
+- [ ] App toggled to **"Đang hoạt động"** (Quản lý ứng dụng → Cài đặt) — otherwise `-209` / `-14002`
+- [ ] **Official Account API** registered (Quản lý ứng dụng → Đăng ký sử dụng API) — otherwise `-212`
+- [ ] Domain or URL prefix verified (Quản lý ứng dụng → Xác thực domain)
+- [ ] **Official Account Callback Url** + **Code Challenge** saved (Sản phẩm → Official Account → Thiết lập chung) — otherwise `-14003`
+- [ ] All needed permission groups ticked **before** first consent — changing them later forces re-consent
+- [ ] Webhook URL registered (HTTPS **domain**, not `host:port`)
+- [ ] Token obtained once via **API Explorer** to unblock development (§4.1.3)
 - [ ] ZBS templates drafted and **submitted for review** — approval is asynchronous and blocks your first real send
 
 ### 22.2 Build order
@@ -3793,6 +3977,14 @@ Every item appeared in Zalo's docs ambiguously, contradicted itself across pages
 | 21 | **Mini App checkout server host** (§12.3) | No merchant server host published | Reconcile via ZaloPay `/v2/query` instead of trusting the client callback |
 | 22 | **Mini App eKYC and journey-messaging endpoints** | Pages exist; not enumerated here | Fetch `docs.zaloplatforms.com/docs/MA/*` if needed |
 | 23 | OA quota v3.0 body-overload shapes (§5.13) | Two request shapes on one path | Wrap each in a named method; verify both against a real OA |
+| 24 | **Night-window timezone** | No Zalo page states one — bare `22h–6h` everywhere | Assume `Asia/Ho_Chi_Minh`; confirm with a boundary-time send |
+| 25 | **Is `-133` still live under ZBS?** | Absent from the new ZBS error table entirely | Handle it as a reschedule; log whether it ever fires |
+| 26 | **OTP templates exempt from the night window?** | Neither granted nor denied in any doc | **Test with your own OTP template before shipping nighttime auth**; keep an SMS fallback |
+| 27 | Per-user monthly promotional cap | Zalo sources say both **4/month** and **30/month** | Do not schedule against either; trust `-1441` / `-1472` at runtime |
+| 28 | Daily quota reset hour | Undocumented | Midnight VN time is the reasonable assumption |
+| 29 | Exact-vs-prefix matching of the saved OA Callback Url | Undocumented | Echo the console value byte-for-byte; the question then does not arise |
+| 30 | Whether a **Web platform** under Đăng nhập is also needed for the OA flow | Docs scope that screen to Social login only, but one third-party guide configures both | Cheap to add if `-14003` survives step 4 of §4.1.1 |
+| 31 | Rest of the `-14xxx` family | Only `-14002` and `-14003` are attested anywhere | Log the full error body; `error_name` is the only signal |
 
 **Definitively NOT available** — do not spend time looking:
 
@@ -3870,6 +4062,14 @@ Every item appeared in Zalo's docs ambiguously, contradicted itself across pages
 - `phu-luc/cau-truc-cua-tham-so-buttons` · `phu-luc/cau-truc-cua-tham-so-elements`
 - `phu-luc/ma-tai-san-asset_id-la-gi` · `phu-luc/cac-trang-thai-cua-video`
 - `phu-luc/cac-tuong-tac-cua-nguoi-dung-voi-oa` · `phu-luc/huong-dan-xac-thuc-domain`
+
+**OA console configuration (the `-14003` trail):**
+
+- OA auth flow, Bước 1–4 — https://developers.zalo.me/docs/official-account/bat-dau/xac-thuc-va-uy-quyen-cho-ung-dung-new
+  (mirror: https://stc-developers.zdn.vn/docs/v2/official-account/bat-dau/xac-thuc-va-uy-quyen-cho-ung-dung-new/index.html)
+- Domain verification — `.../official-account/phu-luc/huong-dan-xac-thuc-domain` — prefix semantics, 20-domain / 20-URL / 75-char caps, and the tunnel-host exemption (localtunnel.me, ngrok.io, localhost.run, serveo.net skip verification entirely)
+- `official-account-api/phu-luc/official-account-callback-url` — **deleted from the docs**; still cited in community threads
+- Community threads evidencing the `-14xxx` family: `community/detail/81dd56256a60833eda71` (`-14003 Invalid redirect uri`), `community/detail/63fa901eac5b45051c4a` and `.../81f4e20ede4b37156e5a` (`-14002 Invalid appId / App is not active but user is not admin`)
 
 **Official SDKs:**
 

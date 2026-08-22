@@ -15,7 +15,11 @@
     "Non-zero error codes arrive with HTTP 200. Never branch on HTTP status.",
     "Codes flagged overloaded:true carry more than one meaning on the same surface — branch on the message string, not the code alone.",
     "Zalo Shop, the call-consent check, and ZaloPay each have their own error tables that are not reproduced here.",
-    "Typos in message strings (Unkown, exits, banded, weeky, Offical) are Zalo's own and are preserved verbatim so string matching works."
+    "Typos in message strings (Unkown, exits, banded, weeky, Offical) are Zalo's own and are preserved verbatim so string matching works.",
+    "The night window is per message type, not global: consultation (CS) and group messages send 24/24; only promotional sends are blocked (-234). Transaction messages send at any hour but their push is suppressed outside 06:00-21:59.",
+    "-133 does not appear in the new ZBS error table and may be retired.",
+    "The -14xxx family (surface: oauth) is NOT published by Zalo in any error table. It is reconstructed from community reports and is incomplete — only -14002 and -14003 are attested. Log the full error body: error_name is the only reliable signal that endpoint returns.",
+    "OA consent is console-configured: redirect_uri and code_challenge are saved settings, not request parameters. Building your own authorize URL returns -14003 regardless of domain verification."
   ],
   "errors": [
     {
@@ -245,7 +249,7 @@
       "message": "This message cannot be sent at night (10:00PM - 6:00AM)",
       "meaning": "Night ban",
       "retry_class": "night_ban",
-      "action": "reschedule to 06:05 Asia/Ho_Chi_Minh with jitter",
+      "action": "reschedule to 06:05 Asia/Ho_Chi_Minh with jitter. Should only fire for promotional sends — CS replies and group messages are permitted 24/24, so seeing this on one means message-type routing is wrong. Timezone is an assumption, not documented.",
       "overloaded": false
     },
     {
@@ -516,6 +520,26 @@
       "meaning": null,
       "retry_class": "success",
       "action": "none",
+      "overloaded": false
+    },
+    {
+      "code": -14003,
+      "surface": "oauth",
+      "surface_label": "OAuth authorize endpoint (oauth.zaloapp.com)",
+      "message": "Invalid redirect uri",
+      "meaning": "redirect_uri does not match the Official Account Callback Url saved in the console. error_reason comes back EMPTY. Domain verification proves hostname ownership and does NOT allowlist a callback — they are separate.",
+      "retry_class": "needs_human",
+      "action": "Save the callback at San pham > Official Account > Thiet lap chung > 'Official Account Callback Url', alongside 'Code Challenge'. Then send the console-GENERATED consent link rather than building your own URL.",
+      "overloaded": false
+    },
+    {
+      "code": -14002,
+      "surface": "oauth",
+      "surface_label": "OAuth authorize endpoint (oauth.zaloapp.com)",
+      "message": "Invalid appId",
+      "meaning": "error_reason: 'App is not active but user is not admin'. The app is not activated, and the person completing consent is not an app admin.",
+      "retry_class": "needs_human",
+      "action": "Activate the app: Quan ly ung dung > Cai dat > toggle 'Chua kich hoat' to 'Dang hoat dong'. Or complete the flow as an app admin.",
       "overloaded": false
     },
     {
@@ -1185,7 +1209,7 @@
       "message": "Cannot send at night (22:00–06:00)",
       "meaning": null,
       "retry_class": "night_ban",
-      "action": "reschedule to 06:05 Asia/Ho_Chi_Minh with jitter",
+      "action": "reschedule to 06:05 Asia/Ho_Chi_Minh with jitter. Should only fire for promotional sends — CS replies and group messages are permitted 24/24, so seeing this on one means message-type routing is wrong. Timezone is an assumption, not documented.",
       "overloaded": false
     },
     {
