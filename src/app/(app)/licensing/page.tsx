@@ -6,6 +6,7 @@ import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
+import { DocumentUploader } from "@/components/DocumentUploader";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
@@ -278,6 +279,18 @@ function LicenseCard({
       <p className="text-[11px] text-muted mt-0.5">
         Reminder {license.renewalLeadDays} days before · Nhắc trước {license.renewalLeadDays} ngày
       </p>
+
+      <div className="mt-3 pt-3 border-t border-border">
+        <DocumentUploader
+          entityType="license"
+          entityId={license.id}
+          title={{ en: "The certificate itself", vi: "Bản chứng nhận" }}
+          hint={{
+            en: "A scan or photo, so it can be produced at an inspection without hunting for the original.",
+            vi: "Bản quét hoặc ảnh, để xuất trình khi thanh tra mà không phải tìm bản gốc.",
+          }}
+        />
+      </div>
 
       {canEdit &&
         (mode === "date" ? (

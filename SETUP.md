@@ -240,6 +240,41 @@ the guest.
 
 ---
 
+## Part 6b — Uploading certificates and paperwork (free)
+
+Lets you attach the actual files — a supplier's food-safety certificate, a
+staff health certificate, your Certificate of Eligibility, PCCC fire safety —
+to the record they belong to. Until now the app recorded that these existed and
+when they expired, but not the documents themselves, and at an inspection a
+tick saying "on file" is worth nothing if the file is in a drawer at home.
+
+**Everyone who is signed in can view them.** A chef taking a delivery can check
+the supplier's certificate hasn't lapsed without asking the manager.
+
+- [ ] Run [`supabase/documents-schema.sql`](supabase/documents-schema.sql) in
+      the Supabase SQL editor. Creates the `documents` table and a private
+      storage bucket.
+- [ ] Nothing else — no keys, no environment variables. It uses the Supabase
+      connection you already have.
+
+Where the upload buttons appear:
+
+| Screen | What to attach |
+|---|---|
+| Suppliers → a supplier | Food-safety certificate, business registration |
+| Staff → a person | Health certificate |
+| Licensing | The certificate for each licence |
+
+PDF or a photo, up to 10 MB each. You can set an expiry date on the document
+itself, and one that has lapsed shows in red.
+
+**One limitation, deliberately.** Documents need a connection — unlike the rest
+of the app, they are not available offline. A PDF is megabytes, the browser's
+local storage is a few and shared across every module, and a certificate
+uploaded on your laptop has to be visible on the kitchen tablet. Uploading
+paperwork is an office job done once, not something anyone does mid-service, so
+this trade is worth making. Everything else keeps working without wifi.
+
 ## Part 7 — Alerts on staff phones (free, recommended)
 
 This is the one that makes the app reach people. An alert lands on the phone

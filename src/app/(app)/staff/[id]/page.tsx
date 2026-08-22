@@ -6,6 +6,7 @@ import { ChevronLeft, CheckCircle2, Plus, UserMinus, RotateCcw, Lock } from "luc
 import { RoleGate } from "@/components/RoleGate";
 import { Bi } from "@/components/Bi";
 import { PinGate } from "@/components/PinGate";
+import { DocumentUploader } from "@/components/DocumentUploader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -384,6 +385,17 @@ function HealthCertSection({ staffId }: { staffId: string }) {
       <button onClick={startEditing} className="mt-2 text-xs text-brand font-semibold">
         {cert.expiryDate ? "Update · Cập nhật" : "Add date · Thêm ngày"}
       </button>
+      <div className="mt-4 pt-4 border-t border-border">
+        <DocumentUploader
+          entityType="staff_health"
+          entityId={staffId}
+          title={{ en: "Health certificate on file", vi: "Giấy khám sức khỏe" }}
+          hint={{
+            en: "A photo or scan of the certificate itself — an inspector asks to see it, not a date.",
+            vi: "Ảnh chụp hoặc bản quét giấy khám — thanh tra yêu cầu xem giấy, không chỉ ngày.",
+          }}
+        />
+      </div>
     </Card>
   );
 }

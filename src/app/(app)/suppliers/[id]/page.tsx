@@ -6,6 +6,7 @@ import { RoleGate } from "@/components/RoleGate";
 import { BackLink } from "@/components/BackLink";
 import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/Card";
+import { DocumentUploader } from "@/components/DocumentUploader";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
@@ -356,6 +357,27 @@ function SupplierDetailContent({ id }: { id: string }) {
         <ContactSection supplier={supplier} canEdit={canEdit} onChanged={refresh} />
         <CertsSection supplier={supplier} canEdit={canEdit} onChanged={refresh} />
         <DocumentChecklistSection supplier={supplier} canEdit={canEdit} onChanged={refresh} />
+        <Card className="mb-4">
+
+          <DocumentUploader
+
+            entityType="supplier"
+
+            entityId={supplier.id}
+
+            title={{ en: "Certificates and paperwork", vi: "Chứng nhận và giấy tờ" }}
+
+            hint={{
+
+              en: "The actual files — food-safety certificate, business registration. A tick above says you have it; this is it.",
+
+              vi: "Tệp thật — giấy chứng nhận ATTP, đăng ký kinh doanh.",
+
+            }}
+
+          />
+
+        </Card>
         <HistorySection supplierId={supplier.id} />
       </div>
     </div>
