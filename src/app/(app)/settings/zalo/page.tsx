@@ -74,6 +74,8 @@ function ZaloSettingsContent() {
 
   const justConnected = params.get("connected");
   const failureReason = params.get("reason");
+  const failureCode = params.get("code");
+  const failureDetail = params.get("detail");
 
   const load = async () => {
     setLoading(true);
@@ -138,6 +140,12 @@ function ZaloSettingsContent() {
                 }[failureReason ?? ""] ?? "Try again."
               }
             </p>
+            {(failureCode || failureDetail) && (
+              <p className="text-xs text-muted mt-2 font-mono break-words">
+                {failureCode ? `Zalo ${failureCode}: ` : ""}
+                {failureDetail}
+              </p>
+            )}
           </Card>
         )}
 

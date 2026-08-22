@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { exchangeAuthorizationCode } from "@/lib/zalo/tokens";
 import { getZaloConfig } from "@/lib/zalo/config";
+import { ZaloError } from "@/lib/zalo/errors";
 import { configuredVerifier } from "@/lib/zalo/pkce";
 
 /**
@@ -77,7 +78,24 @@ export async function GET(request: Request) {
   try {
     await exchangeAuthorizationCode(cfg, code, verifier, effectiveOaId);
     return done(request, { connected: "1" });
-  } catch {
-    return done(request, { connected: "0", reason: "exchange_failed" });
+  } catch (err) {
+    // Pass Zalo's own words through. Swallowing them into a generic
+    // "exchange_failed" is how this became guesswork: the oauth endpoint's
+    // -14xxx codes are published in no error table, so its message string is
+    // the only real signal it gives.
+    console.error("[zalo] token exchange failed", err);
+    if (err instanceof ZaloError) {
+      return done(request, {
+        connected: "0",
+        reason: "exchange_failed",
+        code: String(err.code),
+        detail: err.zaloMessage.slice(0, 200),
+      });
+    }
+    return done(request, {
+      connected: "0",
+      reason: "exchange_failed",
+      detail: (err instanceof Error ? err.message : String(err)).slice(0, 200),
+    });
   }
 }
