@@ -1,6 +1,10 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ZaloError } from "./errors";
-import { getServiceRoleCredentials, type ZaloConfig } from "./config";
+import {
+  getServiceRoleCredentials,
+  describeServiceRoleKeyProblem,
+  type ZaloConfig,
+} from "./config";
 
 /**
  * The Zalo token store.
@@ -48,6 +52,11 @@ function serviceClient(): SupabaseClient {
       "SUPABASE_SERVICE_ROLE_KEY is not set — the Zalo token store cannot be reached"
     );
   }
+  // Checked before the client is built, so a malformed key is reported as
+  // itself rather than as a ByteString TypeError from deep inside fetch.
+  const problem = describeServiceRoleKeyProblem(creds.key);
+  if (problem) throw new Error(problem);
+
   return createClient(creds.url, creds.key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });

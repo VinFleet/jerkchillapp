@@ -76,6 +76,32 @@ export function serviceRoleConfigured(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
+/**
+ * Why this is validated rather than trusted.
+ *
+ * A key pasted with a stray character — a smart quote, an arrow, a newline from
+ * copying surrounding text — reaches the Supabase client, which puts it in an
+ * HTTP header, and fails as "Cannot convert argument to a ByteString because
+ * the character at index N has a value of 8594". That is a real error we hit,
+ * and nothing in it says "your key has an arrow in it".
+ */
+export function describeServiceRoleKeyProblem(key: string): string | null {
+  if (!key.trim()) return "SUPABASE_SERVICE_ROLE_KEY is empty";
+  for (let i = 0; i < key.length; i += 1) {
+    const code = key.charCodeAt(i);
+    if (code > 255) {
+      return `SUPABASE_SERVICE_ROLE_KEY contains a non-ASCII character (${JSON.stringify(
+        key[i]
+      )}, code ${code}) at position ${i} — it looks like extra text was copied with the key`;
+    }
+    if (code < 32) {
+      return `SUPABASE_SERVICE_ROLE_KEY contains a line break or control character at position ${i}`;
+    }
+  }
+  if (key !== key.trim()) return "SUPABASE_SERVICE_ROLE_KEY has leading or trailing whitespace";
+  return null;
+}
+
 export function getServiceRoleCredentials(): { url: string; key: string } | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

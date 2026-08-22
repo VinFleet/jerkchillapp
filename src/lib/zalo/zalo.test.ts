@@ -25,6 +25,7 @@ import {
 import { escapeMentions } from "./mentions.ts";
 import { toNfc, zaloLength, fitsZaloLimit, truncateForZalo } from "./text.ts";
 import { createPkce, challengeFor, createState } from "./pkce.ts";
+import { describeServiceRoleKeyProblem } from "./config.ts";
 import { tierAllowsGroups, assessCapabilities } from "./capabilities.ts";
 
 // ---------- phone ----------
@@ -358,4 +359,30 @@ test("a fully provisioned OA reports everything ready", () => {
   assert.equal(caps.groupMessaging.available, true);
   assert.equal(caps.bookingConfirmations.available, true);
   assert.deepEqual(caps.groupMessaging.blockedBy, []);
+});
+
+// ---------- service-role key validation ----------
+
+test("catches a key with text copied in alongside it", () => {
+  // The real failure: an arrow (U+2192, 8594) pasted with the key surfaced as
+  // "Cannot convert argument to a ByteString because the character at index 10
+  // has a value of 8594" — from inside fetch, with nothing pointing at the key.
+  const problem = describeServiceRoleKeyProblem("eyJhbGciO→iJIUzI1NiJ9");
+  assert.ok(problem, "must be rejected");
+  assert.match(problem!, /non-ASCII/);
+  assert.match(problem!, /position 9/, "must say where");
+});
+
+test("catches the other ways a pasted key goes wrong", () => {
+  assert.match(describeServiceRoleKeyProblem("")!, /empty/);
+  assert.match(describeServiceRoleKeyProblem("  ")!, /empty/);
+  assert.match(describeServiceRoleKeyProblem("eyJhbGciOi\nJIUzI1")!, /line break/);
+  assert.match(describeServiceRoleKeyProblem(" eyJhbGciOiJIUzI1 ")!, /whitespace/);
+});
+
+test("accepts a normal key", () => {
+  assert.equal(
+    describeServiceRoleKeyProblem("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc-_123.def"),
+    null
+  );
 });
