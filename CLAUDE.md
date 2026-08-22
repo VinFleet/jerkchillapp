@@ -197,3 +197,107 @@ Don't build all 16 modules at once — build shallow-and-wide and nothing will a
 ## First message to send Claude Code
 
 > Read CLAUDE.md in this folder for full context — it's the complete spec, but only build Phase 1 first (Modules 1–5: Digital Recipe Book, Daily Stock & Production Log, Opening/Closing Checklists, Production Planner, Notice Board). Set up a new React/Next.js project with Tailwind, configured as a PWA. Use `#003295` as the primary brand color and `logo.png` as the header logo. Every screen needs bilingual English/Vietnamese labels, mobile-first responsive layout, and big tap targets — this will be used one-handed on a phone mid-shift by staff with no training on the app. Build the role-permission system (Owner/Manager/Chef/Bartender) from the start, even if only Owner exists as a real login for now.
+
+---
+
+# Architectural invariants
+
+*Everything above is the original brief. Everything below is how the code
+actually works — verified against the repository, not remembered. Breaking any
+of these produces a failure that is hard to trace back to its cause.*
+
+## The rules
+
+1. **Local-first.** Every read comes from `localStorage`; every write lands
+   there first. Supabase is a shared copy, never the source of truth during a
+   shift. The app must stay fully usable with no network. The one deliberate
+   exception is document uploads (§Documents below).
+
+2. **`src/lib/repo/` is the only code that touches storage.** No screen or
+   component reads `localStorage` directly. Repos are also the only place that
+   knows key names.
+
+3. **Food-safety collections are append-only.** Records are never edited or
+   deleted, only superseded by a new record that points at the one it replaces.
+   Postgres triggers enforce this, so an app-side path that assumes mutation
+   will fail at the database rather than silently corrupt a legal record.
+
+4. **Sync has two families with different merge rules.** Operational
+   collections are last-write-wins; food-safety collections are an append-only
+   union. Merge functions are pure and must stay unit-tested for convergence
+   (any order reaches the same state) and idempotency (merging twice changes
+   nothing).
+
+5. **Reference data does not sync** — recipes, suppliers, contacts, fridge
+   units, cleaning tasks. It seeds identically on every device, so syncing
+   would add failure modes for no benefit.
+
+6. **Seed-staleness rule.** If data is *not* user-editable, bump the storage key
+   to reship it. If it *is* editable, write a targeted `isSeeded()`-guarded
+   migration, so a corrected seed never overwrites something someone typed.
+
+7. **Bilingual English/Vietnamese at equal weight, everywhere**, via the `Bi`
+   component. Never a language toggle — half the team reads each.
+
+8. **Stations, not personal logins.** The device signs in to a station once; the
+   person is picked from a dropdown and stamped onto every record. A PIN is
+   required only where the record is personally someone's.
+
+9. **No cron or background jobs.** Alerts ride on the action that produced them,
+   and the device that caused an event is excluded from its own fan-out.
+
+## Layout
+
+**17 modules:** recipes · stock · checklists · planner · notices · bookings ·
+foodSafety · suppliers · contacts · licensing · sales · staff · menu ·
+marketing · shopping · deliveryPerformance · usageVariance.
+
+**56 local collections** across `src/lib/repo/`, namespaced
+`jc:{tenant}:{key}`.
+
+**14 sync**, in the two families:
+
+- *Last-write-wins:* `checklist_items`, `checklist_ticks`, `notices`,
+  `notice_acks`, `stock_entries`
+- *Append-only:* `fs_temp_readings`, `fs_cook_logs`, `fs_delivery_logs`,
+  `fs_cleaning_signoffs`, `fs_inspections`, `fs_samples`,
+  `fs_sample_destruction_checks`, `fs_pest`, `fs_complaints`
+
+## Documents — the exception to rule 1
+
+Certificates and paperwork live in Postgres and Supabase Storage, not on the
+device, and need a connection. A PDF is megabytes against a ~5MB localStorage
+budget shared by every module, and a certificate uploaded on the owner's laptop
+has to be visible on the kitchen tablet — which local storage cannot do, since
+supplier records do not sync. Uploading paperwork is an office task done once,
+not something anyone does mid-service.
+
+## Where the judgement lives
+
+Logic with a decision in it is kept import-free so it can be tested without a
+browser, a network or credentials. Follow this pattern rather than reaching
+into a repo from a test:
+
+| Pure module | Decides |
+|---|---|
+| `lib/repo/dueTodayRules.ts` | which recurring checks are outstanding |
+| `lib/zalo/capabilities.ts` | what the Official Account can do |
+| `lib/zalo/sendWindow.ts` | whether a message type may send now |
+| `lib/zalo/mentions.ts` | defusing `[@…]` injection in relayed text |
+| `lib/zalo/text.ts` | NFC normalisation before any length check |
+
+Tests: `npm run test:zalo`, `npm run test:due`.
+
+## Zalo, briefly
+
+OA consent is **console-configured**, not request-built: `redirect_uri` and
+`code_challenge` are saved settings and Zalo generates the consent link.
+Building your own authorize URL returns `-14003`. PKCE is **one fixed pair**,
+not one per request. Full detail in `docs/ZALO_RULES.md`; do not implement Zalo
+endpoints from memory.
+
+## Before changing anything here
+
+Run `npx tsc --noEmit`, `npx eslint src/`, `npm run test:zalo`,
+`npm run test:due`, and `npx next build`. The build type-checks the tests too,
+so a test with a missing annotation fails the build rather than the test run.
