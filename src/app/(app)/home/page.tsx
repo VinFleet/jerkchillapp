@@ -10,6 +10,7 @@ import { canAccessModule } from "@/lib/auth/permissions";
 import { NAV_ITEMS } from "@/lib/nav";
 import { STATION_LABEL } from "@/lib/auth/RoleContext";
 import { getDueToday, type DueTask } from "@/lib/repo/dueToday";
+import { PortionTracker } from "@/components/PortionTracker";
 import { getCompletion } from "@/lib/repo/checklists";
 import { getNotices, isAckedBy } from "@/lib/repo/notices";
 import { getReorderFlags } from "@/lib/repo/planner";
@@ -153,6 +154,11 @@ export default function HomePage() {
             </div>
           </div>
         )}
+
+        {/* Counting portions at both ends is what tells a chef how many to make
+            tomorrow. It sits under the compliance checks but above the status
+            cards: it is work to do, not a number to read. */}
+        <PortionTracker />
 
         {/* Normal notices used to surface nowhere — "we're out of X" and "new
             supplier price" are the spec's own examples of what replaces the
