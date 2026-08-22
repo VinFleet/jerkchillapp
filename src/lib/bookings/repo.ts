@@ -54,20 +54,40 @@ export async function moveTable(id: string, posX: number, posY: number) {
 type StarterTable = Pick<RestaurantTable, "table_number" | "seats" | "pos_x" | "pos_y" | "shape">;
 
 /**
- * A plausible 26-seat starting layout — 4 × 2-top + 3 × 4-top + 1 × 6-top.
+ * The real room: 11 indoor tables (I1–I11) and 3 outdoor (O1–O3).
+ *
+ * Indoor totals the restaurant's stated 26 covers — eight 2-tops, two 4-tops
+ * and a 2-top — with the terrace as additional seating on top. Seat counts are
+ * a sensible starting point rather than a survey of the room; every table is
+ * editable, and the numbering is what matters for staff calling a table.
+ *
+ * Positions are normalised 0–1 across the floor-plan canvas and kept inside
+ * POS_MIN/POS_MAX. Indoor occupies the left two thirds, outdoor sits apart on
+ * the right so the terrace reads as a separate zone at a glance.
+ *
  * Offered as a one-tap action when the floor plan is empty, never created
- * silently: the real room layout is the owner's call, and until at least one
- * table exists the public booking form tells every guest "we may be full."
+ * silently: the real layout is the owner's call, and until at least one table
+ * exists the public booking form tells every guest "we may be full."
  */
 export const STARTER_FLOOR_PLAN: StarterTable[] = [
-  { table_number: "1", seats: 2, pos_x: 0.14, pos_y: 0.16, shape: "round" },
-  { table_number: "2", seats: 2, pos_x: 0.14, pos_y: 0.39, shape: "round" },
-  { table_number: "3", seats: 2, pos_x: 0.14, pos_y: 0.62, shape: "round" },
-  { table_number: "4", seats: 2, pos_x: 0.14, pos_y: 0.85, shape: "round" },
-  { table_number: "5", seats: 4, pos_x: 0.47, pos_y: 0.22, shape: "square" },
-  { table_number: "6", seats: 4, pos_x: 0.47, pos_y: 0.5, shape: "square" },
-  { table_number: "7", seats: 4, pos_x: 0.47, pos_y: 0.78, shape: "square" },
-  { table_number: "8", seats: 6, pos_x: 0.81, pos_y: 0.36, shape: "rect" },
+  // Indoor — window run
+  { table_number: "I1", seats: 2, pos_x: 0.10, pos_y: 0.14, shape: "round" },
+  { table_number: "I2", seats: 2, pos_x: 0.10, pos_y: 0.34, shape: "round" },
+  { table_number: "I3", seats: 2, pos_x: 0.10, pos_y: 0.54, shape: "round" },
+  { table_number: "I4", seats: 2, pos_x: 0.10, pos_y: 0.74, shape: "round" },
+  // Indoor — centre
+  { table_number: "I5", seats: 2, pos_x: 0.30, pos_y: 0.14, shape: "square" },
+  { table_number: "I6", seats: 2, pos_x: 0.30, pos_y: 0.34, shape: "square" },
+  { table_number: "I7", seats: 2, pos_x: 0.30, pos_y: 0.54, shape: "square" },
+  { table_number: "I8", seats: 2, pos_x: 0.30, pos_y: 0.74, shape: "square" },
+  // Indoor — larger tables against the back wall
+  { table_number: "I9", seats: 4, pos_x: 0.52, pos_y: 0.20, shape: "rect" },
+  { table_number: "I10", seats: 4, pos_x: 0.52, pos_y: 0.48, shape: "rect" },
+  { table_number: "I11", seats: 2, pos_x: 0.52, pos_y: 0.76, shape: "square" },
+  // Outdoor — terrace
+  { table_number: "O1", seats: 2, pos_x: 0.82, pos_y: 0.20, shape: "round" },
+  { table_number: "O2", seats: 2, pos_x: 0.82, pos_y: 0.48, shape: "round" },
+  { table_number: "O3", seats: 2, pos_x: 0.82, pos_y: 0.76, shape: "round" },
 ];
 
 /** Creates the starter layout. No-ops if any table already exists — never overwrites a real floor plan. */
