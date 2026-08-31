@@ -160,9 +160,26 @@ async function pushCollection(collection: SyncedCollection): Promise<void> {
   }
 }
 
-export async function pushAll(): Promise<void> {
+/**
+ * Push local changes.
+ *
+ * `everything` ignores dirty tracking and offers every collection. That exists
+ * because dirty tracking has a gap it cannot close on its own: it works by
+ * observing storage writes, and React runs a child page's effects before the
+ * provider's, so anything a screen writes during its first mount happens while
+ * nothing is listening. The QR sticker page does exactly that — it mints a
+ * table's code once, on mount, and never touches it again — so those codes
+ * were written, never marked dirty, and never synced. A guest scanning that
+ * table got "this code isn't active" forever.
+ *
+ * Doing it once per session is cheap and safe: every push is an upsert, and
+ * both merge families are idempotent by construction.
+ */
+export async function pushAll(everything = false): Promise<void> {
   if (!supabase || pushing) return;
-  const dirty = getDirty();
+  const dirty = everything
+    ? (Object.keys(SYNCED_COLLECTIONS) as SyncedCollection[])
+    : getDirty();
   if (dirty.length === 0) return;
 
   pushing = true;
@@ -326,6 +343,9 @@ async function hasAuthSession(): Promise<boolean> {
   return Boolean(data.session);
 }
 
+/** Set once the session has offered every collection at least once. */
+let fullPushDone = false;
+
 export async function syncNow(): Promise<void> {
   if (!supabase) return;
   // Once we know the table isn't there, stop hammering it every minute —
@@ -336,7 +356,10 @@ export async function syncNow(): Promise<void> {
     emit();
     return;
   }
-  await pushAll();
+  // The first push of a session offers everything, closing the mount-order gap
+  // described on pushAll. Subsequent pushes use dirty tracking as normal.
+  await pushAll(!fullPushDone);
+  fullPushDone = true;
   // Photos go up before the records are pulled, so a record that arrives on
   // another device already has a Storage path to resolve rather than a gap.
   await uploadPendingPhotos();

@@ -37,6 +37,30 @@ function byTableNumber(a: CachedTable, b: CachedTable): number {
   return pa.zone === pb.zone ? pa.seq - pb.seq : pa.zone.localeCompare(pb.zone);
 }
 
+/**
+ * The prefix on a fallback table's id.
+ *
+ * The compiled-in floor plan exists so a device that has never been online
+ * still knows the room. Those ids are for display only — the real ones are
+ * UUIDs from Postgres — and anything that binds a record to a table must
+ * refuse to use them. See isRealTableId.
+ */
+const SEED_ID_PREFIX = "seed:";
+
+/**
+ * Whether this id identifies a real table, rather than a placeholder from the
+ * offline fallback.
+ *
+ * Worth the ceremony because of what happened without it: the QR sticker page
+ * minted a token against `seed:I1` before the live floor plan arrived, then a
+ * second token against the real UUID. Two codes per table, and an order placed
+ * through the first would carry a tableId no table has — so the kitchen would
+ * see the ticket while the floor screen still showed that table empty.
+ */
+export function isRealTableId(id: string): boolean {
+  return !id.startsWith(SEED_ID_PREFIX);
+}
+
 export function cacheTables(tables: CachedTable[]): void {
   // An empty live list means the owner has not built the floor plan yet, not
   // that the room has no tables. Caching it would replace a working fallback
@@ -52,7 +76,7 @@ export function getCachedTables(): CachedTable[] {
   // Never been online. The seed ids are synthetic — a real fetch replaces
   // them — but the numbers are what a waiter taps and what the kitchen reads.
   return STARTER_FLOOR_PLAN.map((t) => ({
-    id: `seed:${t.table_number}`,
+    id: `${SEED_ID_PREFIX}${t.table_number}`,
     tableNumber: t.table_number,
     seats: t.seats,
   })).sort(byTableNumber);

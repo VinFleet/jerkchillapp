@@ -2,13 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { Printer, RotateCcw } from "lucide-react";
+import { Printer, RotateCcw, AlertTriangle } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { BackLink } from "@/components/BackLink";
 import { useSession } from "@/lib/auth/RoleContext";
-import { getCachedTables, type CachedTable } from "@/lib/repo/tableCache";
-import { ensureToken, rotateToken, orderUrlFor } from "@/lib/repo/tableTokens";
+import { getCachedTables, isRealTableId, type CachedTable } from "@/lib/repo/tableCache";
+import {
+  ensureToken,
+  rotateToken,
+  orderUrlFor,
+  isPrintableOrigin,
+  publicOrigin,
+  dropPlaceholderTokens,
+} from "@/lib/repo/tableTokens";
 
 /**
  * The QR stickers that go on the tables.
@@ -28,16 +35,27 @@ function StickersContent() {
   const [tables, setTables] = useState<CachedTable[]>([]);
   const [codes, setCodes] = useState<Record<string, { url: string; svg: string }>>({});
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [printable, setPrintable] = useState(true);
+  const [origin, setOrigin] = useState("");
 
   const build = useCallback(async () => {
+    // Clear anything an earlier run bound to a placeholder table before the
+    // real floor plan arrived.
+    dropPlaceholderTokens();
     const list = getCachedTables();
     setTables(list);
 
     const origin = window.location.origin;
+    setPrintable(isPrintableOrigin(origin));
+    setOrigin(publicOrigin(origin));
     const next: Record<string, { url: string; svg: string }> = {};
 
     await Promise.all(
       list.map(async (t) => {
+        // Never mint a code against a placeholder id. The offline fallback is
+        // there so the room is still legible without a connection, not so a
+        // sticker can be bound to a table that does not exist yet.
+        if (!isRealTableId(t.id)) return;
         const token = ensureToken(t.id);
         const url = orderUrlFor(token.token, origin);
         // SVG rather than a raster: these get printed, and a scaled-up PNG
@@ -79,12 +97,31 @@ function StickersContent() {
         action={
           <button
             onClick={() => window.print()}
-            className="min-h-[44px] px-4 rounded-xl border border-[var(--line)] flex items-center gap-2 text-sm font-semibold print:hidden"
+            disabled={!printable}
+            title={printable ? undefined : "These codes point at this computer — open the live site to print"}
+            className="min-h-[44px] px-4 rounded-xl border border-[var(--line)] flex items-center gap-2 text-sm font-semibold print:hidden disabled:opacity-40"
           >
             <Printer size={16} /> Print
           </button>
         }
       />
+
+      {!printable && (
+        <div className="px-4 md:px-8 mb-4 print:hidden">
+          <p className="flex items-start gap-2 text-sm rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900 px-3 py-2.5">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <span>
+              <strong>Do not print these.</strong> They point at{" "}
+              <span className="font-mono">{origin}</span>, which only exists on this computer — a
+              guest scanning one would get nothing. Open this page on the live site before printing.
+              <br />
+              <span className="opacity-80">
+                Đừng in — mã đang trỏ về máy này. Hãy mở trang này trên trang web thật rồi mới in.
+              </span>
+            </span>
+          </p>
+        </div>
+      )}
 
       <div className="px-4 md:px-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 print:grid-cols-3 print:gap-6">
         {tables.map((t) => {
@@ -102,8 +139,16 @@ function StickersContent() {
                   // created; nothing here comes from a guest or the network.
                   dangerouslySetInnerHTML={{ __html: code.svg }}
                 />
-              ) : (
+              ) : isRealTableId(t.id) ? (
                 <div className="w-full aspect-square bg-[var(--line)]/30 rounded animate-pulse" />
+              ) : (
+                <div className="w-full aspect-square rounded border border-dashed border-[var(--line)] grid place-items-center p-2 text-center">
+                  <span className="text-xs text-muted">
+                    Waiting for the floor plan
+                    <br />
+                    <span className="opacity-80">Đang chờ sơ đồ bàn</span>
+                  </span>
+                </div>
               )}
               <p className="text-[10px] text-muted text-center break-all leading-tight">
                 {code?.url}
