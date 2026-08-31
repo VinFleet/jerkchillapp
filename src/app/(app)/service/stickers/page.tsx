@@ -99,7 +99,7 @@ function StickersContent() {
             onClick={() => window.print()}
             disabled={!printable}
             title={printable ? undefined : "These codes point at this computer — open the live site to print"}
-            className="min-h-[44px] px-4 rounded-xl border border-[var(--line)] flex items-center gap-2 text-sm font-semibold print:hidden disabled:opacity-40"
+            className="min-h-[44px] px-4 rounded-xl border border-border flex items-center gap-2 text-sm font-semibold print:hidden disabled:opacity-40"
           >
             <Printer size={16} /> Print
           </button>
@@ -129,7 +129,7 @@ function StickersContent() {
           return (
             <div
               key={t.id}
-              className="border border-[var(--line)] rounded-2xl p-4 flex flex-col items-center gap-2 break-inside-avoid"
+              className="border border-border rounded-2xl p-4 flex flex-col items-center gap-2 break-inside-avoid"
             >
               <span className="text-3xl font-black tracking-tight">{t.tableNumber}</span>
               {code ? (
@@ -140,9 +140,9 @@ function StickersContent() {
                   dangerouslySetInnerHTML={{ __html: code.svg }}
                 />
               ) : isRealTableId(t.id) ? (
-                <div className="w-full aspect-square bg-[var(--line)]/30 rounded animate-pulse" />
+                <div className="w-full aspect-square bg-border/30 rounded animate-pulse" />
               ) : (
-                <div className="w-full aspect-square rounded border border-dashed border-[var(--line)] grid place-items-center p-2 text-center">
+                <div className="w-full aspect-square rounded border border-dashed border-border grid place-items-center p-2 text-center">
                   <span className="text-xs text-muted">
                     Waiting for the floor plan
                     <br />
@@ -169,7 +169,7 @@ function StickersContent() {
                       </button>
                       <button
                         onClick={() => setConfirming(null)}
-                        className="flex-1 min-h-[40px] rounded-lg border border-[var(--line)] text-xs"
+                        className="flex-1 min-h-[40px] rounded-lg border border-border text-xs"
                       >
                         Keep
                       </button>
@@ -177,7 +177,7 @@ function StickersContent() {
                   ) : (
                     <button
                       onClick={() => setConfirming(t.id)}
-                      className="w-full min-h-[40px] rounded-lg border border-[var(--line)] text-xs text-muted flex items-center justify-center gap-1"
+                      className="w-full min-h-[40px] rounded-lg border border-border text-xs text-muted flex items-center justify-center gap-1"
                     >
                       <RotateCcw size={12} /> Replace code
                     </button>

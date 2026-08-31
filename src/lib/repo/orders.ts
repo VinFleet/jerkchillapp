@@ -1,4 +1,4 @@
-import { readList, writeList, newId, todayIso } from "@/lib/storage";
+import { readList, writeList, newId, todayIso, isSeeded, markSeeded } from "@/lib/storage";
 import { getMenuItems } from "@/lib/repo/menu";
 import {
   billState,
@@ -6,8 +6,11 @@ import {
   paymentReference,
   resolveQtyChange,
   isVoided,
+  linePriceVnd,
 } from "@/lib/repo/orderRules";
 import type {
+  OrderLineChoice,
+  OrderDiscount,
   Order,
   OrderLine,
   OrderSource,
@@ -36,6 +39,31 @@ const ORDERS_KEY = "orders";
 const PAYMENTS_KEY = "order_payments";
 
 // ---------- reading ----------
+
+const VOIDED_REPAIR_KEY = "orders_voided_repair_v1";
+
+/**
+ * Close out orders that were emptied before deriveOrderStatus knew to.
+ *
+ * The status is derived when a line changes, so an order whose every line was
+ * already cancelled kept "placed" and held its table at 0d with nothing able
+ * to free it. New voids are handled at the source; these are the ones already
+ * stuck, and they will not fix themselves because nothing is going to touch
+ * their lines again.
+ */
+export function repairVoidedOrders() {
+  if (isSeeded(VOIDED_REPAIR_KEY)) return;
+  const all = readList<Order>(ORDERS_KEY);
+  let changed = false;
+  const fixed = all.map((order) => {
+    if (order.status === "closed" || order.status === "cancelled") return order;
+    if (!isVoided(order.lines)) return order;
+    changed = true;
+    return { ...order, status: "cancelled" as OrderStatus, updatedAt: new Date().toISOString() };
+  });
+  if (changed) writeList(ORDERS_KEY, fixed);
+  markSeeded(VOIDED_REPAIR_KEY);
+}
 
 export function getOrders(): Order[] {
   return readList<Order>(ORDERS_KEY).sort((a, b) => (a.placedAt < b.placedAt ? 1 : -1));
@@ -99,7 +127,9 @@ export function addLine(
   orderId: string,
   menuItemId: string,
   qty: number,
-  note?: string
+  note?: string,
+  /** Spice level, mocktail — copied onto the line with their price effect. */
+  choices?: OrderLineChoice[]
 ): OrderLine | null {
   const all = readList<Order>(ORDERS_KEY);
   const idx = all.findIndex((o) => o.id === orderId);
@@ -116,10 +146,13 @@ export function addLine(
   const line: OrderLine = {
     id: newId("line"),
     menuItemId,
-    unitPriceVnd: price,
+    // Deltas are folded in now, so nothing downstream needs to know this line
+    // had options at all.
+    unitPriceVnd: linePriceVnd(price, choices ?? []),
     qty: Math.max(1, Math.round(qty)),
     status: "placed",
     note,
+    choices: choices?.length ? choices : undefined,
   };
 
   all[idx] = { ...all[idx], lines: [...all[idx].lines, line], updatedAt: new Date().toISOString() };
@@ -206,7 +239,28 @@ export function getPayments(orderId: string): Payment[] {
 export function getBill(orderId: string) {
   const order = getOrder(orderId);
   if (!order) return null;
-  return billState(order.lines, getPayments(orderId));
+  return billState(order.lines, getPayments(orderId), order.discount);
+}
+
+/**
+ * Put money off the bill, or take it off again.
+ *
+ * Stamped with who and when, because "why did table six pay less" is asked
+ * when the takings are counted, not while the guest is still sitting there.
+ */
+export function setDiscount(
+  orderId: string,
+  discount: OrderDiscount | null
+): void {
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return;
+  all[idx] = {
+    ...all[idx],
+    discount: discount ?? undefined,
+    updatedAt: new Date().toISOString(),
+  };
+  writeList(ORDERS_KEY, all);
 }
 
 /**

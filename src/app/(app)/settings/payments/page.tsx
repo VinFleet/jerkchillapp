@@ -117,8 +117,8 @@ function PaymentsContent() {
                 onClick={() => set({ bankBin: b.bin })}
                 className={`min-h-[52px] rounded-xl border px-3 text-sm text-left ${
                   form.bankBin === b.bin
-                    ? "border-[var(--brand)] bg-[var(--brand)]/5 font-semibold"
-                    : "border-[var(--line)]"
+                    ? "border-brand bg-brand-light font-semibold"
+                    : "border-border"
                 }`}
               >
                 {b.name}
@@ -131,7 +131,7 @@ function PaymentsContent() {
             onChange={(e) => set({ bankBin: e.target.value })}
             inputMode="numeric"
             placeholder="Or a six-digit BIN · Hoặc mã BIN 6 số"
-            className="w-full min-h-[52px] rounded-xl border border-[var(--line)] px-4 tabular-nums"
+            className="w-full min-h-[52px] rounded-xl border border-border px-4 tabular-nums"
           />
           {form.bankBin && !binLooksRight && (
             <p className="text-xs text-amber-700">
@@ -148,7 +148,7 @@ function PaymentsContent() {
             value={form.accountNumber}
             onChange={(e) => set({ accountNumber: e.target.value })}
             inputMode="numeric"
-            className="w-full min-h-[52px] rounded-xl border border-[var(--line)] px-4 tabular-nums text-lg"
+            className="w-full min-h-[52px] rounded-xl border border-border px-4 tabular-nums text-lg"
           />
           {form.accountNumber && !accountLooksRight && (
             <p className="text-xs text-amber-700">Digits only, 6–20 of them · Chỉ chữ số</p>
@@ -163,7 +163,7 @@ function PaymentsContent() {
             value={form.accountName}
             onChange={(e) => set({ accountName: e.target.value })}
             placeholder="JERK AND CHILL"
-            className="w-full min-h-[52px] rounded-xl border border-[var(--line)] px-4 uppercase"
+            className="w-full min-h-[52px] rounded-xl border border-border px-4 uppercase"
           />
           <p className="text-xs text-muted">
             Shown in the guest&apos;s banking app before they confirm · Khách sẽ thấy tên này
@@ -173,21 +173,21 @@ function PaymentsContent() {
         <div className="flex gap-2">
           <button
             onClick={save}
-            className="flex-1 min-h-[52px] rounded-xl bg-[var(--brand)] text-white font-semibold active:scale-[0.98]"
+            className="flex-1 min-h-[52px] rounded-xl bg-brand text-white font-semibold active:scale-[0.98]"
           >
             {saved ? "Saved · Đã lưu" : "Save · Lưu"}
           </button>
           <button
             onClick={runTest}
             disabled={!binLooksRight || !accountLooksRight}
-            className="flex-1 min-h-[52px] rounded-xl border border-[var(--line)] font-semibold active:scale-[0.98] disabled:opacity-40"
+            className="flex-1 min-h-[52px] rounded-xl border border-border font-semibold active:scale-[0.98] disabled:opacity-40"
           >
             Test QR · Thử mã
           </button>
         </div>
 
         {testResult && (
-          <p className="flex items-start gap-2 text-sm rounded-xl border border-[var(--line)] px-3 py-2">
+          <p className="flex items-start gap-2 text-sm rounded-xl border border-border px-3 py-2">
             {testResult.startsWith("Builds a valid") ? (
               <Check size={16} className="shrink-0 mt-0.5 text-green-700" />
             ) : (

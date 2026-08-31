@@ -59,6 +59,11 @@ export function amountSettledVnd(payments: PaymentRecord[]): number {
 }
 
 export type BillState = {
+  /** Before any discount — what the lines add up to. */
+  subtotalVnd: number;
+  /** What came off. Zero when there is no discount. */
+  discountVnd: number;
+  /** What the guest actually owes. */
   totalVnd: number;
   settledVnd: number;
   /** Negative when overpaid — worth surfacing rather than clamping to zero. */
@@ -69,12 +74,20 @@ export type BillState = {
   awaitingConfirmation: boolean;
 };
 
-export function billState(lines: Line[], payments: PaymentRecord[]): BillState {
-  const totalVnd = orderTotalVnd(lines);
+export function billState(
+  lines: Line[],
+  payments: PaymentRecord[],
+  discount?: DiscountLike
+): BillState {
+  const subtotalVnd = orderTotalVnd(lines);
+  const discountVnd = discountAmountVnd(subtotalVnd, discount);
+  const totalVnd = subtotalVnd - discountVnd;
   const settledVnd = amountSettledVnd(payments);
   const outstandingVnd = totalVnd - settledVnd;
 
   return {
+    subtotalVnd,
+    discountVnd,
     totalVnd,
     settledVnd,
     outstandingVnd,
@@ -154,4 +167,57 @@ export function resolveQtyChange(requested: number): QtyChange {
  */
 export function isVoided(lines: Line[]): boolean {
   return lines.length > 0 && lines.every((line) => line.status === "cancelled");
+}
+
+// ---------- options and discounts ----------
+
+export type ChoiceLike = { priceDeltaVnd: number };
+
+/**
+ * What a line costs once its choices are applied.
+ *
+ * Deltas are folded into the line's unit price at the moment of ordering, so
+ * everything downstream — the bill, the variance report, a refund next week —
+ * reads one number and needs to know nothing about options.
+ *
+ * Floored at zero. A misconfigured delta should make something free, never
+ * make the bill go backwards, because a negative line silently pays the guest.
+ */
+export function linePriceVnd(basePriceVnd: number, choices: ChoiceLike[] = []): number {
+  const total = choices.reduce((sum, c) => sum + c.priceDeltaVnd, basePriceVnd);
+  if (!Number.isInteger(total)) {
+    throw new Error(`Line price is not a whole dong: ${total}`);
+  }
+  return Math.max(0, total);
+}
+
+export type DiscountLike = { kind: "percent" | "amount"; value: number };
+
+/**
+ * How much comes off the bill.
+ *
+ * Two things are load-bearing. It never exceeds the bill, because a discount
+ * larger than the total would otherwise produce a negative amount owed and the
+ * till would think it owed the guest money. And it returns whole dong: 10% of
+ * 155,000 is 15,500 exactly, but 7% is not, and there is no subunit to round
+ * into. Rounding is toward the guest's favour on a tie, which is the direction
+ * that never leaves someone arguing over a dong at the till.
+ */
+export function discountAmountVnd(subtotalVnd: number, discount?: DiscountLike): number {
+  if (!discount) return 0;
+  if (subtotalVnd <= 0) return 0;
+
+  const raw =
+    discount.kind === "percent"
+      ? (subtotalVnd * clampPercent(discount.value)) / 100
+      : discount.value;
+
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return Math.min(subtotalVnd, Math.round(raw));
+}
+
+/** A percentage outside 0-100 is a typo, not an instruction. */
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
 }

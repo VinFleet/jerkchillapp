@@ -7,6 +7,7 @@ const REPRINT_FLAG_KEY = "menu_needs_reprint";
 const MATERIALS_KEY = "printed_materials";
 const COCKTAIL_RECIPE_LINK_KEY = "menu_cocktail_recipe_link_v1";
 const KBLANC_NAME_FIX_KEY = "menu_kblanc_name_fix_v1";
+const OPTIONS_AND_DRINKS_KEY = "menu_options_and_drinks_v1";
 
 export function ensureMenuSeeded() {
   if (!isSeeded(MENU_KEY)) {
@@ -46,6 +47,64 @@ export function ensureMenuSeeded() {
       writeList(MENU_KEY, all);
     }
     markSeeded(KBLANC_NAME_FIX_KEY);
+  }
+  // One-time migration: the questions asked at the table, and one row per
+  // soft drink.
+  //
+  // Three changes, none of which may touch a price a manager has edited:
+  //
+  //  - Jerk Chicken and the Lunch Box gain the spice question, and every
+  //    cocktail gains cocktail-or-mocktail. Options are copied from the seed
+  //    only where the item has none, so a manager who has since edited them
+  //    keeps their version.
+  //  - The standalone Mocktail becomes a choice on each cocktail, so the item
+  //    is retired. Deactivated rather than deleted: it may sit on orders
+  //    already taken, and a bill that loses its item name is unreadable.
+  //  - "Soft Drinks (Coke / Sprite / Fanta)" becomes Coca-Cola, Sprite and
+  //    Fanta. The old row is likewise retired rather than removed, and the
+  //    three new ones inherit its price if it was changed from the seed —
+  //    otherwise a corrected price would be silently undone.
+  if (!isSeeded(OPTIONS_AND_DRINKS_KEY)) {
+    const all = readList<MenuItem>(MENU_KEY);
+    let changed = false;
+
+    for (const seedItem of SEED_MENU_ITEMS) {
+      if (!seedItem.options?.length) continue;
+      const idx = all.findIndex((m) => m.id === seedItem.id);
+      if (idx >= 0 && !all[idx].options?.length) {
+        all[idx] = { ...all[idx], options: seedItem.options, updatedAt: new Date().toISOString() };
+        changed = true;
+      }
+    }
+
+    const retire = (id: string) => {
+      const idx = all.findIndex((m) => m.id === id);
+      if (idx >= 0 && all[idx].active) {
+        all[idx] = { ...all[idx], active: false, updatedAt: new Date().toISOString() };
+        changed = true;
+      }
+      return idx >= 0 ? all[idx] : undefined;
+    };
+
+    retire("mi_mocktail");
+    const oldSoftDrinks = retire("mi_soft_drinks");
+
+    // Carry across a price someone actually set, rather than resetting to seed.
+    const inheritedPrice = oldSoftDrinks?.pricesVnd;
+    for (const id of ["mi_coke", "mi_sprite", "mi_fanta"]) {
+      if (all.some((m) => m.id === id)) continue;
+      const seedItem = SEED_MENU_ITEMS.find((m) => m.id === id);
+      if (!seedItem) continue;
+      all.push(
+        inheritedPrice && inheritedPrice.dine_in !== 25000
+          ? { ...seedItem, pricesVnd: inheritedPrice, updatedAt: new Date().toISOString() }
+          : { ...seedItem, updatedAt: new Date().toISOString() }
+      );
+      changed = true;
+    }
+
+    if (changed) writeList(MENU_KEY, all);
+    markSeeded(OPTIONS_AND_DRINKS_KEY);
   }
 }
 

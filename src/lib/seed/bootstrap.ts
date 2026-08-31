@@ -10,6 +10,8 @@ import { ensureStaffSeeded } from "@/lib/repo/staff";
 import { ensureMenuSeeded } from "@/lib/repo/menu";
 import { ensureShoppingSeeded } from "@/lib/repo/shopping";
 import { ensureDeliveryPerformanceSeeded } from "@/lib/repo/deliveryPerformance";
+import { ensurePromotionsSeeded } from "@/lib/repo/promotions";
+import { repairVoidedOrders } from "@/lib/repo/orders";
 
 export function ensureAllSeeded() {
   ensureRecipesSeeded();
@@ -24,4 +26,6 @@ export function ensureAllSeeded() {
   ensureMenuSeeded();
   ensureShoppingSeeded();
   ensureDeliveryPerformanceSeeded();
+  ensurePromotionsSeeded();
+  repairVoidedOrders();
 }

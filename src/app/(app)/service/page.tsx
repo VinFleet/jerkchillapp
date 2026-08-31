@@ -151,7 +151,7 @@ function ServiceContent() {
 
       <div className="px-4 md:px-8 pb-28 space-y-5">
         {!live && tablesAreCached() && (
-          <p className="flex items-center gap-2 text-sm text-muted border border-[var(--line)] rounded-xl px-3 py-2">
+          <p className="flex items-center gap-2 text-sm text-muted border border-border rounded-xl px-3 py-2">
             <WifiOff size={16} className="shrink-0" />
             <span>
               Showing the saved floor plan — orders still work
@@ -171,8 +171,8 @@ function ServiceContent() {
                 onClick={() => open(card)}
                 className={`min-h-[104px] rounded-2xl border p-3 text-left flex flex-col justify-between transition active:scale-[0.98] ${
                   busy
-                    ? "border-[var(--brand)] bg-[var(--brand)]/5"
-                    : "border-[var(--line)] hover:border-[var(--brand)]/40"
+                    ? "border-brand bg-brand-light"
+                    : "border-border hover:border-brand/40"
                 }`}
               >
                 <div className="flex items-baseline justify-between gap-2">
@@ -219,7 +219,7 @@ function ServiceContent() {
               <button
                 key={o.id}
                 onClick={() => router.push(`/service/${o.id}`)}
-                className="w-full min-h-[60px] rounded-xl border border-[var(--line)] px-4 py-3 flex items-center justify-between gap-3 text-left active:scale-[0.99]"
+                className="w-full min-h-[60px] rounded-xl border border-border px-4 py-3 flex items-center justify-between gap-3 text-left active:scale-[0.99]"
               >
                 <span className="flex items-center gap-2">
                   <Receipt size={18} className="text-muted shrink-0" />
@@ -234,7 +234,7 @@ function ServiceContent() {
           })}
           <button
             onClick={startCounterOrder}
-            className="w-full min-h-[60px] rounded-xl border border-dashed border-[var(--line)] px-4 py-3 flex items-center justify-center gap-2 text-muted active:scale-[0.99]"
+            className="w-full min-h-[60px] rounded-xl border border-dashed border-border px-4 py-3 flex items-center justify-center gap-2 text-muted active:scale-[0.99]"
           >
             <Plus size={18} />
             New counter order <span className="opacity-70">· Đơn tại quầy</span>

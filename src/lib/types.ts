@@ -626,6 +626,34 @@ export type InterviewScorecard = {
 
 export type MenuChannel = "dine_in" | "delivery" | "lunch_box";
 
+/**
+ * A choice within an option — "Spicy", "Mocktail".
+ *
+ * The delta is what makes one menu row cover a cocktail and its mocktail:
+ * fourteen near-identical rows to scroll past mid-service is how a waiter taps
+ * the wrong one.
+ */
+export type MenuOptionChoice = {
+  id: string;
+  label: Bi;
+  /** Added to the item's price. Negative for a cheaper variant. */
+  priceDeltaVnd: number;
+};
+
+/**
+ * A question the waiter is asked when adding this item.
+ *
+ * Modelled on what actually gets asked at the table — "how spicy?", "cocktail
+ * or mocktail?" — and asked per line, because it is per person.
+ */
+export type MenuOption = {
+  id: string;
+  label: Bi;
+  /** The line cannot be added until this is answered. */
+  required: boolean;
+  choices: MenuOptionChoice[];
+};
+
 export type MenuItem = {
   id: string;
   name: Bi;
@@ -636,6 +664,8 @@ export type MenuItem = {
   updatedAt: string;
   /** visible caveat on the price itself, e.g. "unconfirmed — flag for Owner to confirm" — shown, never silently dropped. */
   priceNote?: Bi;
+  /** Asked when the item is added. Absent means the item has no variants. */
+  options?: MenuOption[];
 };
 
 export type PrintedMaterial = {
@@ -802,15 +832,31 @@ export type OrderStatus = "placed" | "preparing" | "ready" | "served" | "closed"
 /** Per-line, because a kitchen marks the chicken ready before the sides. */
 export type OrderLineStatus = "placed" | "preparing" | "ready" | "served" | "cancelled";
 
+/**
+ * A choice as it was made, copied onto the line.
+ *
+ * The label travels with it for the same reason the price does: a ticket
+ * printed tonight must still read "Extra spicy" after someone renames that
+ * choice next month.
+ */
+export type OrderLineChoice = {
+  optionId: string;
+  choiceId: string;
+  label: Bi;
+  priceDeltaVnd: number;
+};
+
 export type OrderLine = {
   id: string;
   menuItemId: string;
-  /** Copied at the time of ordering. A later price change must not rewrite history. */
+  /** Copied at the time of ordering, deltas already applied. A later price change must not rewrite history. */
   unitPriceVnd: number;
   qty: number;
   status: OrderLineStatus;
   /** "no scotch bonnet", "extra rice" — free text from a guest, treat as untrusted. */
   note?: string;
+  /** What was chosen when this line was added — spice level, mocktail, and so on. */
+  choices?: OrderLineChoice[];
 };
 
 export type Order = {
@@ -826,6 +872,44 @@ export type Order = {
   /** Staff name for waiter/counter orders; null when a guest ordered by QR. */
   placedBy: string | null;
   guestNote?: string;
+  /** Taken off the whole bill. Absent means nothing was discounted. */
+  discount?: OrderDiscount;
+  updatedAt: string;
+};
+
+/**
+ * Money off the bill.
+ *
+ * Recorded rather than just subtracted: a till that quietly reduces a total
+ * cannot answer "why did table six pay 80,000d less", which is the question
+ * that gets asked when the takings are counted. Who and why are part of the
+ * record, not optional metadata.
+ */
+export type OrderDiscount = {
+  /** "percent" takes a share of the bill; "amount" takes whole dong off. */
+  kind: "percent" | "amount";
+  /** Percent (0-100) or whole dong, depending on kind. */
+  value: number;
+  /** Where it came from — a promotion button, or a manual reduction. */
+  label: Bi;
+  /** Set when it came from a configured promotion rather than a manual entry. */
+  promotionId?: string;
+  appliedBy: string | null;
+  appliedAt: string;
+};
+
+/**
+ * A discount the manager has set up, offered to waiters as one tap.
+ *
+ * Typing a percentage under pressure is how the wrong number gets keyed, so
+ * the common reductions are configured once and then chosen, not entered.
+ */
+export type Promotion = {
+  id: string;
+  label: Bi;
+  kind: "percent" | "amount";
+  value: number;
+  active: boolean;
   updatedAt: string;
 };
 

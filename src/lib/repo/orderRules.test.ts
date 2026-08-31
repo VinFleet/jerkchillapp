@@ -17,6 +17,8 @@ import {
   paymentReference,
   resolveQtyChange,
   isVoided,
+  linePriceVnd,
+  discountAmountVnd,
   type Line,
   type PaymentRecord,
 } from "./orderRules.ts";
@@ -184,4 +186,81 @@ test("an order with every line voided is not an empty order, it is gone", () => 
 test("a table someone is still ordering at is not voided", () => {
   assert.equal(isVoided([]), false, "no lines yet is a new table, not a void");
   assert.equal(isVoided([line({ status: "placed" }), line({ status: "cancelled" })]), false);
+});
+
+// ---------- option pricing ----------
+
+test("a mocktail costs less than the cocktail it came from", () => {
+  assert.equal(linePriceVnd(130_000, [{ priceDeltaVnd: -45_000 }]), 85_000);
+});
+
+test("no choices leaves the price alone", () => {
+  assert.equal(linePriceVnd(210_000), 210_000);
+  assert.equal(linePriceVnd(210_000, []), 210_000);
+});
+
+test("choices stack", () => {
+  assert.equal(linePriceVnd(100_000, [{ priceDeltaVnd: 10_000 }, { priceDeltaVnd: 5_000 }]), 115_000);
+});
+
+test("a misconfigured delta makes something free, never negative", () => {
+  // A negative line would silently pay the guest.
+  assert.equal(linePriceVnd(50_000, [{ priceDeltaVnd: -80_000 }]), 0);
+});
+
+// ---------- discounts ----------
+
+test("a percentage comes off the bill", () => {
+  assert.equal(discountAmountVnd(500_000, { kind: "percent", value: 10 }), 50_000);
+});
+
+test("money off comes off the bill", () => {
+  assert.equal(discountAmountVnd(500_000, { kind: "amount", value: 80_000 }), 80_000);
+});
+
+test("a discount never exceeds the bill", () => {
+  // Otherwise outstanding goes negative and the till thinks it owes the guest.
+  assert.equal(discountAmountVnd(50_000, { kind: "amount", value: 200_000 }), 50_000);
+  assert.equal(discountAmountVnd(50_000, { kind: "percent", value: 100 }), 50_000);
+});
+
+test("a percentage outside 0-100 is a typo, not an instruction", () => {
+  assert.equal(discountAmountVnd(100_000, { kind: "percent", value: 150 }), 100_000);
+  assert.equal(discountAmountVnd(100_000, { kind: "percent", value: -10 }), 0);
+});
+
+test("a discount is always whole dong", () => {
+  // 7% of 155,000 is 10,850 exactly; 7% of 155,555 is not a whole dong, and
+  // there is no subunit to round into.
+  for (const subtotal of [155_000, 155_555, 99_999, 1]) {
+    const d = discountAmountVnd(subtotal, { kind: "percent", value: 7 });
+    assert.ok(Number.isInteger(d), `${subtotal} gave ${d}`);
+  }
+});
+
+test("no discount, or an empty bill, takes nothing off", () => {
+  assert.equal(discountAmountVnd(100_000, undefined), 0);
+  assert.equal(discountAmountVnd(0, { kind: "percent", value: 50 }), 0);
+  assert.equal(discountAmountVnd(-5, { kind: "amount", value: 10 }), 0);
+});
+
+test("the bill reports what came off, not just the reduced total", () => {
+  // A total that silently shrank cannot answer "why did table six pay less".
+  const b = billState([line({ unitPriceVnd: 100_000, qty: 2 })], [], {
+    kind: "percent",
+    value: 10,
+  });
+  assert.equal(b.subtotalVnd, 200_000);
+  assert.equal(b.discountVnd, 20_000);
+  assert.equal(b.totalVnd, 180_000);
+  assert.equal(b.outstandingVnd, 180_000);
+});
+
+test("a fully discounted bill is settled, not stuck", () => {
+  const b = billState([line({ unitPriceVnd: 100_000, qty: 1 })], [], {
+    kind: "percent",
+    value: 100,
+  });
+  assert.equal(b.totalVnd, 0);
+  assert.equal(b.fullyPaid, true, "nothing owed means nothing to collect");
 });
