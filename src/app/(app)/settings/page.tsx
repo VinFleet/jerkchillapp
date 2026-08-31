@@ -76,6 +76,18 @@ function SettingsContent() {
       </div>
       <div className="px-4 md:px-8 mt-3">
         <Link
+          href="/settings/payments"
+          className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light mb-3"
+        >
+          <span>
+            <span className="block font-semibold text-sm">Bank transfers</span>
+            <span className="block text-xs text-muted">
+              Chuyển khoản — the account VietQR pays into
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-muted shrink-0" />
+        </Link>
+        <Link
           href="/settings/zalo"
           className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light"
         >

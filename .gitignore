@@ -37,3 +37,7 @@ next-env.d.ts
 
 # local agent runtime state
 /.claude/scheduled_tasks.lock
+
+# node_modules lives outside iCloud sync (the .nosync suffix is what stops it),
+# with node_modules symlinked to it. Both are build artefacts.
+/node_modules.nosync

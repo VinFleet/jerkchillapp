@@ -7,6 +7,7 @@ export type ModuleId =
   | "planner"
   | "notices"
   | "bookings"
+  | "orders"
   | "foodSafety"
   | "suppliers"
   | "contacts"
@@ -26,6 +27,7 @@ export const MODULE_ORDER: ModuleId[] = [
   "planner",
   "notices",
   "bookings",
+  "orders",
   "foodSafety",
   "suppliers",
   "contacts",
@@ -46,6 +48,9 @@ const MODULE_ACCESS: Record<ModuleId, Role[]> = {
   planner: ["owner", "manager", "chef"],
   notices: ["owner", "manager", "chef", "bartender"],
   bookings: ["owner", "manager", "bartender"],
+  // All four: a chef needs the pass, a waiter needs the pad. What differs is
+  // the money — see canTakePayment, which is the real boundary here.
+  orders: ["owner", "manager", "chef", "bartender"],
   foodSafety: ["owner", "manager", "chef", "bartender"],
   suppliers: ["owner", "manager", "chef"],
   // Everyone: kitchen and bar staff need the emergency numbers (113/114/115)
@@ -64,6 +69,17 @@ const MODULE_ACCESS: Record<ModuleId, Role[]> = {
 
 export function canAccessModule(role: Role, module: ModuleId): boolean {
   return MODULE_ACCESS[module].includes(role);
+}
+
+/**
+ * Who can take money and close a bill.
+ *
+ * Chefs are in the orders module for the pass, not the till. Handing the
+ * kitchen tablet the ability to close a bill would put payment decisions on
+ * the one device nobody is watching, mid-service, with wet hands.
+ */
+export function canTakePayment(role: Role): boolean {
+  return role === "owner" || role === "manager" || role === "bartender";
 }
 
 /** Recipe book: owner/manager can edit; chef can flag for review; bartender is read-only. */

@@ -120,3 +120,24 @@ export function paymentReference(orderId: string, seq: number): string {
   const compact = orderId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(-6);
   return `JC${compact}${seq}`;
 }
+
+/**
+ * What a quantity change means.
+ *
+ * A waiter pressing "minus" on a single item is not asking for a line of
+ * zero — they are taking it off. Storing a zero would leave the kitchen a
+ * ticket for nothing and the bill a row worth nothing, and every screen
+ * downstream would need to remember to skip it. Deciding it once, here, means
+ * none of them do.
+ *
+ * Fractional quantities round rather than throw: half a portion is a real
+ * thing a waiter might key by accident on a number pad, and refusing it
+ * mid-service helps nobody. Fractional *money* is a different matter and is
+ * still rejected in orderTotalVnd.
+ */
+export type QtyChange = { action: "set"; qty: number } | { action: "cancel" };
+
+export function resolveQtyChange(requested: number): QtyChange {
+  const qty = Math.round(requested);
+  return qty < 1 ? { action: "cancel" } : { action: "set", qty };
+}

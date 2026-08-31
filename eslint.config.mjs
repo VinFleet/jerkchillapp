@@ -21,6 +21,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The real dependency tree, parked outside iCloud sync — node_modules is a
+    // symlink to it. ESLint ignores "node_modules" by name, so it does not
+    // recognise this one. See scripts/icloud-unsync.mjs.
+    "node_modules.nosync/**",
   ]),
 ]);
 

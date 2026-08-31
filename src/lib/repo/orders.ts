@@ -1,6 +1,6 @@
 import { readList, writeList, newId, todayIso } from "@/lib/storage";
 import { getMenuItems } from "@/lib/repo/menu";
-import { billState, canCloseOrder, paymentReference } from "@/lib/repo/orderRules";
+import { billState, canCloseOrder, paymentReference, resolveQtyChange } from "@/lib/repo/orderRules";
 import type {
   Order,
   OrderLine,
@@ -119,6 +119,37 @@ export function addLine(
   all[idx] = { ...all[idx], lines: [...all[idx].lines, line], updatedAt: new Date().toISOString() };
   writeList(ORDERS_KEY, all);
   return line;
+}
+
+/**
+ * Change how many of a line.
+ *
+ * Separate from addLine because they are different events: adding is a guest
+ * asking for another, and this is a correction. Going below one cancels the
+ * line rather than storing a zero — a line of nothing is not something the
+ * kitchen or the bill should have to interpret.
+ */
+export function setLineQty(orderId: string, lineId: string, qty: number) {
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return;
+
+  const change = resolveQtyChange(qty);
+  const lines = all[idx].lines.map((l) =>
+    l.id === lineId
+      ? change.action === "cancel"
+        ? { ...l, status: "cancelled" as OrderLineStatus }
+        : { ...l, qty: change.qty }
+      : l
+  );
+
+  all[idx] = {
+    ...all[idx],
+    lines,
+    status: deriveOrderStatus(all[idx].status, lines),
+    updatedAt: new Date().toISOString(),
+  };
+  writeList(ORDERS_KEY, all);
 }
 
 export function setLineStatus(orderId: string, lineId: string, status: OrderLineStatus) {

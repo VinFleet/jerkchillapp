@@ -15,6 +15,7 @@ import {
   billState,
   canCloseOrder,
   paymentReference,
+  resolveQtyChange,
   type Line,
   type PaymentRecord,
 } from "./orderRules.ts";
@@ -142,4 +143,31 @@ test("two open tables cannot collide", () => {
   assert.notEqual(paymentReference("order_aaaaaa", 1), paymentReference("order_bbbbbb", 1));
   // Same order, second attempt — a re-shown QR must not look like the first.
   assert.notEqual(paymentReference("order_aaaaaa", 1), paymentReference("order_aaaaaa", 2));
+});
+
+// ---------- changing a quantity ----------
+
+test("minus on the last one takes the line off, rather than storing a zero", () => {
+  assert.deepEqual(resolveQtyChange(0), { action: "cancel" });
+  assert.deepEqual(resolveQtyChange(-1), { action: "cancel" });
+});
+
+test("an ordinary quantity is kept as typed", () => {
+  assert.deepEqual(resolveQtyChange(1), { action: "set", qty: 1 });
+  assert.deepEqual(resolveQtyChange(12), { action: "set", qty: 12 });
+});
+
+test("a fractional quantity rounds instead of throwing mid-service", () => {
+  assert.deepEqual(resolveQtyChange(2.4), { action: "set", qty: 2 });
+  assert.deepEqual(resolveQtyChange(2.6), { action: "set", qty: 3 });
+  // Rounds to zero, so it cancels — not a line of nothing.
+  assert.deepEqual(resolveQtyChange(0.4), { action: "cancel" });
+});
+
+test("a cancelled line stops counting toward the bill", () => {
+  // The reason the rule exists: the total must follow the cancel.
+  const before = orderTotalVnd([line({ unitPriceVnd: 50_000, qty: 1 })]);
+  const after = orderTotalVnd([line({ unitPriceVnd: 50_000, qty: 1, status: "cancelled" })]);
+  assert.equal(before, 50_000);
+  assert.equal(after, 0);
 });

@@ -17,6 +17,8 @@ import {
   Bike,
   Scale,
   CalendarDays,
+  Receipt,
+  ChefHat,
 } from "lucide-react";
 import type { ModuleId } from "@/lib/auth/permissions";
 import type { Bi } from "@/lib/types";
@@ -36,6 +38,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/planner", label: { en: "Planner", vi: "Kế hoạch" }, icon: CalendarClock, module: "planner" },
   { href: "/notices", label: { en: "Notices", vi: "Thông báo" }, icon: Megaphone, module: "notices" },
   { href: "/bookings", label: { en: "Bookings", vi: "Đặt Bàn" }, icon: CalendarDays, module: "bookings" },
+  { href: "/service", label: { en: "Service", vi: "Phục Vụ" }, icon: Receipt, module: "orders" },
+  { href: "/kitchen", label: { en: "Kitchen Pass", vi: "Bếp" }, icon: ChefHat, module: "orders" },
   { href: "/food-safety", label: { en: "Food Safety", vi: "An toàn TP" }, icon: ShieldCheck, module: "foodSafety" },
   { href: "/suppliers", label: { en: "Suppliers", vi: "Nhà cung cấp" }, icon: Truck, module: "suppliers" },
   { href: "/contacts", label: { en: "Contacts", vi: "Danh bạ" }, icon: Contact, module: "contacts" },
