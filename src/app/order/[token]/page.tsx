@@ -5,10 +5,7 @@ import Image from "next/image";
 import { CheckCircle2, Plus, Minus, ShoppingBag, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { MENU_CATEGORY_LABEL } from "@/lib/menuLabels";
-import { getMenuItems } from "@/lib/repo/menu";
-import { resolveToken } from "@/lib/repo/tableTokens";
-import { createOrder, addLine } from "@/lib/repo/orders";
-import type { MenuItem, RecipeCategory } from "@/lib/types";
+import type { Bi, RecipeCategory } from "@/lib/types";
 
 /**
  * The guest's ordering page — what a QR sticker on the table opens.
@@ -17,8 +14,16 @@ import type { MenuItem, RecipeCategory } from "@/lib/types";
  * restaurant's wifi: no login, no app, bilingual, and light enough to work on
  * a bad connection while the kitchen is busy.
  *
- * Prices come from the Menu module, which is already the single source of
- * truth across dine-in and delivery. There is no second price list here.
+ * Everything here comes from /api/order/[token], and that is not incidental.
+ * A guest's browser has no local store of ours and no Supabase session, so
+ * the menu, the table and the order itself all have to cross the network.
+ * Reading them from a repo would have silently read an empty store on the
+ * guest's phone — the page would tell every guest the code was inactive, and
+ * an order that appeared to send would sit on their handset forever.
+ *
+ * Prices come from the Menu module via that route, which is already the
+ * single source of truth across dine-in and delivery. The client posts an id
+ * and a quantity; the server prices it. Nothing here can name its own price.
  */
 
 const CATEGORY_ORDER: RecipeCategory[] = [
@@ -31,57 +36,137 @@ const CATEGORY_ORDER: RecipeCategory[] = [
   "roast_sunday",
 ];
 
-type CartLine = { item: MenuItem; qty: number };
+/** Exactly what the API returns — no cost, no margin, no delivery prices. */
+type GuestMenuItem = {
+  id: string;
+  name: Bi;
+  category: RecipeCategory;
+  priceVnd: number;
+};
+
+type CartLine = { item: GuestMenuItem; qty: number };
+
+type LoadState = "loading" | "ready" | "unknown_table" | "unavailable";
 
 export default function OrderPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = usePromise(params);
-  const [tableId, setTableId] = useState<string | null | undefined>(undefined);
-  const [items, setItems] = useState<MenuItem[]>([]);
+  const [state, setState] = useState<LoadState>("loading");
+  const [items, setItems] = useState<GuestMenuItem[]>([]);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [placed, setPlaced] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   useEffect(() => {
-    const resolved = resolveToken(token);
-    setTableId(resolved?.tableId ?? null);
-    setItems(getMenuItems().filter((i) => i.pricesVnd.dine_in !== null));
+    let cancelled = false;
+    fetch(`/api/order/${encodeURIComponent(token)}`)
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.status === 404) {
+          setState("unknown_table");
+          return;
+        }
+        if (!res.ok) {
+          setState("unavailable");
+          return;
+        }
+        const body = (await res.json()) as { menu?: GuestMenuItem[] };
+        setItems(body.menu ?? []);
+        setState("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setState("unavailable");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const lines: CartLine[] = useMemo(
     () =>
       Object.entries(cart)
         .filter(([, qty]) => qty > 0)
-        .map(([id, qty]) => ({ item: items.find((i) => i.id === id)!, qty }))
-        .filter((l) => l.item),
+        .map(([id, qty]) => ({ item: items.find((i) => i.id === id), qty }))
+        .filter((l): l is CartLine => Boolean(l.item)),
     [cart, items]
   );
 
-  const total = lines.reduce((sum, l) => sum + (l.item.pricesVnd.dine_in ?? 0) * l.qty, 0);
+  const total = lines.reduce((sum, l) => sum + l.item.priceVnd * l.qty, 0);
 
   const bump = (id: string, by: number) =>
     setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] ?? 0) + by) }));
 
-  const send = () => {
-    if (!tableId || lines.length === 0) return;
+  const send = async () => {
+    if (lines.length === 0 || sending) return;
     setSending(true);
-    // Guests do not have a name in the app, so the order is unattributed —
-    // `placedBy: null` is what distinguishes a QR order from a waiter's.
-    const order = createOrder({
-      tableId,
-      source: "qr",
-      channel: "dine_in",
-      placedBy: null,
-      guestNote: note.trim() || undefined,
-    });
-    for (const line of lines) addLine(order.id, line.item.id, line.qty);
-    setSending(false);
-    setPlaced(true);
+    setSendError(null);
+
+    try {
+      // Ids and quantities only. The server prices it — a posted price would
+      // be a guest naming their own.
+      const res = await fetch(`/api/order/${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lines: lines.map((l) => ({ menuItemId: l.item.id, qty: l.qty })),
+          note: note.trim() || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        // Never claim the kitchen has it when it does not. A guest who is told
+        // the order is on its way and then waits for food nobody is cooking is
+        // the single worst outcome this page has.
+        setSendError(
+          res.status === 404
+            ? "This code isn't active any more. Please ask a member of staff. · Mã này không còn hoạt động."
+            : "We couldn't send that. Please try again, or ask a member of staff. · Không gửi được, vui lòng thử lại."
+        );
+        return;
+      }
+
+      setPlaced(true);
+    } catch {
+      setSendError(
+        "No connection. Please try again, or ask a member of staff. · Mất kết nối, vui lòng thử lại."
+      );
+    } finally {
+      setSending(false);
+    }
   };
+
+  if (state === "loading") {
+    return (
+      <Shell>
+        <div className="text-center py-10 text-muted">
+          <p className="text-sm">Loading the menu…</p>
+          <p className="text-sm">Đang tải thực đơn…</p>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (state === "unavailable") {
+    return (
+      <Shell>
+        <div className="text-center py-10">
+          <AlertTriangle size={40} className="text-warning mx-auto mb-3" />
+          <p className="font-bold">We can&apos;t load the menu right now</p>
+          <p className="text-sm text-muted mt-1">Hiện chưa tải được thực đơn</p>
+          <p className="text-sm text-muted mt-3">
+            Please ask a member of staff — they can take your order.
+            <br />
+            Vui lòng hỏi nhân viên — nhân viên sẽ ghi món giúp bạn.
+          </p>
+        </div>
+      </Shell>
+    );
+  }
 
   // An unknown or retired token. Deliberately vague: someone probing tokens
   // from outside should learn nothing about which ones exist.
-  if (tableId === null) {
+  if (state === "unknown_table") {
     return (
       <Shell>
         <div className="text-center py-10">
@@ -110,7 +195,7 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
             <br />
             Thanh toán khi ăn xong — tiền mặt, thẻ hoặc chuyển khoản.
           </p>
-          <Button className="mt-6" variant="secondary" onClick={() => { setPlaced(false); setCart({}); setNote(""); }}>
+          <Button className="mt-6" variant="secondary" onClick={() => { setPlaced(false); setCart({}); setNote(""); setSendError(null); }}>
             Order something else · Gọi thêm món
           </Button>
         </div>
@@ -145,7 +230,7 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
                       <p className="font-semibold text-sm">{item.name.en}</p>
                       <p className="text-xs text-muted">{item.name.vi}</p>
                       <p className="text-sm font-bold mt-0.5 tabular-nums">
-                        {(item.pricesVnd.dine_in ?? 0).toLocaleString("vi-VN")}₫
+                        {item.priceVnd.toLocaleString("vi-VN")}₫
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -189,7 +274,13 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
               className="w-full min-h-12 rounded-xl border-2 border-border px-3 text-sm mt-1"
             />
           </label>
-          <Button className="w-full min-h-14" disabled={sending} onClick={send}>
+          {sendError && (
+            <p className="flex items-start gap-2 text-sm rounded-xl border-2 border-warning/40 bg-warning/10 px-3 py-2 mb-2">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5 text-warning" />
+              {sendError}
+            </p>
+          )}
+          <Button className="w-full min-h-14" disabled={sending} onClick={() => void send()}>
             <ShoppingBag size={18} className="mr-2" />
             {sending ? "Sending… · Đang gửi…" : `Send order · Gửi đơn — ${total.toLocaleString("vi-VN")}₫`}
           </Button>

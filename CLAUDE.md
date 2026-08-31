@@ -260,10 +260,11 @@ kitchen tablet away from closing a bill.
 `jc:{tenant}:{key}`. That count excludes seven `isSeeded()` migration guards
 and four device-local meta keys, which are storage but not collections.
 
-**16 sync**, in the two families:
+**18 sync**, in the two families:
 
 - *Last-write-wins:* `checklist_items`, `checklist_ticks`, `notices`,
-  `notice_acks`, `stock_entries`, `orders`, `order_payments`
+  `notice_acks`, `stock_entries`, `orders`, `order_payments`, `menu_items`,
+  `table_tokens`
 - *Append-only:* `fs_temp_readings`, `fs_cook_logs`, `fs_delivery_logs`,
   `fs_cleaning_signoffs`, `fs_inspections`, `fs_samples`,
   `fs_sample_destruction_checks`, `fs_pest`, `fs_complaints`
@@ -273,6 +274,24 @@ choice and the riskier one: a line added on a waiter's phone while the kitchen
 marks another ready must not lose either edit. It holds because writes are
 per-record and the two devices touch different lines. If orders ever grow an
 operation that rewrites the whole line array at once, this stops being safe.
+
+## The guest's phone knows nothing
+
+A guest opening `/order/<token>` is a stranger's browser: no local store of
+ours, no Supabase session, no sync. Everything that page needs crosses the
+network through `/api/order/[token]`, which reads `synced_records` with the
+service role and writes the order back in exactly the shape a device would
+have written locally — so the till pulls a guest's order down the same merge
+path as a waiter's.
+
+This is why `menu_items` and `table_tokens` sync despite being reference data
+under rule 5: the server is the only thing that can answer "which table is
+this, and what can they order", and `synced_records` is the only shared copy.
+Syncing the menu also closed a quieter gap — a price the owner changed on
+their laptop never used to reach the kitchen tablet.
+
+The client posts an id and a quantity, never a price. Anything a guest can
+send is something a guest can forge.
 
 ## Tables — the other exception to rule 1
 
@@ -306,9 +325,11 @@ into a repo from a test:
 | `lib/zalo/text.ts` | NFC normalisation before any length check |
 | `lib/repo/orderRules.ts` | what a bill totals, and whether a table may be closed |
 | `lib/payments/vietqr.ts` | the EMVCo payload and its CRC — a wrong byte means a QR that will not scan |
+| `lib/payments/webhookAuth.ts` | whether a payment callback is genuinely from the provider |
 
-Tests: `npm run test:all` runs all five suites (79 assertions); individually
-`npm run test:zalo`, `test:due`, `test:portions`, `test:orders`, `test:vietqr`.
+Tests: `npm run test:all` runs all six suites (88 assertions); individually
+`npm run test:zalo`, `test:due`, `test:portions`, `test:orders`, `test:vietqr`,
+`test:webhook`.
 
 ## Zalo, briefly
 
