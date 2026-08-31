@@ -6,6 +6,7 @@ import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
 import { Card } from "@/components/ui/Card";
+import { MenuPhotoButton } from "@/components/MenuPhotoButton";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
@@ -181,7 +182,10 @@ function MenuItemCard({
   return (
     <Card>
       <div className="flex items-start justify-between gap-2 mb-2">
-        <Bi value={item.name} className="font-semibold text-sm" />
+        {/* The photo the waiter's pad and the guest's phone will show. Owner
+            and manager set it here, where the rest of the item lives. */}
+        {canEdit && <MenuPhotoButton item={item} onChange={onChanged} />}
+        <Bi value={item.name} className="font-semibold text-sm flex-1 min-w-0" />
         {canEdit && (
           <button
             onClick={() => setEditing((e) => !e)}

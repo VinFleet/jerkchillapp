@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import {
   Plus,
@@ -118,9 +119,20 @@ function AddItemPanel({
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         <div className="rounded-2xl border border-border bg-[var(--surface)] p-3 flex items-center gap-3">
-          <span className="w-16 h-16 rounded-xl bg-brand-light text-brand grid place-items-center text-xl font-black shrink-0">
-            {item.name.en.slice(0, 2).toUpperCase()}
-          </span>
+          {item.imageUrl ? (
+            <Image
+              src={item.imageUrl}
+              alt=""
+              width={64}
+              height={64}
+              unoptimized
+              className="w-16 h-16 rounded-xl object-cover shrink-0"
+            />
+          ) : (
+            <span className="w-16 h-16 rounded-xl bg-brand-light text-brand grid place-items-center text-xl font-black shrink-0">
+              {item.name.en.slice(0, 2).toUpperCase()}
+            </span>
+          )}
           <Bi value={item.name} className="font-bold leading-tight" />
           <span className="ml-auto font-bold tabular-nums shrink-0">{vnd(base)}</span>
         </div>
@@ -382,11 +394,22 @@ function OrderContent() {
                     onClick={() => add(item)}
                     className="rounded-2xl overflow-hidden border border-border text-left active:scale-[0.98] flex flex-col"
                   >
-                    {/* No photography in the menu data yet, so the tile carries
-                        the initials rather than an empty grey box. */}
-                    <span className="aspect-[4/3] bg-brand-light text-brand/70 grid place-items-center text-2xl font-black">
-                      {item.name.en.slice(0, 2).toUpperCase()}
-                    </span>
+                    {/* The photo, when one has been added on Menu & Pricing.
+                        Initials otherwise — never an empty grey box. */}
+                    {item.imageUrl ? (
+                      <Image
+                        src={item.imageUrl}
+                        alt=""
+                        width={300}
+                        height={225}
+                        unoptimized
+                        className="aspect-[4/3] w-full object-cover"
+                      />
+                    ) : (
+                      <span className="aspect-[4/3] bg-brand-light text-brand/70 grid place-items-center text-2xl font-black">
+                        {item.name.en.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
                     <span className="bg-[var(--surface)] py-1.5 text-center font-bold tabular-nums text-sm">
                       {vnd(item.pricesVnd[order.channel] ?? 0)}
                     </span>

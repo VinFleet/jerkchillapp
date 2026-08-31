@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, use as usePromise } from "react";
+import { useEffect, useState, use as usePromise } from "react";
 import Image from "next/image";
 import { CheckCircle2, Plus, Minus, ShoppingBag, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -37,14 +37,31 @@ const CATEGORY_ORDER: RecipeCategory[] = [
 ];
 
 /** Exactly what the API returns — no cost, no margin, no delivery prices. */
+type GuestOption = {
+  id: string;
+  label: Bi;
+  required: boolean;
+  choices: { id: string; label: Bi; priceDeltaVnd: number }[];
+};
+
 type GuestMenuItem = {
   id: string;
   name: Bi;
   category: RecipeCategory;
   priceVnd: number;
+  imageUrl?: string;
+  options?: GuestOption[];
 };
 
-type CartLine = { item: GuestMenuItem; qty: number };
+type CartEntry = {
+  item: GuestMenuItem;
+  qty: number;
+  /** Answers, priced from the option data the server sent. */
+  choices: { optionId: string; choiceId: string }[];
+  /** What one costs with the choices applied — display only; the server re-prices. */
+  eachVnd: number;
+  label: string;
+};
 
 type LoadState = "loading" | "ready" | "unknown_table" | "unavailable";
 
@@ -52,7 +69,9 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
   const { token } = usePromise(params);
   const [state, setState] = useState<LoadState>("loading");
   const [items, setItems] = useState<GuestMenuItem[]>([]);
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<CartEntry[]>([]);
+  const [asking, setAsking] = useState<GuestMenuItem | null>(null);
+  const [picked, setPicked] = useState<Record<string, string>>({});
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [placed, setPlaced] = useState(false);
@@ -83,22 +102,56 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
     };
   }, [token]);
 
-  const lines: CartLine[] = useMemo(
-    () =>
-      Object.entries(cart)
-        .filter(([, qty]) => qty > 0)
-        .map(([id, qty]) => ({ item: items.find((i) => i.id === id), qty }))
-        .filter((l): l is CartLine => Boolean(l.item)),
-    [cart, items]
-  );
+  const total = cart.reduce((sum, entry) => sum + entry.eachVnd * entry.qty, 0);
 
-  const total = lines.reduce((sum, l) => sum + l.item.priceVnd * l.qty, 0);
+  /** Key that makes "spicy" and "extra spicy" different cart rows. */
+  const entryKey = (itemId: string, choices: { choiceId: string }[]) =>
+    `${itemId}|${choices.map((c) => c.choiceId).sort().join(",")}`;
 
-  const bump = (id: string, by: number) =>
-    setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] ?? 0) + by) }));
+  const addEntry = (item: GuestMenuItem, choices: { optionId: string; choiceId: string }[]) => {
+    const deltas = choices.map((pick) => {
+      const option = item.options?.find((o) => o.id === pick.optionId);
+      return option?.choices.find((c) => c.id === pick.choiceId);
+    });
+    const eachVnd = Math.max(
+      0,
+      deltas.reduce((sum, c) => sum + (c?.priceDeltaVnd ?? 0), item.priceVnd)
+    );
+    const label = deltas
+      .filter(Boolean)
+      .map((c) => `${c!.label.en} · ${c!.label.vi}`)
+      .join(", ");
+    const key = entryKey(item.id, choices);
+
+    setCart((entries) => {
+      const at = entries.findIndex((e) => entryKey(e.item.id, e.choices) === key);
+      if (at >= 0) {
+        const next = [...entries];
+        next[at] = { ...next[at], qty: next[at].qty + 1 };
+        return next;
+      }
+      return [...entries, { item, qty: 1, choices, eachVnd, label }];
+    });
+  };
+
+  const tap = (item: GuestMenuItem) => {
+    if (item.options?.some((o) => o.required)) {
+      setPicked({});
+      setAsking(item);
+      return;
+    }
+    addEntry(item, []);
+  };
+
+  const bumpEntry = (index: number, by: number) =>
+    setCart((entries) =>
+      entries
+        .map((e, i) => (i === index ? { ...e, qty: e.qty + by } : e))
+        .filter((e) => e.qty > 0)
+    );
 
   const send = async () => {
-    if (lines.length === 0 || sending) return;
+    if (cart.length === 0 || sending) return;
     setSending(true);
     setSendError(null);
 
@@ -109,7 +162,11 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          lines: lines.map((l) => ({ menuItemId: l.item.id, qty: l.qty })),
+          lines: cart.map((entry) => ({
+            menuItemId: entry.item.id,
+            qty: entry.qty,
+            choices: entry.choices,
+          })),
           note: note.trim() || undefined,
         }),
       });
@@ -195,7 +252,7 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
             <br />
             Thanh toán khi ăn xong — tiền mặt, thẻ hoặc chuyển khoản.
           </p>
-          <Button className="mt-6" variant="secondary" onClick={() => { setPlaced(false); setCart({}); setNote(""); setSendError(null); }}>
+          <Button className="mt-6" variant="secondary" onClick={() => { setPlaced(false); setCart([]); setNote(""); setSendError(null); }}>
             Order something else · Gọi thêm món
           </Button>
         </div>
@@ -218,14 +275,26 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
             <p className="text-xs text-muted mb-2">{MENU_CATEGORY_LABEL[category].vi}</p>
             <div className="space-y-2">
               {inCategory.map((item) => {
-                const qty = cart[item.id] ?? 0;
+                const inCart = cart
+                  .filter((e) => e.item.id === item.id)
+                  .reduce((n, e) => n + e.qty, 0);
                 return (
                   <div
                     key={item.id}
                     className={`rounded-2xl border-2 p-3 flex items-center gap-3 ${
-                      qty > 0 ? "border-brand bg-brand-light" : "border-border"
+                      inCart > 0 ? "border-brand bg-brand-light" : "border-border"
                     }`}
                   >
+                    {item.imageUrl && (
+                      <Image
+                        src={item.imageUrl}
+                        alt=""
+                        width={56}
+                        height={56}
+                        unoptimized
+                        className="w-14 h-14 rounded-xl object-cover shrink-0"
+                      />
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-sm">{item.name.en}</p>
                       <p className="text-xs text-muted">{item.name.vi}</p>
@@ -234,20 +303,11 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {qty > 0 && (
-                        <>
-                          <button
-                            onClick={() => bump(item.id, -1)}
-                            aria-label={`One less ${item.name.en}`}
-                            className="w-11 h-11 rounded-xl border-2 border-border flex items-center justify-center"
-                          >
-                            <Minus size={16} />
-                          </button>
-                          <span className="w-6 text-center font-bold tabular-nums">{qty}</span>
-                        </>
+                      {inCart > 0 && (
+                        <span className="w-6 text-center font-bold tabular-nums">{inCart}</span>
                       )}
                       <button
-                        onClick={() => bump(item.id, 1)}
+                        onClick={() => tap(item)}
                         aria-label={`One more ${item.name.en}`}
                         className="w-11 h-11 rounded-xl bg-brand text-white flex items-center justify-center"
                       >
@@ -262,8 +322,99 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
         );
       })}
 
-      {lines.length > 0 && (
+      {asking && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+          <div className="w-full max-w-md bg-background rounded-t-3xl p-4 pb-8 space-y-4 max-h-[85vh] overflow-y-auto">
+            <p className="font-bold">{asking.name.en}</p>
+            <p className="text-sm text-muted -mt-3">{asking.name.vi}</p>
+            {(asking.options ?? []).map((option) => (
+              <div key={option.id} className="space-y-2">
+                <p className="text-sm font-semibold">
+                  {option.label.en} <span className="text-muted font-normal">· {option.label.vi}</span>
+                </p>
+                {option.choices.map((choice) => {
+                  const active = picked[option.id] === choice.id;
+                  return (
+                    <button
+                      key={choice.id}
+                      onClick={() => setPicked((prev) => ({ ...prev, [option.id]: choice.id }))}
+                      className={`w-full min-h-[52px] rounded-xl border-2 px-4 flex items-center justify-between text-left ${
+                        active ? "border-brand bg-brand-light" : "border-border"
+                      }`}
+                    >
+                      <span className="text-sm">
+                        {choice.label.en} <span className="text-muted">· {choice.label.vi}</span>
+                      </span>
+                      {choice.priceDeltaVnd !== 0 && (
+                        <span className="text-sm text-muted tabular-nums shrink-0">
+                          {choice.priceDeltaVnd > 0 ? "+" : "−"}
+                          {Math.abs(choice.priceDeltaVnd).toLocaleString("vi-VN")}₫
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAsking(null)}
+                className="flex-1 min-h-[52px] rounded-xl border-2 border-border font-semibold"
+              >
+                Cancel · Huỷ
+              </button>
+              <button
+                onClick={() => {
+                  addEntry(
+                    asking,
+                    Object.entries(picked).map(([optionId, choiceId]) => ({ optionId, choiceId }))
+                  );
+                  setAsking(null);
+                }}
+                disabled={(asking.options ?? []).some((o) => o.required && !picked[o.id])}
+                className="flex-1 min-h-[52px] rounded-xl bg-brand text-white font-semibold disabled:opacity-40"
+              >
+                Add · Thêm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cart.length > 0 && (
         <div className="sticky bottom-0 -mx-5 px-5 pt-3 pb-5 bg-surface border-t-2 border-border safe-bottom">
+          {/* What they are about to send, choices visible — a guest who picked
+              mocktail needs to see the word before committing to it. */}
+          <div className="mb-2 max-h-[30vh] overflow-y-auto space-y-1">
+            {cart.map((entry, index) => (
+              <div key={index} className="flex items-center gap-2 text-sm">
+                <span className="min-w-0 flex-1">
+                  {entry.item.name.en}
+                  {entry.label && (
+                    <span className="block text-xs text-brand font-medium">{entry.label}</span>
+                  )}
+                </span>
+                <button
+                  onClick={() => bumpEntry(index, -1)}
+                  aria-label="One fewer"
+                  className="w-9 h-9 rounded-lg border-2 border-border flex items-center justify-center shrink-0"
+                >
+                  <Minus size={14} />
+                </button>
+                <span className="w-5 text-center font-bold tabular-nums shrink-0">{entry.qty}</span>
+                <button
+                  onClick={() => bumpEntry(index, 1)}
+                  aria-label="One more"
+                  className="w-9 h-9 rounded-lg border-2 border-border flex items-center justify-center shrink-0"
+                >
+                  <Plus size={14} />
+                </button>
+                <span className="w-20 text-right tabular-nums font-semibold shrink-0">
+                  {(entry.eachVnd * entry.qty).toLocaleString("vi-VN")}₫
+                </span>
+              </div>
+            ))}
+          </div>
           <label className="block mb-2">
             <span className="text-xs text-muted">Anything we should know? · Cần lưu ý gì không?</span>
             <input

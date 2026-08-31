@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { MenuItem, Order, OrderLine } from "@/lib/types";
+import type { MenuItem, Order, OrderLine, OrderLineChoice } from "@/lib/types";
 import type { TableToken } from "@/lib/repo/tableTokens";
 import { newId } from "@/lib/storage";
+import { linePriceVnd } from "@/lib/repo/orderRules";
 import { sendPush } from "@/lib/push/server";
 
 /**
@@ -94,6 +95,11 @@ export async function GET(
           name: m.name,
           category: m.category,
           priceVnd: m.pricesVnd.dine_in,
+          // Public by design — the same photo the printed menu uses.
+          imageUrl: m.imageUrl,
+          // The questions the waiter would ask — spice level, mocktail. The
+          // guest answers them on their own phone instead.
+          options: m.options,
         })),
     });
   } catch {
@@ -102,7 +108,13 @@ export async function GET(
 }
 
 type PlaceBody = {
-  lines?: { menuItemId?: string; qty?: number }[];
+  lines?: {
+    menuItemId?: string;
+    qty?: number;
+    /** Ids only. The server resolves labels and price deltas from the menu —
+     *  anything a guest can send is something a guest can forge. */
+    choices?: { optionId?: string; choiceId?: string }[];
+  }[];
   note?: string;
 };
 
@@ -146,13 +158,37 @@ export async function POST(
       const price = item?.pricesVnd?.dine_in;
       if (!item || price == null) continue;
 
+      // Resolve the guest's answers against the menu's own options. The
+      // client sends ids; the label and the price delta come from here, so a
+      // forged delta is simply ignored. An unanswered REQUIRED question
+      // refuses the line — the kitchen cooking the default and finding out at
+      // the table is the exact failure the question exists to prevent.
+      const chosen: OrderLineChoice[] = [];
+      let missingRequired = false;
+      for (const option of item.options ?? []) {
+        const pick = (line.choices ?? []).find((c) => c.optionId === option.id);
+        const choice = option.choices.find((c) => c.id === pick?.choiceId);
+        if (choice) {
+          chosen.push({
+            optionId: option.id,
+            choiceId: choice.id,
+            label: choice.label,
+            priceDeltaVnd: choice.priceDeltaVnd,
+          });
+        } else if (option.required) {
+          missingRequired = true;
+        }
+      }
+      if (missingRequired) continue;
+
       const qty = Math.min(MAX_QTY_PER_LINE, Math.max(1, Math.round(Number(line.qty) || 1)));
       lines.push({
         id: newId("line"),
         menuItemId: item.id,
-        unitPriceVnd: price,
+        unitPriceVnd: linePriceVnd(price, chosen),
         qty,
         status: "placed",
+        choices: chosen.length ? chosen : undefined,
         // A guest has no "send" button — tapping order IS sending. Without
         // this the ticket would sit unsent on the pass forever, waiting for
         // a waiter who was never involved.

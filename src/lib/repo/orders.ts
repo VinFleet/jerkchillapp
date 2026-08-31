@@ -42,6 +42,37 @@ const PAYMENTS_KEY = "order_payments";
 
 // ---------- reading ----------
 
+const SENT_BACKFILL_KEY = "orders_sent_backfill_v1";
+
+/**
+ * Stamp sentAt onto lines that predate the send feature.
+ *
+ * Before sentAt existed, every line reached the pass the moment it was keyed
+ * — de facto sent. When the feature landed, those lines had no stamp, so the
+ * pass's new "sent lines only" filter hid every in-flight order at once: a
+ * 46-minute-old ticket the kitchen had been cooking from simply vanished.
+ *
+ * Runs once. Everything unsent at that moment was visible on the old pass,
+ * so stamping it all is honest; lines keyed after this are governed by the
+ * real send flow.
+ */
+export function backfillSentLines() {
+  if (isSeeded(SENT_BACKFILL_KEY)) return;
+  const all = readList<Order>(ORDERS_KEY);
+  let changed = false;
+  const fixed = all.map((order) => {
+    if (!order.lines.some((l) => !l.sentAt)) return order;
+    changed = true;
+    return {
+      ...order,
+      lines: order.lines.map((l) => (l.sentAt ? l : { ...l, sentAt: order.placedAt })),
+      updatedAt: new Date().toISOString(),
+    };
+  });
+  if (changed) writeList(ORDERS_KEY, fixed);
+  markSeeded(SENT_BACKFILL_KEY);
+}
+
 const VOIDED_REPAIR_KEY = "orders_voided_repair_v1";
 
 /**

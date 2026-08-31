@@ -160,8 +160,18 @@ function KitchenContent() {
                         >
                           <span className="text-xl font-bold tabular-nums w-8 shrink-0">{line.qty}×</span>
                           <span className="min-w-0 flex-1">
-                            <span className="block font-semibold text-sm">{name?.en ?? line.menuItemId}</span>
+                            <span className="block font-semibold text-sm">
+                              {name?.en ?? line.menuItemId.replace("adhoc:", "")}
+                            </span>
                             <span className="block text-xs text-muted">{name?.vi ?? ""}</span>
+                            {/* The choice is the cooking instruction — "Spicy",
+                                "Mocktail". A pass that hides it cooks the
+                                default and finds out at the table. */}
+                            {line.choices?.length ? (
+                              <span className="block text-xs font-bold text-brand mt-0.5">
+                                {line.choices.map((c) => `${c.label.en} · ${c.label.vi}`).join(" — ")}
+                              </span>
+                            ) : null}
                             {line.note && (
                               <span className="block text-xs text-warning font-semibold mt-0.5">{line.note}</span>
                             )}
