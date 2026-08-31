@@ -21,6 +21,9 @@ import {
   discountAmountVnd,
   changeDueVnd,
   cashSuggestionsVnd,
+  orderCode,
+  canSplitOrder,
+  canMergeOrders,
   type Line,
   type PaymentRecord,
 } from "./orderRules.ts";
@@ -303,4 +306,95 @@ test("suggestions do not repeat themselves", () => {
 test("an empty bill suggests nothing", () => {
   assert.deepEqual(cashSuggestionsVnd(0), []);
   assert.deepEqual(cashSuggestionsVnd(-100), []);
+});
+
+// ---------- order codes ----------
+
+test("an order code is short, sayable, and stable", () => {
+  const code = orderCode("order_a1b2c3");
+  assert.equal(code.length, 5);
+  assert.match(code, /^[A-Z2-9]+$/);
+  assert.equal(code, orderCode("order_a1b2c3"), "same order, same code");
+  assert.doesNotMatch(code, /[OI01L]/, "no characters that get misread aloud");
+});
+
+test("different orders get different codes", () => {
+  const seen = new Set<string>();
+  for (let i = 0; i < 200; i += 1) seen.add(orderCode(`order_${i}`));
+  // Not a guarantee of uniqueness — it is five characters — but a collision
+  // rate this low is fine for one service's worth of open tables.
+  assert.ok(seen.size > 190, `only ${seen.size} distinct codes from 200 orders`);
+});
+
+// ---------- splitting ----------
+
+const paid = (over: Partial<PaymentRecord> = {}): PaymentRecord => ({
+  amountVnd: 100_000,
+  status: "paid",
+  ...over,
+});
+
+test("a bill splits when some lines are selected", () => {
+  const lines = [line({ id: "a" }), line({ id: "b" }), line({ id: "c" })];
+  assert.deepEqual(canSplitOrder("placed", lines, ["a"], []), { ok: true });
+});
+
+test("a bill with money on it cannot be split", () => {
+  // The payment would belong to neither half.
+  const lines = [line({ id: "a" }), line({ id: "b" })];
+  assert.deepEqual(canSplitOrder("placed", lines, ["a"], [paid()]), { ok: false, reason: "paid" });
+  assert.equal(canSplitOrder("placed", lines, ["a"], [paid({ status: "pending" })]).ok, false);
+});
+
+test("selecting everything or nothing is not a split", () => {
+  const lines = [line({ id: "a" }), line({ id: "b" })];
+  assert.deepEqual(canSplitOrder("placed", lines, [], []), {
+    ok: false,
+    reason: "nothing_selected",
+  });
+  assert.deepEqual(canSplitOrder("placed", lines, ["a", "b"], []), {
+    ok: false,
+    reason: "everything_selected",
+  });
+});
+
+test("cancelled lines do not count toward a split", () => {
+  const lines = [line({ id: "a" }), line({ id: "b" }), line({ id: "c", status: "cancelled" })];
+  // Selecting both live lines is still "everything".
+  assert.deepEqual(canSplitOrder("placed", lines, ["a", "b"], []), {
+    ok: false,
+    reason: "everything_selected",
+  });
+});
+
+test("a closed bill cannot be split", () => {
+  assert.deepEqual(canSplitOrder("closed", [line({ id: "a" })], ["a"], []), {
+    ok: false,
+    reason: "closed",
+  });
+});
+
+// ---------- merging ----------
+
+test("two open bills merge", () => {
+  assert.deepEqual(canMergeOrders("o1", "o2", "placed", "served", []), { ok: true });
+});
+
+test("a bill cannot merge into itself", () => {
+  assert.deepEqual(canMergeOrders("o1", "o1", "placed", "placed", []), {
+    ok: false,
+    reason: "same_order",
+  });
+});
+
+test("bills with money on them cannot merge", () => {
+  assert.deepEqual(canMergeOrders("o1", "o2", "placed", "placed", [paid()]), {
+    ok: false,
+    reason: "paid",
+  });
+});
+
+test("a closed bill cannot merge", () => {
+  assert.equal(canMergeOrders("o1", "o2", "closed", "placed", []).ok, false);
+  assert.equal(canMergeOrders("o1", "o2", "placed", "cancelled", []).ok, false);
 });

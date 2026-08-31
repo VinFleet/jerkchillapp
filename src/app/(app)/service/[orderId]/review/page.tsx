@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -21,6 +21,14 @@ import {
   ArrowLeftRight,
   Ban,
   StickyNote,
+  Camera,
+  Loader2,
+  Eye,
+  Scissors,
+  Merge,
+  FilePlus2,
+  UserRound,
+  ClipboardList,
 } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { Bi } from "@/components/Bi";
@@ -43,6 +51,13 @@ import {
   moveOrderToTable,
   setOrderNote,
   setLineNote,
+  setPaymentSlip,
+  splitOrder,
+  mergeOrders,
+  addAdHocLine,
+  setOrderCustomer,
+  createOrder,
+  getOrders,
 } from "@/lib/repo/orders";
 import { getMenuItems } from "@/lib/repo/menu";
 import { getPromotions } from "@/lib/repo/promotions";
@@ -50,7 +65,8 @@ import { getCachedTables } from "@/lib/repo/tableCache";
 import { getPaymentSettings, vietQrConfigured } from "@/lib/repo/paymentSettings";
 import { buildVietQrPayload } from "@/lib/payments/vietqr";
 import { VietQrCode } from "@/components/VietQrCode";
-import { changeDueVnd, cashSuggestionsVnd } from "@/lib/repo/orderRules";
+import { changeDueVnd, cashSuggestionsVnd, orderCode } from "@/lib/repo/orderRules";
+import { uploadCardSlip, cardSlipUrl } from "@/lib/payments/slips";
 import type { Order, MenuItem, Payment, PaymentMethod, Promotion } from "@/lib/types";
 
 /**
@@ -83,7 +99,9 @@ function ReviewContent() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
-  const [panel, setPanel] = useState<"none" | "promotions" | "more" | "tables">("none");
+  const [panel, setPanel] = useState<
+    "none" | "promotions" | "more" | "tables" | "split" | "merge" | "adhoc" | "customer"
+  >("none");
   const [qrPayload, setQrPayload] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -96,6 +114,13 @@ function ReviewContent() {
   const [manualValue, setManualValue] = useState("");
   const [cardOpen, setCardOpen] = useState(false);
   const [cardRef, setCardRef] = useState("");
+  const [slipBusy, setSlipBusy] = useState(false);
+  const [slipProblem, setSlipProblem] = useState<string | null>(null);
+  const slipInput = useRef<HTMLInputElement>(null);
+  const [pendingSlip, setPendingSlip] = useState<File | null>(null);
+  const [splitPick, setSplitPick] = useState<string[]>([]);
+  const [adHoc, setAdHoc] = useState({ name: "", price: "", qty: "1" });
+  const [customer, setCustomer] = useState({ name: "", phone: "" });
 
   const load = useCallback(() => {
     setOrder(getOrder(orderId) ?? null);
@@ -287,12 +312,252 @@ function ReviewContent() {
             <ArrowLeftRight size={18} className="text-muted shrink-0" />
             Change table <span className="text-muted">· Đổi bàn</span>
           </button>
+          <Link
+            href={`/service/${order.id}/ticket`}
+            className="w-full min-h-[56px] px-4 flex items-center gap-3"
+          >
+            <ClipboardList size={18} className="text-muted shrink-0" />
+            Print the kitchen ticket <span className="text-muted">· In phiếu bếp</span>
+          </Link>
+          <button
+            onClick={() => {
+              setSplitPick([]);
+              setPanel("split");
+            }}
+            className="w-full min-h-[56px] px-4 flex items-center gap-3 text-left"
+          >
+            <Scissors size={18} className="text-muted shrink-0" />
+            Split the bill <span className="text-muted">· Tách hoá đơn</span>
+          </button>
+          <button
+            onClick={() => setPanel("merge")}
+            className="w-full min-h-[56px] px-4 flex items-center gap-3 text-left"
+          >
+            <Merge size={18} className="text-muted shrink-0" />
+            Merge with another table <span className="text-muted">· Gộp bàn</span>
+          </button>
+          <button
+            onClick={() => setPanel("adhoc")}
+            className="w-full min-h-[56px] px-4 flex items-center gap-3 text-left"
+          >
+            <FilePlus2 size={18} className="text-muted shrink-0" />
+            Add an off-menu item <span className="text-muted">· Thêm món ngoài menu</span>
+          </button>
+          <button
+            onClick={() => {
+              setCustomer({ name: order.customerName ?? "", phone: order.customerPhone ?? "" });
+              setPanel("customer");
+            }}
+            className="w-full min-h-[56px] px-4 flex items-center gap-3 text-left"
+          >
+            <UserRound size={18} className="text-muted shrink-0" />
+            {order.customerName ? order.customerName : "Add the guest's name"}{" "}
+            <span className="text-muted">· Khách hàng</span>
+          </button>
+          <button
+            onClick={() => {
+              const created = createOrder({
+                tableId: order.tableId,
+                source: order.source,
+                channel: order.channel,
+                placedBy: session?.name ?? null,
+              });
+              router.push(`/service/${created.id}`);
+            }}
+            className="w-full min-h-[56px] px-4 flex items-center gap-3 text-left"
+          >
+            <FilePlus2 size={18} className="text-muted shrink-0" />
+            Second bill on this table <span className="text-muted">· Hoá đơn thứ hai</span>
+          </button>
           <button
             onClick={cancelOrder}
             className="w-full min-h-[56px] px-4 flex items-center gap-3 text-left text-danger"
           >
             <Ban size={18} className="shrink-0" />
             Cancel the order <span className="opacity-70">· Huỷ đơn</span>
+          </button>
+        </div>
+      )}
+
+      {panel === "split" && (
+        <div className="mx-4 mt-3 rounded-2xl border border-border bg-surface p-3 space-y-2">
+          <p className="text-sm font-semibold">
+            Which items are paying separately?{" "}
+            <span className="text-muted font-normal">· Món nào thanh toán riêng?</span>
+          </p>
+          {payments.some((p) => p.status === "paid" || p.status === "pending") ? (
+            <p className="text-sm text-warning">
+              Money has been taken on this bill, so it can no longer be split.
+              · Đã có thanh toán, không thể tách nữa.
+            </p>
+          ) : (
+            <>
+              {lines.map((line) => {
+                const item = menu.find((m) => m.id === line.menuItemId);
+                const picked = splitPick.includes(line.id);
+                return (
+                  <button
+                    key={line.id}
+                    onClick={() =>
+                      setSplitPick((p) =>
+                        picked ? p.filter((id) => id !== line.id) : [...p, line.id]
+                      )
+                    }
+                    className={`w-full min-h-[52px] rounded-xl border-2 px-3 flex items-center justify-between text-left ${
+                      picked ? "border-brand bg-brand-light" : "border-border"
+                    }`}
+                  >
+                    <span className="text-sm">
+                      {line.qty}× {item?.name.en ?? line.menuItemId.replace("adhoc:", "")}
+                    </span>
+                    <span className="text-sm tabular-nums">{vnd(line.unitPriceVnd * line.qty)}</span>
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => {
+                  const result = splitOrder(order.id, splitPick, session?.name ?? null);
+                  if (result.ok) {
+                    router.push(`/service/${result.newOrderId}/review`);
+                  } else {
+                    setProblem(
+                      result.reason === "everything_selected"
+                        ? "That is everything — leave at least one item behind. · Phải để lại ít nhất một món."
+                        : "Could not split · Không tách được"
+                    );
+                    setPanel("none");
+                  }
+                }}
+                disabled={splitPick.length === 0 || splitPick.length === lines.length}
+                className="w-full min-h-[52px] rounded-xl bg-brand text-white font-semibold disabled:bg-border disabled:text-muted"
+              >
+                Split {splitPick.length} onto a new bill · Tách {splitPick.length} món
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {panel === "merge" && (
+        <div className="mx-4 mt-3 rounded-2xl border border-border bg-surface p-3 space-y-2">
+          <p className="text-sm font-semibold">
+            Bring which bill into this one?{" "}
+            <span className="text-muted font-normal">· Gộp hoá đơn nào vào đây?</span>
+          </p>
+          {getOrders()
+            .filter(
+              (o) =>
+                o.id !== order.id &&
+                o.status !== "closed" &&
+                o.status !== "cancelled" &&
+                o.lines.some((l) => l.status !== "cancelled")
+            )
+            .map((other) => {
+              const otherTable = tables.find((t) => t.id === other.tableId)?.tableNumber;
+              const total = other.lines
+                .filter((l) => l.status !== "cancelled")
+                .reduce((sum, l) => sum + l.unitPriceVnd * l.qty, 0);
+              return (
+                <button
+                  key={other.id}
+                  onClick={() => {
+                    const result = mergeOrders(order.id, other.id);
+                    if (!result.ok) {
+                      setProblem(
+                        result.reason === "paid"
+                          ? "One of these bills has money on it — settle it first. · Một hoá đơn đã có thanh toán."
+                          : "Could not merge · Không gộp được"
+                      );
+                    }
+                    setPanel("none");
+                    load();
+                  }}
+                  className="w-full min-h-[56px] rounded-xl border border-border px-3 flex items-center justify-between text-left"
+                >
+                  <span className="text-sm font-semibold">
+                    {otherTable ? `Table ${otherTable}` : "Counter"}{" "}
+                    <span className="text-muted font-normal font-mono">{orderCode(other.id)}</span>
+                  </span>
+                  <span className="text-sm tabular-nums">{vnd(total)}</span>
+                </button>
+              );
+            })}
+        </div>
+      )}
+
+      {panel === "adhoc" && (
+        <div className="mx-4 mt-3 rounded-2xl border border-border bg-surface p-3 space-y-2">
+          <p className="text-sm font-semibold">
+            Off-menu item <span className="text-muted font-normal">· Món ngoài thực đơn</span>
+          </p>
+          <input
+            value={adHoc.name}
+            onChange={(e) => setAdHoc({ ...adHoc, name: e.target.value })}
+            placeholder="Chef's special, corkage… · Món đặc biệt…"
+            className="w-full min-h-[48px] rounded-xl border border-border px-3 text-sm"
+          />
+          <div className="flex gap-2">
+            <input
+              value={adHoc.price}
+              onChange={(e) => setAdHoc({ ...adHoc, price: e.target.value.replace(/[^\d]/g, "") })}
+              inputMode="numeric"
+              placeholder="Price · Giá (₫)"
+              className="flex-1 min-w-0 min-h-[48px] rounded-xl border border-border px-3 text-sm tabular-nums"
+            />
+            <input
+              value={adHoc.qty}
+              onChange={(e) => setAdHoc({ ...adHoc, qty: e.target.value.replace(/[^\d]/g, "") })}
+              inputMode="numeric"
+              className="w-20 min-h-[48px] rounded-xl border border-border px-3 text-sm tabular-nums text-center"
+            />
+            <button
+              onClick={() => {
+                if (!adHoc.name.trim() || !Number(adHoc.price)) return;
+                addAdHocLine(order.id, adHoc.name, Number(adHoc.price), Number(adHoc.qty) || 1);
+                setAdHoc({ name: "", price: "", qty: "1" });
+                setPanel("none");
+                load();
+              }}
+              disabled={!adHoc.name.trim() || !Number(adHoc.price)}
+              className="min-h-[48px] px-4 rounded-xl bg-brand text-white font-semibold text-sm disabled:bg-border disabled:text-muted"
+            >
+              Add
+            </button>
+          </div>
+          <p className="text-xs text-muted">
+            Shows on the ticket and the bill by this name; flagged apart from real dishes in
+            reports. · Hiện trên phiếu và hoá đơn với tên này.
+          </p>
+        </div>
+      )}
+
+      {panel === "customer" && (
+        <div className="mx-4 mt-3 rounded-2xl border border-border bg-surface p-3 space-y-2">
+          <p className="text-sm font-semibold">
+            Who is this for? <span className="text-muted font-normal">· Khách hàng</span>
+          </p>
+          <input
+            value={customer.name}
+            onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+            placeholder="Name · Tên"
+            className="w-full min-h-[48px] rounded-xl border border-border px-3 text-sm"
+          />
+          <input
+            value={customer.phone}
+            onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
+            inputMode="tel"
+            placeholder="Phone (optional) · SĐT (không bắt buộc)"
+            className="w-full min-h-[48px] rounded-xl border border-border px-3 text-sm"
+          />
+          <button
+            onClick={() => {
+              setOrderCustomer(order.id, customer.name, customer.phone || undefined);
+              setPanel("none");
+              load();
+            }}
+            className="w-full min-h-[48px] rounded-xl bg-brand text-white font-semibold text-sm"
+          >
+            Save · Lưu
           </button>
         </div>
       )}
@@ -330,7 +595,9 @@ function ReviewContent() {
                 <div key={line.id} className="p-3">
                   <div className="flex items-start justify-between gap-3">
                     <span className="min-w-0">
-                      <span className="block font-semibold text-sm">{item?.name.en ?? "Item"}</span>
+                      <span className="block font-semibold text-sm">
+                        {item?.name.en ?? line.menuItemId.replace("adhoc:", "")}
+                      </span>
                       <span className="block text-xs text-muted">{item?.name.vi}</span>
                       {line.choices?.length ? (
                         <span className="block text-xs text-brand font-medium mt-0.5">
@@ -452,6 +719,17 @@ function ReviewContent() {
                   </span>
                 </span>
                 <span className="text-right shrink-0">
+                  {p.slipPhotoPath && (
+                    <button
+                      onClick={async () => {
+                        const url = await cardSlipUrl(p.slipPhotoPath!);
+                        if (url) window.open(url, "_blank", "noopener,noreferrer");
+                      }}
+                      className="text-xs text-brand flex items-center gap-1 ml-auto mb-0.5"
+                    >
+                      <Eye size={13} /> Slip · Ảnh
+                    </button>
+                  )}
                   <span className="block font-bold tabular-nums">{vnd(p.amountVnd)}</span>
                   <span
                     className={`text-xs ${
@@ -736,19 +1014,68 @@ function ReviewContent() {
               <br />
               Máy thẻ đối soát riêng — mã này để khớp đơn khi chốt ca.
             </p>
+            <input
+              ref={slipInput}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                setPendingSlip(e.target.files?.[0] ?? null);
+                setSlipProblem(null);
+              }}
+            />
             <button
-              onClick={() => {
-                pay("card", cardRef);
+              onClick={() => slipInput.current?.click()}
+              className="w-full min-h-[52px] rounded-xl border border-border font-semibold flex items-center justify-center gap-2"
+            >
+              <Camera size={17} />
+              {pendingSlip
+                ? "Photo ready · Đã chụp — retake?"
+                : "Photograph the slip · Chụp hoá đơn thẻ"}
+            </button>
+
+            <button
+              onClick={async () => {
+                setSlipBusy(true);
+                const payment = takePayment({
+                  orderId: order.id,
+                  method: "card",
+                  amountVnd: bill.outstandingVnd,
+                  takenBy: session?.name ?? null,
+                  providerRef: cardRef,
+                });
+                if (unsentLines(order).length > 0) sendToKitchen(order.id);
+
+                // The payment is recorded first. A failed upload must never
+                // lose the fact that money was taken — the photo is evidence
+                // for cash-up, not the payment itself.
+                const file = pendingSlip;
+                if (file) {
+                  const up = await uploadCardSlip(payment.id, file);
+                  if (up.ok) setPaymentSlip(payment.id, up.path);
+                  else
+                    setSlipProblem(
+                      "Payment recorded, but the photo did not upload · Đã ghi nhận thanh toán, ảnh chưa tải lên"
+                    );
+                }
+                setPendingSlip(null);
+                setSlipBusy(false);
                 setCardOpen(false);
                 setCardRef("");
+                load();
               }}
-              className="w-full min-h-[52px] rounded-xl bg-success text-white font-semibold"
+              disabled={slipBusy}
+              className="w-full min-h-[52px] rounded-xl bg-success text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
             >
+              {slipBusy ? <Loader2 size={17} className="animate-spin" /> : null}
               Take {vnd(bill.outstandingVnd)} on card · Nhận thẻ
             </button>
-            {!cardRef && (
+
+            {slipProblem && <p className="text-xs text-warning">{slipProblem}</p>}
+            {!cardRef && !pendingSlip && (
               <p className="text-xs text-warning">
-                No reference — it will be harder to reconcile · Không có mã sẽ khó đối soát
+                No reference or photo — it will be harder to reconcile · Khó đối soát
               </p>
             )}
           </div>

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
+import { downscaleImage } from "@/lib/images/downscale";
 
 /**
  * Menu photography.
@@ -27,41 +28,13 @@ export type PhotoUploadResult =
 /** Refused before any resizing work, so a wrong file fails immediately. */
 const MAX_SOURCE_BYTES = 15 * 1024 * 1024;
 
-/**
- * Shrink to fit MAX_EDGE_PX, preserving aspect ratio.
- *
- * Returns the original if anything goes wrong: a photo that uploads large is
- * a slow menu, but a photo that fails to upload is no menu at all.
- */
-async function downscale(file: File): Promise<Blob> {
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_EDGE_PX / Math.max(bitmap.width, bitmap.height));
-    if (scale === 1 && file.type === "image/jpeg") return file;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return file;
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY)
-    );
-    return blob ?? file;
-  } catch {
-    return file;
-  }
-}
 
 export async function uploadMenuPhoto(menuItemId: string, file: File): Promise<PhotoUploadResult> {
   if (!supabase) return { ok: false, reason: "not_configured" };
   if (!file.type.startsWith("image/")) return { ok: false, reason: "not_an_image" };
   if (file.size > MAX_SOURCE_BYTES) return { ok: false, reason: "too_large" };
 
-  const body = await downscale(file);
+  const body = await downscaleImage(file, MAX_EDGE_PX, JPEG_QUALITY);
   // Named for the item and stamped, so replacing a photo does not have to
   // race a cache and an old URL never silently becomes a different dish.
   const path = `${menuItemId}/${Date.now()}.jpg`;

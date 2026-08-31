@@ -896,6 +896,9 @@ export type Order = {
    * and for an allergy the difference is the one a kitchen needs.
    */
   orderNote?: string;
+  /** Who is sitting there. Recorded only when it is worth recording. */
+  customerName?: string;
+  customerPhone?: string;
   /** Taken off the whole bill. Absent means nothing was discounted. */
   discount?: OrderDiscount;
   updatedAt: string;
@@ -973,4 +976,11 @@ export type Payment = {
   confirmedAt?: string;
   /** Kept verbatim when a provider rejects, so a failure can be explained later. */
   failureDetail?: string;
+  /**
+   * Storage path of a photographed card slip.
+   *
+   * A path rather than a URL, because the bucket is private and its URLs
+   * expire — see lib/payments/slips.ts.
+   */
+  slipPhotoPath?: string;
 };

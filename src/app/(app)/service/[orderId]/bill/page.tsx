@@ -106,7 +106,7 @@ function BillContent() {
                 <tr key={line.id} className="align-top">
                   <td className="py-1.5 pr-2 tabular-nums w-8">{line.qty}×</td>
                   <td className="py-1.5 pr-2">
-                    <span className="block">{item?.name.en ?? "Item"}</span>
+                    <span className="block">{item?.name.en ?? line.menuItemId.replace("adhoc:", "")}</span>
                     <span className="block text-xs text-muted">{item?.name.vi}</span>
                     {line.choices?.length ? (
                       <span className="block text-xs text-muted">

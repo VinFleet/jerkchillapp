@@ -272,3 +272,85 @@ export function cashSuggestionsVnd(owedVnd: number, limit = 5): number[] {
   }
   return out;
 }
+
+// ---------- splitting, merging, naming ----------
+
+/**
+ * A short code a person can say out loud.
+ *
+ * Order ids are for machines. At cash-up, on a card slip, or shouted across a
+ * pass, what is needed is something five characters long that survives being
+ * written on paper — so this is derived from the id rather than stored, and
+ * uses an alphabet with no O/0 or I/1 to read back.
+ */
+export function orderCode(orderId: string): string {
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let hash = 0;
+  for (let i = 0; i < orderId.length; i += 1) {
+    hash = (hash * 31 + orderId.charCodeAt(i)) >>> 0;
+  }
+  let out = "";
+  for (let i = 0; i < 5; i += 1) {
+    out += alphabet[hash % alphabet.length];
+    hash = Math.floor(hash / alphabet.length) + 7;
+  }
+  return out;
+}
+
+export type SplitVerdict =
+  | { ok: true }
+  | { ok: false; reason: "closed" | "paid" | "nothing_selected" | "everything_selected" };
+
+/**
+ * Whether a bill may be split.
+ *
+ * Refused once money has been taken. A payment belongs to an order, and
+ * moving half the lines out from under it leaves two bills where the paid
+ * amount belongs to neither — the kind of mess that is only discovered when
+ * the takings do not add up.
+ *
+ * Also refused when everything or nothing is selected: neither is a split,
+ * and both leave an empty order behind holding a table.
+ */
+export function canSplitOrder(
+  status: string,
+  lines: Line[],
+  selectedIds: string[],
+  payments: PaymentRecord[]
+): SplitVerdict {
+  if (status === "closed" || status === "cancelled") return { ok: false, reason: "closed" };
+  if (payments.some((p) => p.status === "paid" || p.status === "pending")) {
+    return { ok: false, reason: "paid" };
+  }
+  const live = lines.filter((l) => l.status !== "cancelled");
+  const selected = live.filter((l) => selectedIds.includes(l.id));
+  if (selected.length === 0) return { ok: false, reason: "nothing_selected" };
+  if (selected.length === live.length) return { ok: false, reason: "everything_selected" };
+  return { ok: true };
+}
+
+export type MergeVerdict = { ok: true } | { ok: false; reason: "closed" | "paid" | "same_order" };
+
+/**
+ * Whether two bills may be merged.
+ *
+ * Same reasoning as splitting: once either side has taken money, combining
+ * them makes the payment ambiguous. Merging is for two tables that pushed
+ * together before anyone paid.
+ */
+export function canMergeOrders(
+  intoId: string,
+  fromId: string,
+  intoStatus: string,
+  fromStatus: string,
+  paymentsEitherSide: PaymentRecord[]
+): MergeVerdict {
+  if (intoId === fromId) return { ok: false, reason: "same_order" };
+  for (const status of [intoStatus, fromStatus]) {
+    if (status === "closed" || status === "cancelled") return { ok: false, reason: "closed" };
+  }
+  if (paymentsEitherSide.some((p) => p.status === "paid" || p.status === "pending")) {
+    return { ok: false, reason: "paid" };
+  }
+  return { ok: true };
+}

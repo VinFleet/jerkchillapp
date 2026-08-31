@@ -7,6 +7,8 @@ import {
   resolveQtyChange,
   isVoided,
   linePriceVnd,
+  canSplitOrder,
+  canMergeOrders,
 } from "@/lib/repo/orderRules";
 import type {
   OrderLineChoice,
@@ -305,6 +307,144 @@ export function moveOrderToTable(orderId: string, tableId: string) {
   writeList(ORDERS_KEY, all);
 }
 
+/**
+ * Move some lines onto a bill of their own.
+ *
+ * The classic "we'll pay separately". The new order inherits the table and
+ * the channel, and the lines keep their sentAt — the kitchen has already
+ * cooked them and must not see them twice.
+ *
+ * The discount deliberately stays with the original: it was applied to a
+ * bill that no longer exists in the same shape, and silently re-applying a
+ * percentage to both halves would give away more than anyone agreed to.
+ */
+export function splitOrder(
+  orderId: string,
+  lineIds: string[],
+  placedBy: string | null
+): { ok: true; newOrderId: string } | { ok: false; reason: string } {
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return { ok: false, reason: "missing" };
+
+  const source = all[idx];
+  const verdict = canSplitOrder(source.status, source.lines, lineIds, getPayments(orderId));
+  if (!verdict.ok) return { ok: false, reason: verdict.reason };
+
+  const now = new Date().toISOString();
+  const moving = source.lines.filter((l) => lineIds.includes(l.id));
+  const staying = source.lines.filter((l) => !lineIds.includes(l.id));
+
+  const split: Order = {
+    id: newId("order"),
+    tableId: source.tableId,
+    source: source.source,
+    channel: source.channel,
+    status: "placed",
+    lines: moving,
+    placedAt: source.placedAt,
+    placedBy,
+    updatedAt: now,
+  };
+
+  all[idx] = { ...source, lines: staying, updatedAt: now };
+  writeList(ORDERS_KEY, [...all, split]);
+  return { ok: true, newOrderId: split.id };
+}
+
+/**
+ * Fold one bill into another.
+ *
+ * For two tables that pushed together. The absorbed order is cancelled rather
+ * than deleted, so its history survives — and its lines keep their sentAt for
+ * the same reason as a split.
+ */
+export function mergeOrders(
+  intoId: string,
+  fromId: string
+): { ok: true } | { ok: false; reason: string } {
+  const all = readList<Order>(ORDERS_KEY);
+  const intoIdx = all.findIndex((o) => o.id === intoId);
+  const fromIdx = all.findIndex((o) => o.id === fromId);
+  if (intoIdx < 0 || fromIdx < 0) return { ok: false, reason: "missing" };
+
+  const verdict = canMergeOrders(
+    intoId,
+    fromId,
+    all[intoIdx].status,
+    all[fromIdx].status,
+    [...getPayments(intoId), ...getPayments(fromId)]
+  );
+  if (!verdict.ok) return { ok: false, reason: verdict.reason };
+
+  const now = new Date().toISOString();
+  const notes = [all[intoIdx].orderNote, all[fromIdx].orderNote].filter(Boolean).join(" · ");
+
+  all[intoIdx] = {
+    ...all[intoIdx],
+    lines: [...all[intoIdx].lines, ...all[fromIdx].lines],
+    // Both tables' notes survive. Losing an allergy note in a merge is the
+    // one outcome this must never have.
+    orderNote: notes || undefined,
+    updatedAt: now,
+  };
+  all[fromIdx] = { ...all[fromIdx], status: "cancelled", lines: [], updatedAt: now };
+  writeList(ORDERS_KEY, all);
+  return { ok: true };
+}
+
+/**
+ * An item that is not on the menu.
+ *
+ * Specials, a corkage charge, a plate the kitchen improvised. Priced by the
+ * person adding it, named in English only because they are typing it
+ * one-handed — a Vietnamese name can be added when it becomes a real menu
+ * item, and pretending otherwise would just produce two copies of the
+ * English.
+ */
+export function addAdHocLine(
+  orderId: string,
+  name: string,
+  priceVnd: number,
+  qty: number
+): OrderLine | null {
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return null;
+
+  const line: OrderLine = {
+    id: newId("line"),
+    // Not a menu id: nothing in the menu matches, and the variance report
+    // needs to be able to tell these apart from a real dish.
+    menuItemId: `adhoc:${name.trim().slice(0, 60)}`,
+    unitPriceVnd: Math.max(0, Math.round(priceVnd)),
+    qty: Math.max(1, Math.round(qty)),
+    status: "placed",
+  };
+
+  all[idx] = {
+    ...all[idx],
+    lines: [...all[idx].lines, line],
+    updatedAt: new Date().toISOString(),
+  };
+  writeList(ORDERS_KEY, all);
+  return line;
+}
+
+/** Who is sitting there, when it is worth recording. */
+export function setOrderCustomer(orderId: string, name: string, phone?: string) {
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return;
+  all[idx] = {
+    ...all[idx],
+    customerName: name.trim().slice(0, 120) || undefined,
+    customerPhone: phone?.trim().slice(0, 32) || undefined,
+    updatedAt: new Date().toISOString(),
+  };
+  writeList(ORDERS_KEY, all);
+}
+
 export function setOrderStatus(orderId: string, status: OrderStatus) {
   const all = readList<Order>(ORDERS_KEY);
   const idx = all.findIndex((o) => o.id === orderId);
@@ -412,6 +552,15 @@ export function confirmPaymentByReference(
   };
   writeList(PAYMENTS_KEY, all);
   return true;
+}
+
+/** Attach a photographed card slip to a payment. */
+export function setPaymentSlip(paymentId: string, path: string) {
+  const all = readList<Payment>(PAYMENTS_KEY);
+  const idx = all.findIndex((p) => p.id === paymentId);
+  if (idx < 0) return;
+  all[idx] = { ...all[idx], slipPhotoPath: path };
+  writeList(PAYMENTS_KEY, all);
 }
 
 export function failPayment(paymentId: string, detail: string) {
