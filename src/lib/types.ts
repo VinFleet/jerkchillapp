@@ -779,3 +779,90 @@ export type Session = {
   /** Their staff record, so attribution survives a name being edited later. */
   activeStaffId: string | null;
 };
+
+// ---------- Ordering ----------
+
+/**
+ * How an order reached us. Kept separate from MenuChannel, which is about
+ * pricing: a waiter-entered order and a QR order are both dine-in priced, but
+ * they behave differently and the difference is worth reporting on.
+ */
+export type OrderSource = "qr" | "waiter" | "counter" | "delivery";
+
+/**
+ * Order lifecycle.
+ *
+ * `placed` is the kitchen's inbox; `served` means the food is on the table;
+ * `closed` means it is paid and done. Payment is deliberately NOT a status —
+ * an order can be served and unpaid, or paid before it is served, and folding
+ * the two into one axis makes both wrong.
+ */
+export type OrderStatus = "placed" | "preparing" | "ready" | "served" | "closed" | "cancelled";
+
+/** Per-line, because a kitchen marks the chicken ready before the sides. */
+export type OrderLineStatus = "placed" | "preparing" | "ready" | "served" | "cancelled";
+
+export type OrderLine = {
+  id: string;
+  menuItemId: string;
+  /** Copied at the time of ordering. A later price change must not rewrite history. */
+  unitPriceVnd: number;
+  qty: number;
+  status: OrderLineStatus;
+  /** "no scotch bonnet", "extra rice" — free text from a guest, treat as untrusted. */
+  note?: string;
+};
+
+export type Order = {
+  id: string;
+  /** Null for a counter or delivery order that isn't sitting at a table. */
+  tableId: string | null;
+  source: OrderSource;
+  /** Which price list applied. Copied so a channel change can't rewrite an old bill. */
+  channel: MenuChannel;
+  status: OrderStatus;
+  lines: OrderLine[];
+  placedAt: string;
+  /** Staff name for waiter/counter orders; null when a guest ordered by QR. */
+  placedBy: string | null;
+  guestNote?: string;
+  updatedAt: string;
+};
+
+// ---------- Payments ----------
+
+/**
+ * Three rails, one shape.
+ *
+ * VietQR settles bank-to-bank and is confirmed by a webhook watching the
+ * account; cards go through a gateway; cash is settled in the room. They differ
+ * in how confirmation arrives, not in what a payment is — so they share a
+ * record and differ only in adapter.
+ */
+export type PaymentMethod = "cash" | "vietqr" | "card";
+
+/**
+ * `pending` means we are waiting to hear. Cash never sits here — it is
+ * confirmed the moment it is in the drawer — but both electronic rails do, and
+ * an order must never read as paid on the strength of a QR having been shown.
+ */
+export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+
+export type Payment = {
+  id: string;
+  orderId: string;
+  method: PaymentMethod;
+  amountVnd: number;
+  status: PaymentStatus;
+  /** Our reference, embedded in the VietQR string so the webhook can match it back. */
+  reference: string;
+  /** The provider's own id, once they give us one. */
+  providerRef?: string;
+  /** Which service confirmed it — 'sepay', 'casso', '9pay'. Null for cash. */
+  provider?: string;
+  takenBy: string | null;
+  createdAt: string;
+  confirmedAt?: string;
+  /** Kept verbatim when a provider rejects, so a failure can be explained later. */
+  failureDetail?: string;
+};
