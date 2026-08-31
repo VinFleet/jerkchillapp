@@ -233,7 +233,10 @@ function OrderContent() {
         }
       />
 
-      <div className="px-4 md:px-8 pb-40 space-y-6">
+      {/* Clears the money bar and the mobile nav beneath it. The bar grows a
+          row when part-paid, so this is generous on purpose — menu items
+          hidden behind it are items nobody can order. */}
+      <div className="px-4 md:px-8 pb-64 md:pb-48 space-y-6">
         {problem && (
           <p className="flex items-start gap-2 text-sm rounded-xl border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2">
             <AlertTriangle size={16} className="shrink-0 mt-0.5" />

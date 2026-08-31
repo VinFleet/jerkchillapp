@@ -8,6 +8,7 @@ import { useSession } from "@/lib/auth/RoleContext";
 import { onSyncedDataChanged, syncNow } from "@/lib/sync/engine";
 import { getKitchenQueue, setLineStatus, setOrderStatus } from "@/lib/repo/orders";
 import { getMenuItems } from "@/lib/repo/menu";
+import { getCachedTables } from "@/lib/repo/tableCache";
 import type { Order, MenuItem } from "@/lib/types";
 
 /**
@@ -33,6 +34,9 @@ function KitchenContent() {
   const { session } = useSession();
   const [orders, setOrders] = useState<Order[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  // Table id -> the number painted on the table. A chef reading a ticket needs
+  // "I4", not a UUID; the id is the join key, never the label.
+  const [tableNumbers, setTableNumbers] = useState<Record<string, string>>({});
   // Re-render on a timer so ticket ages climb without anyone touching the
   // screen — a stale "2 min" on a ticket that has been sitting ten is worse
   // than no age at all.
@@ -41,6 +45,9 @@ function KitchenContent() {
   const load = useCallback(() => {
     setOrders(getKitchenQueue());
     setMenu(getMenuItems(false));
+    setTableNumbers(
+      Object.fromEntries(getCachedTables().map((t) => [t.id, t.tableNumber]))
+    );
   }, []);
 
   useEffect(() => {
@@ -91,7 +98,11 @@ function KitchenContent() {
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div>
                       <p className="font-bold text-lg">
-                        {order.tableId ?? "Counter · Quầy"}
+                        {order.tableId
+                          ? // Falls back to the id only if the floor plan has
+                            // not loaded — unreadable, but better than blank.
+                            (tableNumbers[order.tableId] ?? order.tableId)
+                          : "Counter · Quầy"}
                       </p>
                       <p className="text-xs text-muted">
                         {order.source === "qr" ? "Ordered by guest · Khách tự gọi" : order.placedBy ?? ""}

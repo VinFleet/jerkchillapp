@@ -1,6 +1,12 @@
 import { readList, writeList, newId, todayIso } from "@/lib/storage";
 import { getMenuItems } from "@/lib/repo/menu";
-import { billState, canCloseOrder, paymentReference, resolveQtyChange } from "@/lib/repo/orderRules";
+import {
+  billState,
+  canCloseOrder,
+  paymentReference,
+  resolveQtyChange,
+  isVoided,
+} from "@/lib/repo/orderRules";
 import type {
   Order,
   OrderLine,
@@ -172,6 +178,9 @@ export function setLineStatus(orderId: string, lineId: string, status: OrderLine
  */
 function deriveOrderStatus(current: OrderStatus, lines: OrderLine[]): OrderStatus {
   if (current === "closed" || current === "cancelled") return current;
+  // Every line voided means the order is gone, not merely empty — otherwise
+  // the table stays occupied at 0d with nothing able to close it.
+  if (isVoided(lines)) return "cancelled";
   const active = lines.filter((l) => l.status !== "cancelled");
   if (active.length === 0) return current;
   if (active.every((l) => l.status === "served")) return "served";

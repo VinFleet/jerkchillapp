@@ -16,6 +16,7 @@ import {
   canCloseOrder,
   paymentReference,
   resolveQtyChange,
+  isVoided,
   type Line,
   type PaymentRecord,
 } from "./orderRules.ts";
@@ -170,4 +171,17 @@ test("a cancelled line stops counting toward the bill", () => {
   const after = orderTotalVnd([line({ unitPriceVnd: 50_000, qty: 1, status: "cancelled" })]);
   assert.equal(before, 50_000);
   assert.equal(after, 0);
+});
+
+// ---------- voiding every line ----------
+
+test("an order with every line voided is not an empty order, it is gone", () => {
+  // The bug this exists for: the table showed occupied at 0d forever, and
+  // canCloseOrder refused because the bill was empty, so nothing could free it.
+  assert.equal(isVoided([line({ status: "cancelled" }), line({ status: "cancelled" })]), true);
+});
+
+test("a table someone is still ordering at is not voided", () => {
+  assert.equal(isVoided([]), false, "no lines yet is a new table, not a void");
+  assert.equal(isVoided([line({ status: "placed" }), line({ status: "cancelled" })]), false);
 });

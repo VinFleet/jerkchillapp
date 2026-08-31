@@ -141,3 +141,17 @@ export function resolveQtyChange(requested: number): QtyChange {
   const qty = Math.round(requested);
   return qty < 1 ? { action: "cancel" } : { action: "set", qty };
 }
+
+/**
+ * Whether an order has been emptied by voiding.
+ *
+ * An order whose every line was cancelled is not an order any more, and it
+ * must not keep its table. Without this the floor screen shows the table
+ * occupied at 0d forever: canCloseOrder refuses because the bill is empty, so
+ * nothing can free it, and a waiter who voided a mis-keyed round has no way
+ * back. Distinguished from "no lines yet", which is a table someone has just
+ * opened and is still ordering at.
+ */
+export function isVoided(lines: Line[]): boolean {
+  return lines.length > 0 && lines.every((line) => line.status === "cancelled");
+}
