@@ -19,6 +19,7 @@ import {
   setLineQty,
   takePayment,
   closeOrder,
+  confirmPaymentByReference,
 } from "@/lib/repo/orders";
 import { getMenuItems } from "@/lib/repo/menu";
 import { getCachedTables } from "@/lib/repo/tableCache";
@@ -74,6 +75,54 @@ function OrderContent() {
     load();
     return onSyncedDataChanged(load);
   }, [load]);
+
+  // While a transfer is outstanding, ask whether it has landed.
+  //
+  // The guest is standing at the table for this, so it polls rather than
+  // waiting for the next sync — but it stops the moment nothing is pending,
+  // because an idle till should not be talking to the server every few seconds
+  // all evening. Confirming writes locally and syncs out from there, which is
+  // what keeps the money path on the same local-first footing as everything else.
+  const pendingRefs = payments
+    .filter((p) => p.status === "pending" && p.method === "vietqr")
+    .map((p) => p.reference)
+    .join(",");
+
+  useEffect(() => {
+    if (!pendingRefs) return;
+    const refs = pendingRefs.split(",");
+    let stop = false;
+
+    const check = async () => {
+      for (const reference of refs) {
+        try {
+          const res = await fetch(
+            `/api/payments/status?reference=${encodeURIComponent(reference)}`
+          );
+          if (!res.ok) continue;
+          const body = (await res.json()) as {
+            status?: string;
+            providerRef?: string;
+            provider?: string;
+          };
+          if (body.status === "paid" && body.providerRef) {
+            confirmPaymentByReference(reference, body.providerRef, body.provider ?? "bank");
+            if (!stop) load();
+          }
+        } catch {
+          // Offline, or the server is down. The waiter can still take cash;
+          // silence here is better than an error banner over a working till.
+        }
+      }
+    };
+
+    void check();
+    const timer = setInterval(check, 5000);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
+  }, [pendingRefs, load]);
 
   const bill = order ? getBill(order.id) : null;
 
@@ -316,7 +365,8 @@ function OrderContent() {
             </p>
             <p className="text-xs text-muted break-all font-mono">{qrPayload}</p>
             <p className="text-xs text-muted">
-              The QR image is generated on the sticker screen — this is the payload it encodes.
+              Waiting for the transfer to land · Đang chờ chuyển khoản — this confirms itself, no
+              need to watch it.
             </p>
           </div>
         )}

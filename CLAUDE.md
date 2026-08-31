@@ -248,20 +248,39 @@ of these produces a failure that is hard to trace back to its cause.*
 
 ## Layout
 
-**17 modules:** recipes · stock · checklists · planner · notices · bookings ·
-foodSafety · suppliers · contacts · licensing · sales · staff · menu ·
+**18 modules:** recipes · stock · checklists · planner · notices · bookings ·
+orders · foodSafety · suppliers · contacts · licensing · sales · staff · menu ·
 marketing · shopping · deliveryPerformance · usageVariance.
 
-**56 local collections** across `src/lib/repo/`, namespaced
-`jc:{tenant}:{key}`.
+`orders` covers all four roles, because a chef needs the pass and a waiter
+needs the pad. The real boundary is money: `canTakePayment` is what keeps the
+kitchen tablet away from closing a bill.
 
-**14 sync**, in the two families:
+**58 local collections** across `src/lib/repo/`, namespaced
+`jc:{tenant}:{key}`. That count excludes seven `isSeeded()` migration guards
+and four device-local meta keys, which are storage but not collections.
+
+**16 sync**, in the two families:
 
 - *Last-write-wins:* `checklist_items`, `checklist_ticks`, `notices`,
-  `notice_acks`, `stock_entries`
+  `notice_acks`, `stock_entries`, `orders`, `order_payments`
 - *Append-only:* `fs_temp_readings`, `fs_cook_logs`, `fs_delivery_logs`,
   `fs_cleaning_signoffs`, `fs_inspections`, `fs_samples`,
   `fs_sample_destruction_checks`, `fs_pest`, `fs_complaints`
+
+Orders are last-write-wins rather than append-only, which is a deliberate
+choice and the riskier one: a line added on a waiter's phone while the kitchen
+marks another ready must not lose either edit. It holds because writes are
+per-record and the two devices touch different lines. If orders ever grow an
+operation that rewrites the whole line array at once, this stops being safe.
+
+## Tables — the other exception to rule 1
+
+The floor plan lives in Postgres, because the public booking form has to see it
+and a guest's browser has no local store of ours. That is right for bookings
+and wrong for the till, so `lib/repo/tableCache.ts` mirrors it locally on every
+successful fetch and falls back to the compiled-in `STARTER_FLOOR_PLAN`. A
+device that has never been online still knows the room.
 
 ## Documents — the exception to rule 1
 
@@ -285,8 +304,11 @@ into a repo from a test:
 | `lib/zalo/sendWindow.ts` | whether a message type may send now |
 | `lib/zalo/mentions.ts` | defusing `[@…]` injection in relayed text |
 | `lib/zalo/text.ts` | NFC normalisation before any length check |
+| `lib/repo/orderRules.ts` | what a bill totals, and whether a table may be closed |
+| `lib/payments/vietqr.ts` | the EMVCo payload and its CRC — a wrong byte means a QR that will not scan |
 
-Tests: `npm run test:zalo`, `npm run test:due`.
+Tests: `npm run test:all` runs all five suites (79 assertions); individually
+`npm run test:zalo`, `test:due`, `test:portions`, `test:orders`, `test:vietqr`.
 
 ## Zalo, briefly
 
