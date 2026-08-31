@@ -254,6 +254,19 @@ function mergeRows(collection: SyncedCollection, rows: RemoteRow[]): boolean {
       changed = true;
       continue;
     }
+    // A collection with its own reconcile gets it on every conflict, not just
+    // in the append-only family. This was the bug: order_payments registered
+    // reconcilePayment and the LWW path never called it, so two same-status
+    // copies tied on their timestamps and the last pusher won — a slip photo
+    // attached on one device could be silently clobbered by the other's copy.
+    if (config.reconcile) {
+      const merged = config.reconcile(existing, row.data);
+      if (JSON.stringify(merged) !== JSON.stringify(existing)) {
+        byId.set(row.record_id, merged);
+        changed = true;
+      }
+      continue;
+    }
     // Last write wins. The server stamps updated_at, so a device with a wrong
     // clock can't permanently win or lose every conflict.
     const localAt = config.updatedAtOf(existing);

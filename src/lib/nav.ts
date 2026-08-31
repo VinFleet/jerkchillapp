@@ -62,4 +62,26 @@ export const NAV_ITEMS: NavItem[] = [
  */
 // Notices sits here rather than behind "More": it replaces the group chat,
 // and an operational message nobody walks past is a message nobody reads.
+//
+// The bar is per-station because the same four slots cannot serve both ends
+// of the room. A waiter's most-used screen is the till and a chef's is the
+// pass — burying either behind "More" makes the newest feature the hardest
+// to reach, mid-shift, one-handed.
 export const MOBILE_PRIMARY_MODULES: ModuleId[] = ["checklists", "stock", "notices", "recipes"];
+
+export function mobilePrimaryModules(station: "kitchen" | "foh" | "manager"): ModuleId[] {
+  switch (station) {
+    case "kitchen":
+      // The pass replaces recipes: recipes are read at prep, the pass is read
+      // every minute of service, and prep-time reading survives a tap on More.
+      return ["orders", "checklists", "stock", "notices"];
+    case "foh":
+    case "manager":
+      return ["orders", "checklists", "stock", "notices"];
+  }
+}
+
+/** Where the orders module lands for this station — the pad or the pass. */
+export function ordersHref(station: "kitchen" | "foh" | "manager"): string {
+  return station === "kitchen" ? "/kitchen" : "/service";
+}

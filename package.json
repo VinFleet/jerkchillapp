@@ -15,8 +15,9 @@
     "test:orders": "node --experimental-strip-types --test src/lib/repo/orderRules.test.ts",
     "test:vietqr": "node --experimental-strip-types --test src/lib/payments/vietqr.test.ts",
     "postinstall": "node scripts/icloud-unsync.mjs",
-    "test:all": "npm run test:zalo && npm run test:due && npm run test:portions && npm run test:orders && npm run test:vietqr && npm run test:webhook",
-    "test:webhook": "node --experimental-strip-types --test src/lib/payments/webhookAuth.test.ts"
+    "test:all": "npm run test:zalo && npm run test:due && npm run test:portions && npm run test:orders && npm run test:vietqr && npm run test:webhook && npm run test:sync",
+    "test:webhook": "node --experimental-strip-types --test src/lib/payments/webhookAuth.test.ts",
+    "test:sync": "node --experimental-strip-types --test src/lib/sync/collections.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

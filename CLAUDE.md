@@ -224,8 +224,11 @@ of these produces a failure that is hard to trace back to its cause.*
 
 4. **Sync has two families with different merge rules.** Operational
    collections are last-write-wins; food-safety collections are an append-only
-   union. Merge functions are pure and must stay unit-tested for convergence
-   (any order reaches the same state) and idempotency (merging twice changes
+   union. A collection may register a `reconcile`, and the engine applies it on
+   conflicts in *both* families — `order_payments` uses this so a slip photo
+   attached on one device survives another device's copy of the same payment.
+   Merge functions are pure and must stay unit-tested for convergence (any
+   order reaches the same state) and idempotency (merging twice changes
    nothing).
 
 5. **Reference data does not sync** — recipes, suppliers, contacts, fridge
@@ -256,8 +259,8 @@ marketing · shopping · deliveryPerformance · usageVariance.
 needs the pad. The real boundary is money: `canTakePayment` is what keeps the
 kitchen tablet away from closing a bill.
 
-**58 local collections** across `src/lib/repo/`, namespaced
-`jc:{tenant}:{key}`. That count excludes seven `isSeeded()` migration guards
+**59 local collections** across `src/lib/repo/`, namespaced
+`jc:{tenant}:{key}`. That count excludes ten `isSeeded()` migration guards
 and four device-local meta keys, which are storage but not collections.
 
 **18 sync**, in the two families:
@@ -326,10 +329,11 @@ into a repo from a test:
 | `lib/repo/orderRules.ts` | what a bill totals, and whether a table may be closed |
 | `lib/payments/vietqr.ts` | the EMVCo payload and its CRC — a wrong byte means a QR that will not scan |
 | `lib/payments/webhookAuth.ts` | whether a payment callback is genuinely from the provider |
+| `lib/sync/collections.ts` (reconcilers) | how two devices' copies of one record merge — tested for convergence |
 
-Tests: `npm run test:all` runs all six suites (88 assertions); individually
+Tests: `npm run test:all` runs all seven suites (125 assertions); individually
 `npm run test:zalo`, `test:due`, `test:portions`, `test:orders`, `test:vietqr`,
-`test:webhook`.
+`test:webhook`, `test:sync`.
 
 ## Zalo, briefly
 

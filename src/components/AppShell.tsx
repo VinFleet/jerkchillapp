@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, MoreHorizontal, Settings } from "lucide-react";
-import { NAV_ITEMS, MOBILE_PRIMARY_MODULES } from "@/lib/nav";
+import { NAV_ITEMS, mobilePrimaryModules, ordersHref } from "@/lib/nav";
 import { canAccessModule } from "@/lib/auth/permissions";
 import { useSession } from "@/lib/auth/RoleContext";
 import { useSync } from "@/lib/sync/SyncProvider";
@@ -35,11 +35,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const items = NAV_ITEMS.filter(
     (item) => item.module === "home" || canAccessModule(session.role, item.module)
   );
+  const primary = mobilePrimaryModules(session.station);
   const mobileItems = items.filter(
-    (item) => item.module === "home" || MOBILE_PRIMARY_MODULES.includes(item.module)
+    (item) =>
+      item.module === "home" ||
+      (primary.includes(item.module) &&
+        // orders appears twice in NAV_ITEMS (Service and Kitchen Pass); the
+        // bar has room for the one this station actually stands at.
+        (item.module !== "orders" || item.href === ordersHref(session.station)))
   );
   const moreItems = items.filter(
-    (item) => item.module !== "home" && !MOBILE_PRIMARY_MODULES.includes(item.module)
+    (item) => item.module !== "home" && !mobileItems.includes(item)
   );
   const moreActive = moreItems.some(
     (item) => pathname === item.href || pathname.startsWith(item.href + "/")
