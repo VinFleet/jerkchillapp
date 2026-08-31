@@ -67,14 +67,16 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
-  const client = db();
-  if (!client) return NextResponse.json({ error: "unavailable" }, { status: 503 });
 
-  // Shape-check before touching the database, so a scanner probing the route
-  // costs us nothing.
+  // Shape-check first, so a scanner probing the route costs us nothing and
+  // learns nothing — a malformed token is "no such table" whether or not the
+  // backend behind this is even configured.
   if (!/^[A-Z0-9]{6,16}$/.test(token)) {
     return NextResponse.json({ error: "unknown_table" }, { status: 404 });
   }
+
+  const client = db();
+  if (!client) return NextResponse.json({ error: "unavailable" }, { status: 503 });
 
   try {
     const tableId = await resolveTable(client, token);
@@ -109,12 +111,13 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
-  const client = db();
-  if (!client) return NextResponse.json({ error: "unavailable" }, { status: 503 });
 
   if (!/^[A-Z0-9]{6,16}$/.test(token)) {
     return NextResponse.json({ error: "unknown_table" }, { status: 404 });
   }
+
+  const client = db();
+  if (!client) return NextResponse.json({ error: "unavailable" }, { status: 503 });
 
   let body: PlaceBody;
   try {
