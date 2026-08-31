@@ -10,6 +10,7 @@ import type { Bi } from "@/lib/types";
  * next one away too.
  */
 export const PUSH_CATEGORIES = [
+  "orders",
   "shopping",
   "bookings",
   "issues",
@@ -21,6 +22,7 @@ export const PUSH_CATEGORIES = [
 export type PushCategory = (typeof PUSH_CATEGORIES)[number];
 
 export const PUSH_CATEGORY_LABEL: Record<PushCategory, Bi> = {
+  orders: { en: "Orders from tables", vi: "Đơn từ bàn" },
   shopping: { en: "Shopping & orders", vi: "Mua hàng & đặt hàng" },
   bookings: { en: "Table & booking changes", vi: "Thay đổi bàn & đặt bàn" },
   issues: { en: "Problems & complaints", vi: "Sự cố & khiếu nại" },
@@ -30,6 +32,10 @@ export const PUSH_CATEGORY_LABEL: Record<PushCategory, Bi> = {
 };
 
 export const PUSH_CATEGORY_HINT: Record<PushCategory, Bi> = {
+  orders: {
+    en: "A guest orders from their table by QR code",
+    vi: "Khách quét mã QR gọi món tại bàn",
+  },
   shopping: {
     en: "An order is ready to send, or something has dropped below par",
     vi: "Đơn hàng sẵn sàng gửi, hoặc hàng dưới định mức",
@@ -59,12 +65,16 @@ export const PUSH_CATEGORY_HINT: Record<PushCategory, Bi> = {
 /**
  * What someone gets before they've chosen anything.
  *
- * Urgent notices and food safety only — the two where missing one has a
- * consequence beyond inconvenience. Everything else is opt-in, so the first
- * alerts a new starter receives are ones that actually warrant interrupting
- * them.
+ * The three where missing one has a consequence beyond inconvenience.
+ * Everything else is opt-in, so the first alerts a new starter receives are
+ * ones that actually warrant interrupting them.
+ *
+ * Table orders are on this list because a guest orders by QR and then simply
+ * waits. Nobody is standing at the pass saying "table six ordered" — if the
+ * alert does not arrive, the first anyone knows is a guest asking where their
+ * food is, and by then it has not been started.
  */
-export const DEFAULT_PUSH_CATEGORIES: PushCategory[] = ["notices", "food_safety"];
+export const DEFAULT_PUSH_CATEGORIES: PushCategory[] = ["notices", "food_safety", "orders"];
 
 export function isPushCategory(value: string): value is PushCategory {
   return (PUSH_CATEGORIES as readonly string[]).includes(value);

@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { MenuItem, Order, OrderLine } from "@/lib/types";
 import type { TableToken } from "@/lib/repo/tableTokens";
 import { newId } from "@/lib/storage";
+import { sendPush } from "@/lib/push/server";
 
 /**
  * The guest's half of QR ordering.
@@ -194,6 +195,27 @@ export async function POST(
       // The guest must not be told the order is on its way when it is not.
       return NextResponse.json({ error: "not_saved" }, { status: 503 });
     }
+
+    // Tell the kitchen. A guest orders by QR and then simply waits — nobody is
+    // standing at the pass announcing it, and sync only pulls once a minute, so
+    // without this the first anyone knows is a guest asking where their food is.
+    //
+    // Deliberately not awaited and never allowed to throw: the order is saved
+    // at this point, and a push failure must not turn a placed order into an
+    // error the guest sees. The alert rides on the action that produced it,
+    // which is the rule that keeps this app free of cron jobs.
+    void sendPush({
+      category: "orders",
+      title: "New table order · Đơn mới tại bàn",
+      body: `${lines.length} item${lines.length === 1 ? "" : "s"}${
+        order.guestNote ? ` — note: ${order.guestNote}` : ""
+      }`,
+      url: "/kitchen",
+      // One notification per order rather than a stack: a guest adding a
+      // second round should not bury the first.
+      tag: `order-${order.id}`,
+      urgent: true,
+    }).catch(() => undefined);
 
     return NextResponse.json({ status: "placed", orderId: order.id, lines: lines.length });
   } catch {

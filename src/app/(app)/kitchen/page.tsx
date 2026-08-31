@@ -5,7 +5,7 @@ import { ChefHat, Clock } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { useSession } from "@/lib/auth/RoleContext";
-import { onSyncedDataChanged } from "@/lib/sync/engine";
+import { onSyncedDataChanged, syncNow } from "@/lib/sync/engine";
 import { getKitchenQueue, setLineStatus, setOrderStatus } from "@/lib/repo/orders";
 import { getMenuItems } from "@/lib/repo/menu";
 import type { Order, MenuItem } from "@/lib/types";
@@ -47,9 +47,17 @@ function KitchenContent() {
     load();
     const stop = onSyncedDataChanged(load);
     const timer = setInterval(() => setTick((t) => t + 1), 30_000);
+
+    // Pull faster than the app's one-minute background cycle while this screen
+    // is actually up. A QR order is placed by a guest who then just waits, and
+    // a minute of a ticket not existing is a minute nobody is cooking it. This
+    // is the one screen where that latency is the whole job, and it stops as
+    // soon as the pass is closed rather than running all evening everywhere.
+    const pull = setInterval(() => void syncNow(), 12_000);
     return () => {
       stop();
       clearInterval(timer);
+      clearInterval(pull);
     };
   }, [load]);
 
