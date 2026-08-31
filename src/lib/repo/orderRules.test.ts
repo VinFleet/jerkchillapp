@@ -19,6 +19,8 @@ import {
   isVoided,
   linePriceVnd,
   discountAmountVnd,
+  changeDueVnd,
+  cashSuggestionsVnd,
   type Line,
   type PaymentRecord,
 } from "./orderRules.ts";
@@ -263,4 +265,42 @@ test("a fully discounted bill is settled, not stuck", () => {
   });
   assert.equal(b.totalVnd, 0);
   assert.equal(b.fullyPaid, true, "nothing owed means nothing to collect");
+});
+
+// ---------- cash ----------
+
+test("change is what the guest gets back", () => {
+  assert.equal(changeDueVnd(1_000_000, 760_000), 240_000);
+  assert.equal(changeDueVnd(760_000, 760_000), 0);
+});
+
+test("underpaying is not negative change", () => {
+  // Handing money back on an underpayment is a mistake, not change. The bill
+  // just stays part-paid.
+  assert.equal(changeDueVnd(500_000, 760_000), 0);
+});
+
+test("cash suggestions always cover the bill", () => {
+  for (const owed of [760_000, 55_000, 1_000, 999_999, 210_000]) {
+    for (const s of cashSuggestionsVnd(owed)) {
+      assert.ok(s >= owed, `${s} does not cover ${owed}`);
+      assert.ok(Number.isInteger(s), `${s} is not whole dong`);
+    }
+  }
+});
+
+test("the exact amount is always offered first", () => {
+  assert.equal(cashSuggestionsVnd(760_000)[0], 760_000);
+});
+
+test("suggestions do not repeat themselves", () => {
+  // A round bill rounds up to itself at every step; six identical buttons is
+  // not a shortcut, it is a second decision.
+  const s = cashSuggestionsVnd(500_000);
+  assert.equal(new Set(s).size, s.length);
+});
+
+test("an empty bill suggests nothing", () => {
+  assert.deepEqual(cashSuggestionsVnd(0), []);
+  assert.deepEqual(cashSuggestionsVnd(-100), []);
 });

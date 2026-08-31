@@ -120,8 +120,22 @@ function KitchenContent() {
                     </span>
                   </div>
 
+                  {/* Both notes, labelled by who said it. For an allergy the
+                      difference between "the guest typed this" and "a waiter
+                      was told this at the table" is the one that matters. */}
+                  {order.orderNote && (
+                    <p className="text-sm bg-warning-tint text-warning rounded-xl px-3 py-2 mb-2 font-semibold">
+                      <span className="block text-xs font-normal opacity-80">
+                        From the table · Từ bàn
+                      </span>
+                      {order.orderNote}
+                    </p>
+                  )}
                   {order.guestNote && (
                     <p className="text-sm bg-warning-tint text-warning rounded-xl px-3 py-2 mb-3 font-semibold">
+                      <span className="block text-xs font-normal opacity-80">
+                        Guest wrote · Khách ghi
+                      </span>
                       {order.guestNote}
                     </p>
                   )}

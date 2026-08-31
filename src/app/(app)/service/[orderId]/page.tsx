@@ -2,60 +2,40 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   Plus,
   Minus,
   Trash2,
-  Banknote,
-  QrCode,
-  CreditCard,
-  Check,
-  AlertTriangle,
-  Send,
-  Printer,
+
   ChevronUp,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   AlertCircle,
   LayoutGrid,
-  Tag,
-  X,
+
 } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { BackLink } from "@/components/BackLink";
 import { Bi } from "@/components/Bi";
-import { useSession } from "@/lib/auth/RoleContext";
-import { canTakePayment } from "@/lib/auth/permissions";
 import { onSyncedDataChanged } from "@/lib/sync/engine";
 import {
   getOrder,
-  getPayments,
   getBill,
   addLine,
-  setLineStatus,
   setLineQty,
-  takePayment,
-  closeOrder,
-  confirmPaymentByReference,
-  sendToKitchen,
+  setLineStatus,
   unsentLines,
-  setDiscount,
 } from "@/lib/repo/orders";
 import { getMenuItems } from "@/lib/repo/menu";
-import { getPromotions } from "@/lib/repo/promotions";
 import { getCachedTables } from "@/lib/repo/tableCache";
-import { getPaymentSettings, vietQrConfigured } from "@/lib/repo/paymentSettings";
-import { buildVietQrPayload } from "@/lib/payments/vietqr";
 import { linePriceVnd } from "@/lib/repo/orderRules";
 import type {
   Order,
   MenuItem,
   MenuOption,
-  Payment,
-  PaymentMethod,
-  Promotion,
   OrderLineChoice,
   MenuChannel,
 } from "@/lib/types";
@@ -77,11 +57,6 @@ function vnd(n: number): string {
   return `${n.toLocaleString("vi-VN")}₫`;
 }
 
-const METHOD_LABEL: Record<PaymentMethod, { en: string; vi: string }> = {
-  cash: { en: "Cash", vi: "Tiền mặt" },
-  vietqr: { en: "Bank transfer", vi: "Chuyển khoản" },
-  card: { en: "Card", vi: "Thẻ" },
-};
 
 /**
  * Adding one item — its questions, a note, and how many.
@@ -246,29 +221,18 @@ function AddItemPanel({
 }
 
 function OrderContent() {
-  const router = useRouter();
   const params = useParams<{ orderId: string }>();
   const orderId = params.orderId;
-  const { session } = useSession();
-  const mayTakeMoney = session ? canTakePayment(session.role) : false;
 
   const [order, setOrder] = useState<Order | null>(null);
   const [menu, setMenu] = useState<MenuItem[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [category, setCategory] = useState<string>("all");
-  const [qrPayload, setQrPayload] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [asking, setAsking] = useState<MenuItem | null>(null);
-  const [showPromotions, setShowPromotions] = useState(false);
-  const [justSent, setJustSent] = useState(0);
 
   const load = useCallback(() => {
     setOrder(getOrder(orderId) ?? null);
-    setPayments(getPayments(orderId));
     setMenu(getMenuItems());
-    setPromotions(getPromotions());
   }, [orderId]);
 
   useEffect(() => {
@@ -276,42 +240,6 @@ function OrderContent() {
     return onSyncedDataChanged(load);
   }, [load]);
 
-  const pendingRefs = payments
-    .filter((p) => p.status === "pending" && p.method === "vietqr")
-    .map((p) => p.reference)
-    .join(",");
-
-  // While a transfer is outstanding, ask whether it has landed. Stops as soon
-  // as nothing is pending — an idle till should not poll all evening.
-  useEffect(() => {
-    if (!pendingRefs) return;
-    const refs = pendingRefs.split(",");
-    let stop = false;
-
-    const check = async () => {
-      for (const reference of refs) {
-        try {
-          const res = await fetch(`/api/payments/status?reference=${encodeURIComponent(reference)}`);
-          if (!res.ok) continue;
-          const body = (await res.json()) as { status?: string; providerRef?: string; provider?: string };
-          if (body.status === "paid" && body.providerRef) {
-            confirmPaymentByReference(reference, body.providerRef, body.provider ?? "bank");
-            if (!stop) load();
-          }
-        } catch {
-          // Offline, or the server is down. Cash still works; a banner over a
-          // working till would help nobody.
-        }
-      }
-    };
-
-    void check();
-    const timer = setInterval(check, 5000);
-    return () => {
-      stop = true;
-      clearInterval(timer);
-    };
-  }, [pendingRefs, load]);
 
   const bill = order ? getBill(order.id) : null;
 
@@ -399,69 +327,9 @@ function OrderContent() {
     load();
   };
 
-  const send = () => {
-    const count = sendToKitchen(order.id);
-    setJustSent(count);
-    load();
-    // Silence after tapping "send" is indistinguishable from a broken button.
-    window.setTimeout(() => setJustSent(0), 2500);
-  };
 
-  const applyPromotion = (promotion: Promotion) => {
-    setDiscount(order.id, {
-      kind: promotion.kind,
-      value: promotion.value,
-      label: promotion.label,
-      promotionId: promotion.id,
-      appliedBy: session?.name ?? null,
-      appliedAt: new Date().toISOString(),
-    });
-    setShowPromotions(false);
-    load();
-  };
 
-  const pay = (method: PaymentMethod) => {
-    if (!bill || bill.outstandingVnd <= 0) return;
-    const payment = takePayment({
-      orderId: order.id,
-      method,
-      amountVnd: bill.outstandingVnd,
-      takenBy: session?.name ?? null,
-    });
 
-    if (method === "vietqr") {
-      const s = getPaymentSettings();
-      try {
-        setQrPayload(
-          buildVietQrPayload({
-            bankBin: s.bankBin,
-            accountNumber: s.accountNumber,
-            amountVnd: payment.amountVnd,
-            reference: payment.reference,
-          })
-        );
-        setProblem(null);
-      } catch (err) {
-        setProblem(err instanceof Error ? err.message : "Could not build the QR");
-      }
-    }
-    load();
-  };
-
-  const finish = () => {
-    const verdict = closeOrder(order.id);
-    if (verdict.ok) {
-      router.push("/service");
-      return;
-    }
-    setProblem(
-      verdict.reason === "awaiting_payment"
-        ? "A payment is still unconfirmed — wait for it to land, or mark it failed. Thanh toán chưa xác nhận."
-        : verdict.reason === "unpaid"
-          ? "This bill is not fully paid. Hoá đơn chưa thanh toán đủ."
-          : "This order has nothing on it. Đơn này chưa có món."
-    );
-  };
 
   return (
     <>
@@ -475,12 +343,6 @@ function OrderContent() {
         }
       />
 
-      {problem && (
-        <p className="mx-4 md:mx-8 flex items-start gap-2 text-sm rounded-xl border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 mb-2">
-          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-          {problem}
-        </p>
-      )}
 
       {/* Category rail down the side, menu beside it — the shape of the till
           the team already uses. The rail stays put while the menu scrolls, so
@@ -541,17 +403,6 @@ function OrderContent() {
             </section>
           ))}
 
-          {qrPayload && (
-            <div className="rounded-2xl border border-border p-4 space-y-2">
-              <p className="text-sm font-semibold">
-                Show this to the guest <span className="text-muted">· Đưa khách quét</span>
-              </p>
-              <p className="text-xs text-muted break-all font-mono">{qrPayload}</p>
-              <p className="text-xs text-muted">
-                Waiting for the transfer to land · Đang chờ chuyển khoản — this confirms itself.
-              </p>
-            </div>
-          )}
         </div>
       </div>
 
@@ -642,96 +493,12 @@ function OrderContent() {
                 );
               })}
 
-              {order.discount && (
-                <div className="flex items-center justify-between gap-3 px-4 md:px-8 py-2.5 bg-brand-light">
-                  <span className="text-sm">
-                    <Bi value={order.discount.label} mode="inline" className="font-medium" />
-                    <span className="block text-xs text-muted">
-                      {order.discount.appliedBy ?? "—"}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-2 shrink-0">
-                    <span className="tabular-nums font-semibold">−{vnd(bill.discountVnd)}</span>
-                    <button
-                      onClick={() => {
-                        setDiscount(order.id, null);
-                        load();
-                      }}
-                      aria-label="Remove the discount"
-                      className="w-10 h-10 rounded-lg grid place-items-center text-muted"
-                    >
-                      <X size={16} />
-                    </button>
-                  </span>
-                </div>
-              )}
 
-              {payments.map((p) => (
-                <div key={p.id} className="flex items-center justify-between gap-3 px-4 md:px-8 py-2 text-sm">
-                  <span>
-                    {METHOD_LABEL[p.method].en}
-                    <span className="text-muted"> · {METHOD_LABEL[p.method].vi}</span>
-                    <span className="block text-xs text-muted font-mono">{p.reference}</span>
-                  </span>
-                  <span className="text-right shrink-0">
-                    <span className="tabular-nums font-semibold block">{vnd(p.amountVnd)}</span>
-                    <span
-                      className={`text-xs ${
-                        p.status === "paid"
-                          ? "text-green-700"
-                          : p.status === "pending"
-                            ? "text-amber-600"
-                            : "text-muted"
-                      }`}
-                    >
-                      {p.status}
-                    </span>
-                  </span>
-                </div>
-              ))}
             </div>
           )}
 
-          {showPromotions && mayTakeMoney && (
-            <div className="border-t border-border px-4 md:px-8 py-3 space-y-2 max-h-[40vh] overflow-y-auto">
-              {promotions.map((promotion) => (
-                <button
-                  key={promotion.id}
-                  onClick={() => applyPromotion(promotion)}
-                  className="w-full min-h-[52px] rounded-xl border border-border px-4 flex items-center justify-between active:scale-[0.99]"
-                >
-                  <Bi value={promotion.label} mode="inline" className="text-sm font-medium" />
-                  <span className="text-sm text-muted tabular-nums shrink-0">
-                    {promotion.kind === "percent" ? `${promotion.value}%` : vnd(promotion.value)}
-                  </span>
-                </button>
-              ))}
-              {promotions.length === 0 && (
-                <p className="text-sm text-muted text-center py-2">
-                  No promotions set up · Chưa có khuyến mãi
-                </p>
-              )}
-            </div>
-          )}
 
-          {waiting.length > 0 && (
-            <div className="px-4 md:px-8 pt-2 pb-1">
-              <button
-                onClick={send}
-                className="w-full min-h-[52px] rounded-xl bg-brand text-white font-semibold flex items-center justify-center gap-2 active:scale-[0.98]"
-              >
-                <Send size={18} />
-                Send {waiting.length} to kitchen · Gửi {waiting.length} món xuống bếp
-              </button>
-            </div>
-          )}
-          {justSent > 0 && waiting.length === 0 && (
-            <p className="px-4 md:px-8 pt-2 pb-1 text-sm text-success flex items-center gap-2">
-              <Check size={16} /> Sent {justSent} to the kitchen · Đã gửi {justSent} món
-            </p>
-          )}
-
-          <div className="px-4 md:px-8 pt-1 pb-2 flex items-end justify-between gap-3 border-t border-border">
+          <div className="px-4 md:px-8 pt-1 pb-3 flex items-end justify-between gap-3 border-t border-border">
             <span>
               <span className="block text-lg font-bold tabular-nums">
                 Amount: {vnd(bill.totalVnd)}
@@ -739,72 +506,27 @@ function OrderContent() {
               <span className="block text-sm text-muted">
                 {liveLines.length} {liveLines.length === 1 ? "item" : "items"} ·{" "}
                 {liveLines.length} món
-                {bill.discountVnd > 0 && (
-                  <span className="line-through ml-2 tabular-nums">{vnd(bill.subtotalVnd)}</span>
+                {waiting.length > 0 && (
+                  <span className="text-warning font-medium ml-2">
+                    {waiting.length} not sent · chưa gửi
+                  </span>
                 )}
               </span>
             </span>
-          </div>
 
-          {mayTakeMoney && (
-            <div className="px-4 md:px-8 pb-3 flex gap-2">
-              {bill.outstandingVnd > 0 ? (
-                <>
-                  <Link
-                    href={`/service/${order.id}/bill`}
-                    aria-label="Print the bill"
-                    className="min-h-[52px] w-14 rounded-xl border border-border grid place-items-center active:scale-[0.98]"
-                  >
-                    <Printer size={18} />
-                  </Link>
-                  <button
-                    onClick={() => setShowPromotions((v) => !v)}
-                    aria-label="Discounts and promotions"
-                    className={`min-h-[52px] w-14 rounded-xl border grid place-items-center active:scale-[0.98] ${
-                      showPromotions || order.discount
-                        ? "border-brand text-brand"
-                        : "border-border"
-                    }`}
-                  >
-                    <Tag size={18} />
-                  </button>
-                  <button
-                    onClick={() => pay("cash")}
-                    className="flex-1 min-h-[52px] rounded-xl bg-brand text-white font-semibold flex items-center justify-center gap-2 active:scale-[0.98]"
-                  >
-                    <Banknote size={18} /> Cash
-                  </button>
-                  <button
-                    onClick={() => pay("vietqr")}
-                    disabled={!vietQrConfigured()}
-                    title={vietQrConfigured() ? undefined : "Add the bank account in Settings first"}
-                    className="flex-1 min-h-[52px] rounded-xl border border-border font-semibold flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-40"
-                  >
-                    <QrCode size={18} /> Transfer
-                  </button>
-                  <button
-                    onClick={() => pay("card")}
-                    className="flex-1 min-h-[52px] rounded-xl border border-border font-semibold flex items-center justify-center gap-2 active:scale-[0.98]"
-                  >
-                    <CreditCard size={18} /> Card
-                  </button>
-                </>
-              ) : liveLines.length === 0 ? (
-                // Nothing ordered yet. Closing would be refused anyway, and
-                // offering it invites a tap that only produces an error.
-                <p className="flex-1 min-h-[52px] rounded-xl border border-dashed border-border grid place-items-center text-sm text-muted text-center px-3">
-                  Tap a dish to start · Chạm vào món để bắt đầu
-                </p>
-              ) : (
-                <button
-                  onClick={finish}
-                  className="flex-1 min-h-[52px] rounded-xl bg-green-700 text-white font-semibold flex items-center justify-center gap-2 active:scale-[0.98]"
-                >
-                  <Check size={18} /> Close table · Đóng bàn
-                </button>
-              )}
-            </div>
-          )}
+            {/* One way forward. Payment, sending and everything else lives on
+                the review screen, so the menu screen stays a menu. */}
+            <Link
+              href={`/service/${order.id}/review`}
+              className={`min-h-[52px] px-6 rounded-xl font-semibold flex items-center gap-1.5 shrink-0 ${
+                liveLines.length === 0
+                  ? "bg-border text-muted pointer-events-none"
+                  : "bg-brand text-white active:scale-[0.98]"
+              }`}
+            >
+              Next · Tiếp <ChevronRight size={18} />
+            </Link>
+          </div>
         </div>
       )}
     </>

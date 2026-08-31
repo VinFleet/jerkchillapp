@@ -257,6 +257,54 @@ function deriveOrderStatus(current: OrderStatus, lines: OrderLine[]): OrderStatu
   return "placed";
 }
 
+/**
+ * Move an order to a different table.
+ *
+ * Guests move — a two-top becomes a four-top, or a booking lands on the table
+ * someone sat at. Without this the only way out is to void the round and key
+ * it again, which loses the kitchen ticket that is already cooking.
+ */
+/** An allergy or a preference for the whole table. */
+export function setOrderNote(orderId: string, note: string) {
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return;
+  const trimmed = note.trim().slice(0, 300);
+  all[idx] = {
+    ...all[idx],
+    orderNote: trimmed || undefined,
+    updatedAt: new Date().toISOString(),
+  };
+  writeList(ORDERS_KEY, all);
+}
+
+/**
+ * A note on one line.
+ *
+ * Editable after the fact because most items add in a single tap and never
+ * open the panel — "no onion" on a coleslaw is asked at the table, not
+ * chosen from a menu.
+ */
+export function setLineNote(orderId: string, lineId: string, note: string) {
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return;
+  const trimmed = note.trim().slice(0, 200);
+  const lines = all[idx].lines.map((l) =>
+    l.id === lineId ? { ...l, note: trimmed || undefined } : l
+  );
+  all[idx] = { ...all[idx], lines, updatedAt: new Date().toISOString() };
+  writeList(ORDERS_KEY, all);
+}
+
+export function moveOrderToTable(orderId: string, tableId: string) {
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return;
+  all[idx] = { ...all[idx], tableId, updatedAt: new Date().toISOString() };
+  writeList(ORDERS_KEY, all);
+}
+
 export function setOrderStatus(orderId: string, status: OrderStatus) {
   const all = readList<Order>(ORDERS_KEY);
   const idx = all.findIndex((o) => o.id === orderId);

@@ -1,0 +1,752 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import {
+  Plus,
+  Minus,
+  Trash2,
+  Banknote,
+  QrCode,
+  CreditCard,
+  Check,
+  AlertTriangle,
+  ChevronLeft,
+  MoreVertical,
+  Send,
+  Printer,
+  Tag,
+  X,
+  ArrowLeftRight,
+  Ban,
+  StickyNote,
+} from "lucide-react";
+import { RoleGate } from "@/components/RoleGate";
+import { Bi } from "@/components/Bi";
+import { useSession } from "@/lib/auth/RoleContext";
+import { canTakePayment } from "@/lib/auth/permissions";
+import { onSyncedDataChanged } from "@/lib/sync/engine";
+import {
+  getOrder,
+  getPayments,
+  getBill,
+  setLineStatus,
+  setLineQty,
+  takePayment,
+  closeOrder,
+  confirmPaymentByReference,
+  setDiscount,
+  sendToKitchen,
+  unsentLines,
+  setOrderStatus,
+  moveOrderToTable,
+  setOrderNote,
+  setLineNote,
+} from "@/lib/repo/orders";
+import { getMenuItems } from "@/lib/repo/menu";
+import { getPromotions } from "@/lib/repo/promotions";
+import { getCachedTables } from "@/lib/repo/tableCache";
+import { getPaymentSettings, vietQrConfigured } from "@/lib/repo/paymentSettings";
+import { buildVietQrPayload } from "@/lib/payments/vietqr";
+import { VietQrCode } from "@/components/VietQrCode";
+import { changeDueVnd, cashSuggestionsVnd } from "@/lib/repo/orderRules";
+import type { Order, MenuItem, Payment, PaymentMethod, Promotion } from "@/lib/types";
+
+/**
+ * The order, before it becomes money.
+ *
+ * Everything that is not "choose a dish" happens here: sending the round,
+ * discounting it, taking payment, and the handful of things that go wrong at
+ * a table — wrong table, order abandoned. Splitting it off the menu screen is
+ * what lets the menu be a menu; a waiter mid-round is not deciding about tax.
+ */
+
+function vnd(n: number): string {
+  return `${n.toLocaleString("vi-VN")}₫`;
+}
+
+const METHOD_LABEL: Record<PaymentMethod, { en: string; vi: string }> = {
+  cash: { en: "Cash", vi: "Tiền mặt" },
+  vietqr: { en: "Transfer", vi: "Chuyển khoản" },
+  card: { en: "Card", vi: "Thẻ" },
+};
+
+function ReviewContent() {
+  const router = useRouter();
+  const params = useParams<{ orderId: string }>();
+  const orderId = params.orderId;
+  const { session } = useSession();
+  const mayTakeMoney = session ? canTakePayment(session.role) : false;
+
+  const [order, setOrder] = useState<Order | null>(null);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [panel, setPanel] = useState<"none" | "promotions" | "more" | "tables">("none");
+  const [qrPayload, setQrPayload] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [orderNoteDraft, setOrderNoteDraft] = useState<string | null>(null);
+  const [cashOpen, setCashOpen] = useState(false);
+  const [received, setReceived] = useState("");
+  const [manualKind, setManualKind] = useState<"percent" | "amount">("percent");
+  const [manualValue, setManualValue] = useState("");
+
+  const load = useCallback(() => {
+    setOrder(getOrder(orderId) ?? null);
+    setPayments(getPayments(orderId));
+    setMenu(getMenuItems(false));
+    setPromotions(getPromotions());
+  }, [orderId]);
+
+  useEffect(() => {
+    load();
+    return onSyncedDataChanged(load);
+  }, [load]);
+
+  const pendingRefs = payments
+    .filter((p) => p.status === "pending" && p.method === "vietqr")
+    .map((p) => p.reference)
+    .join(",");
+
+  useEffect(() => {
+    if (!pendingRefs) return;
+    const refs = pendingRefs.split(",");
+    let stop = false;
+    const check = async () => {
+      for (const reference of refs) {
+        try {
+          const res = await fetch(`/api/payments/status?reference=${encodeURIComponent(reference)}`);
+          if (!res.ok) continue;
+          const body = (await res.json()) as { status?: string; providerRef?: string; provider?: string };
+          if (body.status === "paid" && body.providerRef) {
+            confirmPaymentByReference(reference, body.providerRef, body.provider ?? "bank");
+            if (!stop) load();
+          }
+        } catch {
+          // Offline. Cash still works, and a banner would help nobody.
+        }
+      }
+    };
+    void check();
+    const timer = setInterval(check, 5000);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
+  }, [pendingRefs, load]);
+
+  const tableId = order?.tableId ?? null;
+  const tables = useMemo(() => getCachedTables(), []);
+  const tableNumber = useMemo(
+    () => (tableId ? (tables.find((t) => t.id === tableId)?.tableNumber ?? null) : null),
+    [tableId, tables]
+  );
+
+  if (!order) return <p className="p-8 text-center text-muted">Order not found · Không tìm thấy đơn</p>;
+
+  const bill = getBill(order.id);
+  const lines = order.lines.filter((l) => l.status !== "cancelled");
+  const waiting = unsentLines(order);
+
+  const flash = (message: string) => {
+    setNote(message);
+    window.setTimeout(() => setNote(null), 2500);
+  };
+
+  const send = () => {
+    const count = sendToKitchen(order.id);
+    load();
+    flash(
+      count > 0
+        ? `Sent ${count} to the kitchen · Đã gửi ${count} món`
+        : "Everything here has already been sent · Đã gửi hết rồi"
+    );
+  };
+
+  const pay = (method: PaymentMethod) => {
+    if (!bill || bill.outstandingVnd <= 0) return;
+    // Sending on payment covers the waiter who takes the money first — the
+    // kitchen must never learn about a round only after it is paid for.
+    if (unsentLines(order).length > 0) sendToKitchen(order.id);
+
+    const payment = takePayment({
+      orderId: order.id,
+      method,
+      amountVnd: bill.outstandingVnd,
+      takenBy: session?.name ?? null,
+    });
+
+    if (method === "vietqr") {
+      const s = getPaymentSettings();
+      try {
+        setQrPayload(
+          buildVietQrPayload({
+            bankBin: s.bankBin,
+            accountNumber: s.accountNumber,
+            amountVnd: payment.amountVnd,
+            reference: payment.reference,
+          })
+        );
+        setProblem(null);
+      } catch (err) {
+        setProblem(err instanceof Error ? err.message : "Could not build the QR");
+      }
+    }
+    load();
+  };
+
+  const finish = () => {
+    const verdict = closeOrder(order.id);
+    if (verdict.ok) {
+      router.push("/service");
+      return;
+    }
+    setProblem(
+      verdict.reason === "awaiting_payment"
+        ? "A payment is still unconfirmed — wait for it, or mark it failed. Thanh toán chưa xác nhận."
+        : verdict.reason === "unpaid"
+          ? "This bill is not fully paid. Hoá đơn chưa thanh toán đủ."
+          : "This order has nothing on it. Đơn này chưa có món."
+    );
+  };
+
+  const cancelOrder = () => {
+    setOrderStatus(order.id, "cancelled");
+    router.push("/service");
+  };
+
+  const moveTable = (toTableId: string) => {
+    moveOrderToTable(order.id, toTableId);
+    setPanel("none");
+    load();
+    flash("Moved · Đã chuyển bàn");
+  };
+
+  return (
+    <div className="pb-64">
+      <header className="sticky top-0 z-20 bg-surface border-b border-border flex items-center gap-2 px-2 py-2">
+        <Link
+          href={`/service/${order.id}`}
+          aria-label="Back to the menu"
+          className="w-11 h-11 rounded-lg grid place-items-center"
+        >
+          <ChevronLeft size={22} />
+        </Link>
+        <span className="flex-1 min-w-0">
+          <span className="block font-bold leading-tight">
+            {tableNumber ? `Table ${tableNumber}` : "Counter · Quầy"}
+          </span>
+          <span className="block text-xs text-muted">
+            {order.placedBy ?? "Ordered by guest · Khách tự gọi"}
+          </span>
+        </span>
+        <button
+          onClick={() => setPanel(panel === "more" ? "none" : "more")}
+          aria-label="More actions"
+          className="w-11 h-11 rounded-lg grid place-items-center"
+        >
+          <MoreVertical size={20} />
+        </button>
+      </header>
+
+      {note && (
+        <p className="mx-4 mt-3 text-sm rounded-xl bg-success-tint text-success px-3 py-2 flex items-center gap-2">
+          <Check size={16} /> {note}
+        </p>
+      )}
+      {problem && (
+        <p className="mx-4 mt-3 text-sm rounded-xl border border-warning bg-warning-tint text-warning px-3 py-2 flex items-start gap-2">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" /> {problem}
+        </p>
+      )}
+
+      {panel === "more" && (
+        <div className="mx-4 mt-3 rounded-2xl border border-border bg-surface divide-y divide-border overflow-hidden">
+          <button onClick={send} className="w-full min-h-[56px] px-4 flex items-center gap-3 text-left">
+            <Send size={18} className="text-muted shrink-0" />
+            Send to kitchen <span className="text-muted">· Gửi bếp</span>
+          </button>
+          <Link
+            href={`/service/${order.id}/bill`}
+            className="w-full min-h-[56px] px-4 flex items-center gap-3"
+          >
+            <Printer size={18} className="text-muted shrink-0" />
+            Print the bill <span className="text-muted">· In hoá đơn</span>
+          </Link>
+          <button
+            onClick={() => setPanel("tables")}
+            className="w-full min-h-[56px] px-4 flex items-center gap-3 text-left"
+          >
+            <ArrowLeftRight size={18} className="text-muted shrink-0" />
+            Change table <span className="text-muted">· Đổi bàn</span>
+          </button>
+          <button
+            onClick={cancelOrder}
+            className="w-full min-h-[56px] px-4 flex items-center gap-3 text-left text-danger"
+          >
+            <Ban size={18} className="shrink-0" />
+            Cancel the order <span className="opacity-70">· Huỷ đơn</span>
+          </button>
+        </div>
+      )}
+
+      {panel === "tables" && (
+        <div className="mx-4 mt-3 rounded-2xl border border-border bg-surface p-3">
+          <p className="text-sm font-semibold mb-2">
+            Move to which table? <span className="text-muted font-normal">· Chuyển sang bàn nào?</span>
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {tables.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => moveTable(t.id)}
+                disabled={t.id === order.tableId}
+                className="min-h-[52px] rounded-xl border border-border font-semibold disabled:opacity-30"
+              >
+                {t.tableNumber}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="px-4 mt-3">
+        {lines.length === 0 ? (
+          <p className="text-center text-muted py-10 text-sm">
+            Nothing on this order yet · Đơn này chưa có món
+          </p>
+        ) : (
+          <div className="rounded-2xl border border-border bg-surface divide-y divide-border">
+            {lines.map((line) => {
+              const item = menu.find((m) => m.id === line.menuItemId);
+              return (
+                <div key={line.id} className="p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-sm">{item?.name.en ?? "Item"}</span>
+                      <span className="block text-xs text-muted">{item?.name.vi}</span>
+                      {line.choices?.length ? (
+                        <span className="block text-xs text-brand font-medium mt-0.5">
+                          {line.choices.map((c) => `${c.label.en} · ${c.label.vi}`).join(" · ")}
+                        </span>
+                      ) : null}
+                      {line.note && <span className="block text-xs text-muted mt-0.5">{line.note}</span>}
+                      {!line.sentAt && (
+                        <span className="block text-xs text-warning font-medium mt-0.5">
+                          Not sent yet · Chưa gửi bếp
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-bold tabular-nums shrink-0">
+                      {vnd(line.unitPriceVnd * line.qty)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 mt-2">
+                    <button
+                      onClick={() => {
+                        setLineStatus(order.id, line.id, "cancelled");
+                        load();
+                      }}
+                      aria-label="Take off the bill"
+                      className="w-11 h-11 rounded-lg grid place-items-center text-muted"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingNote(editingNote === line.id ? null : line.id);
+                        setNoteDraft(line.note ?? "");
+                      }}
+                      aria-label="Note for this item"
+                      className={`w-11 h-11 rounded-lg grid place-items-center mr-auto ${
+                        line.note ? "text-brand" : "text-muted"
+                      }`}
+                    >
+                      <StickyNote size={16} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setLineQty(order.id, line.id, line.qty - 1);
+                        load();
+                      }}
+                      aria-label="One fewer"
+                      className="w-11 h-11 rounded-full border border-border grid place-items-center"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <span className="w-8 text-center font-bold tabular-nums">{line.qty}</span>
+                    <button
+                      onClick={() => {
+                        setLineQty(order.id, line.id, line.qty + 1);
+                        load();
+                      }}
+                      aria-label="One more"
+                      className="w-11 h-11 rounded-full border border-border grid place-items-center"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+
+                  {editingNote === line.id && (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                        maxLength={200}
+                        autoFocus
+                        placeholder="No onion, well done… · Không hành, chín kỹ…"
+                        className="flex-1 min-h-[48px] rounded-xl border border-border px-3 text-sm"
+                      />
+                      <button
+                        onClick={() => {
+                          setLineNote(order.id, line.id, noteDraft);
+                          setEditingNote(null);
+                          load();
+                        }}
+                        className="min-h-[48px] px-4 rounded-xl bg-brand text-white font-semibold text-sm"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {order.discount && bill && (
+              <div className="p-3 flex items-center justify-between gap-3 bg-brand-light">
+                <span className="min-w-0">
+                  <Bi value={order.discount.label} mode="inline" className="text-sm font-medium" />
+                  <span className="block text-xs text-muted">{order.discount.appliedBy ?? "—"}</span>
+                </span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className="font-bold tabular-nums">−{vnd(bill.discountVnd)}</span>
+                  <button
+                    onClick={() => {
+                      setDiscount(order.id, null);
+                      load();
+                    }}
+                    aria-label="Remove the discount"
+                    className="w-9 h-9 rounded-lg grid place-items-center text-muted"
+                  >
+                    <X size={15} />
+                  </button>
+                </span>
+              </div>
+            )}
+
+            {payments.map((p) => (
+              <div key={p.id} className="p-3 flex items-center justify-between gap-3 text-sm">
+                <span>
+                  {METHOD_LABEL[p.method].en}
+                  <span className="text-muted"> · {METHOD_LABEL[p.method].vi}</span>
+                  <span className="block text-xs text-muted font-mono">{p.reference}</span>
+                </span>
+                <span className="text-right shrink-0">
+                  <span className="block font-bold tabular-nums">{vnd(p.amountVnd)}</span>
+                  <span
+                    className={`text-xs ${
+                      p.status === "paid" ? "text-success" : p.status === "pending" ? "text-warning" : "text-muted"
+                    }`}
+                  >
+                    {p.status}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* One note for the whole table. An allergy is rarely about a single
+            line — it is about the person, and everything they are served. */}
+        <div className="mt-3 rounded-2xl border border-border bg-surface p-3">
+          <label htmlFor="order-note" className="text-sm font-semibold flex items-center gap-1.5">
+            <StickyNote size={15} className="text-muted" />
+            Allergies &amp; preferences
+            <span className="text-muted font-normal">· Dị ứng &amp; yêu cầu</span>
+          </label>
+          <textarea
+            id="order-note"
+            value={orderNoteDraft ?? order.orderNote ?? ""}
+            onChange={(e) => setOrderNoteDraft(e.target.value)}
+            onBlur={() => {
+              if (orderNoteDraft === null) return;
+              setOrderNote(order.id, orderNoteDraft);
+              setOrderNoteDraft(null);
+              load();
+            }}
+            rows={2}
+            maxLength={300}
+            placeholder="Nut allergy on table, no pork… · Dị ứng hạt, không thịt heo…"
+            className="w-full mt-2 rounded-xl border border-border px-3 py-2 text-sm resize-none"
+          />
+          {order.guestNote && (
+            <p className="text-xs text-muted mt-2">
+              Guest wrote · Khách ghi: <span className="text-foreground">{order.guestNote}</span>
+            </p>
+          )}
+        </div>
+
+        {qrPayload && (
+          <div className="rounded-2xl border-2 border-brand bg-surface p-4 mt-3 space-y-3 text-center">
+            <p className="font-semibold">
+              Scan to pay <span className="text-muted font-normal">· Quét để thanh toán</span>
+            </p>
+            <VietQrCode payload={qrPayload} />
+            <p className="text-2xl font-black tabular-nums">{vnd(bill?.outstandingVnd ?? 0)}</p>
+            <p className="text-sm text-muted">
+              Waiting for the transfer · Đang chờ chuyển khoản
+              <br />
+              <span className="text-xs">This confirms itself — no need to watch it.</span>
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="fixed z-30 bottom-16 md:bottom-0 left-0 right-0 md:left-64 bg-surface border-t border-border shadow-[0_-8px_24px_rgba(0,0,0,0.10)]">
+        {panel === "promotions" && mayTakeMoney && (
+          <div className="px-4 py-3 space-y-2 max-h-[40vh] overflow-y-auto border-b border-border">
+            {promotions.map((promotion) => (
+              <button
+                key={promotion.id}
+                onClick={() => {
+                  setDiscount(order.id, {
+                    kind: promotion.kind,
+                    value: promotion.value,
+                    label: promotion.label,
+                    promotionId: promotion.id,
+                    appliedBy: session?.name ?? null,
+                    appliedAt: new Date().toISOString(),
+                  });
+                  setPanel("none");
+                  load();
+                }}
+                className="w-full min-h-[52px] rounded-xl border border-border px-4 flex items-center justify-between"
+              >
+                <Bi value={promotion.label} mode="inline" className="text-sm font-medium" />
+                <span className="text-sm text-muted tabular-nums shrink-0">
+                  {promotion.kind === "percent" ? `${promotion.value}%` : vnd(promotion.value)}
+                </span>
+              </button>
+            ))}
+            {promotions.length === 0 && (
+              <p className="text-sm text-muted text-center py-2">No promotions · Chưa có khuyến mãi</p>
+            )}
+
+            {/* Anything not on the list. A one-off reduction still has to be
+                recorded and attributed — it is the same money either way. */}
+            <div className="pt-2 border-t border-border space-y-2">
+              <p className="text-sm font-semibold">
+                Or enter one <span className="text-muted font-normal">· Hoặc nhập tay</span>
+              </p>
+              <div className="flex gap-2">
+                <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
+                  {(["percent", "amount"] as const).map((kind) => (
+                    <button
+                      key={kind}
+                      onClick={() => setManualKind(kind)}
+                      className={`min-h-[48px] w-14 font-semibold ${
+                        manualKind === kind ? "bg-brand text-white" : "text-muted"
+                      }`}
+                    >
+                      {kind === "percent" ? "%" : "₫"}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  value={manualValue}
+                  onChange={(e) => setManualValue(e.target.value.replace(/[^\d]/g, ""))}
+                  inputMode="numeric"
+                  placeholder={manualKind === "percent" ? "10" : "50000"}
+                  className="flex-1 min-w-0 min-h-[48px] rounded-xl border border-border px-3 tabular-nums"
+                />
+                <button
+                  onClick={() => {
+                    const value = Number(manualValue);
+                    if (!value) return;
+                    setDiscount(order.id, {
+                      kind: manualKind,
+                      value,
+                      label:
+                        manualKind === "percent"
+                          ? { en: `${value}% off`, vi: `Giảm ${value}%` }
+                          : {
+                              en: `${value.toLocaleString("vi-VN")}₫ off`,
+                              vi: `Giảm ${value.toLocaleString("vi-VN")}₫`,
+                            },
+                      appliedBy: session?.name ?? null,
+                      appliedAt: new Date().toISOString(),
+                    });
+                    setManualValue("");
+                    setPanel("none");
+                    load();
+                  }}
+                  disabled={!manualValue}
+                  className="min-h-[48px] px-4 rounded-xl bg-brand text-white font-semibold disabled:bg-border disabled:text-muted shrink-0"
+                >
+                  Apply
+                </button>
+              </div>
+              {manualKind === "percent" && Number(manualValue) > 100 && (
+                <p className="text-xs text-warning">
+                  Over 100% — it will be capped at the whole bill · Sẽ giới hạn ở toàn bộ hoá đơn
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="px-4 py-2 flex items-center justify-between gap-3 bg-brand-light">
+          <span className="text-sm">
+            Qty · SL: <span className="font-bold tabular-nums">{lines.reduce((n, l) => n + l.qty, 0)}</span>
+          </span>
+          <span className="text-sm">
+            {bill && bill.discountVnd > 0 && (
+              <span className="text-muted line-through tabular-nums mr-2">{vnd(bill.subtotalVnd)}</span>
+            )}
+            <span className="font-bold">TOTAL: {vnd(bill?.totalVnd ?? 0)}</span>
+          </span>
+        </div>
+
+        {mayTakeMoney && bill && bill.outstandingVnd > 0 && (
+          <div className="px-4 pt-2 flex gap-2">
+            <button
+              onClick={() => setPanel(panel === "promotions" ? "none" : "promotions")}
+              className={`flex-1 min-h-[44px] rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 ${
+                panel === "promotions" || order.discount ? "border-brand text-brand" : "border-border"
+              }`}
+            >
+              <Tag size={15} /> Promotions · Khuyến mãi
+            </button>
+          </div>
+        )}
+
+        <div className="px-4 py-3 flex gap-2">
+          <Link
+            href={`/service/${order.id}`}
+            className="flex-1 min-h-[52px] rounded-xl bg-success text-white font-semibold flex items-center justify-center gap-1.5"
+          >
+            <Plus size={18} /> Add · Thêm
+          </Link>
+          <button
+            onClick={send}
+            disabled={waiting.length === 0}
+            className="flex-1 min-h-[52px] rounded-xl border-2 border-brand text-brand font-semibold flex items-center justify-center gap-1.5 disabled:border-border disabled:text-muted"
+          >
+            <Send size={17} /> {waiting.length > 0 ? `Save (${waiting.length})` : "Saved"}
+          </button>
+          {mayTakeMoney &&
+            (bill && bill.outstandingVnd > 0 ? (
+              <button
+                onClick={() => setPanel(panel === "none" ? "none" : "none")}
+                className="flex-1 min-h-[52px] rounded-xl bg-brand text-white font-semibold"
+                // Payment methods sit directly below; this keeps the row's shape
+                // identical to the till the team already uses.
+                disabled
+                style={{ display: "none" }}
+              >
+                Pay
+              </button>
+            ) : (
+              <button
+                onClick={finish}
+                className="flex-1 min-h-[52px] rounded-xl bg-success text-white font-semibold flex items-center justify-center gap-1.5"
+              >
+                <Check size={18} /> Close · Đóng bàn
+              </button>
+            ))}
+        </div>
+
+        {cashOpen && bill && bill.outstandingVnd > 0 && (
+          <div className="px-4 py-3 border-t border-border space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="received" className="text-sm">
+                Received <span className="text-muted">· Khách đưa</span>
+              </label>
+              <input
+                id="received"
+                value={received}
+                onChange={(e) => setReceived(e.target.value.replace(/[^\d]/g, ""))}
+                inputMode="numeric"
+                placeholder={String(bill.outstandingVnd)}
+                className="w-40 min-h-[48px] rounded-xl border border-border px-3 text-right tabular-nums font-semibold"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {cashSuggestionsVnd(bill.outstandingVnd).map((amount) => (
+                <button
+                  key={amount}
+                  onClick={() => setReceived(String(amount))}
+                  className="min-h-[44px] px-4 rounded-full border border-border text-sm tabular-nums"
+                >
+                  {amount.toLocaleString("vi-VN")}
+                </button>
+              ))}
+            </div>
+
+            {/* The number the waiter actually needs, big enough to read while
+                counting notes out of the drawer. */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-sm text-muted">Change · Tiền thừa</span>
+              <span className="text-2xl font-black tabular-nums">
+                {vnd(changeDueVnd(Number(received || 0), bill.outstandingVnd))}
+              </span>
+            </div>
+
+            <button
+              onClick={() => {
+                pay("cash");
+                setCashOpen(false);
+                setReceived("");
+              }}
+              className="w-full min-h-[52px] rounded-xl bg-success text-white font-semibold"
+            >
+              Take {vnd(bill.outstandingVnd)} · Nhận tiền
+            </button>
+          </div>
+        )}
+
+        {mayTakeMoney && bill && bill.outstandingVnd > 0 && lines.length > 0 && (
+          <div className="px-4 pb-3 flex gap-2">
+            <button
+              onClick={() => setCashOpen((v) => !v)}
+              className={`flex-1 min-h-[52px] rounded-xl font-semibold flex items-center justify-center gap-1.5 ${
+                cashOpen ? "bg-brand-dark text-white" : "bg-brand text-white"
+              }`}
+            >
+              <Banknote size={17} /> Cash
+            </button>
+            <button
+              onClick={() => pay("vietqr")}
+              disabled={!vietQrConfigured()}
+              title={vietQrConfigured() ? undefined : "Add the bank account in Settings first"}
+              className="flex-1 min-h-[52px] rounded-xl border border-border font-semibold flex items-center justify-center gap-1.5 disabled:opacity-40"
+            >
+              <QrCode size={17} /> Transfer
+            </button>
+            <button
+              onClick={() => pay("card")}
+              className="flex-1 min-h-[52px] rounded-xl border border-border font-semibold flex items-center justify-center gap-1.5"
+            >
+              <CreditCard size={17} /> Card
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function ReviewPage() {
+  return (
+    <RoleGate module="orders">
+      <ReviewContent />
+    </RoleGate>
+  );
+}

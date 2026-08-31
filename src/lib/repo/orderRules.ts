@@ -221,3 +221,54 @@ function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, value));
 }
+
+// ---------- cash ----------
+
+/**
+ * Change owed to the guest.
+ *
+ * Floored at zero: handing back money on an underpayment is not change, it is
+ * a mistake, and the bill simply stays part-paid. Whole dong by construction,
+ * because both sides already are.
+ */
+export function changeDueVnd(receivedVnd: number, owedVnd: number): number {
+  if (!Number.isFinite(receivedVnd) || !Number.isFinite(owedVnd)) return 0;
+  return Math.max(0, Math.round(receivedVnd) - Math.round(owedVnd));
+}
+
+/**
+ * The notes a guest is likely to hand over for this bill.
+ *
+ * Offered as buttons so the common case is one tap rather than typing an
+ * amount into a number pad while holding a card machine. Vietnamese notes run
+ * 1k / 2k / 5k / 10k / 20k / 50k / 100k / 200k / 500k, so the useful
+ * suggestions are the bill rounded up to the next sensible note boundary,
+ * plus the exact amount.
+ *
+ * Deduplicated and capped, because six near-identical buttons is not a
+ * shortcut — it is a second decision.
+ */
+export function cashSuggestionsVnd(owedVnd: number, limit = 5): number[] {
+  if (!Number.isFinite(owedVnd) || owedVnd <= 0) return [];
+  const owed = Math.round(owedVnd);
+
+  const roundUpTo = (step: number) => Math.ceil(owed / step) * step;
+  const candidates = [
+    owed,
+    roundUpTo(1_000),
+    roundUpTo(10_000),
+    roundUpTo(50_000),
+    roundUpTo(100_000),
+    roundUpTo(500_000),
+  ];
+
+  const seen = new Set<number>();
+  const out: number[] = [];
+  for (const value of candidates) {
+    if (value < owed || seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+    if (out.length === limit) break;
+  }
+  return out;
+}

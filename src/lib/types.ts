@@ -886,7 +886,16 @@ export type Order = {
   placedAt: string;
   /** Staff name for waiter/counter orders; null when a guest ordered by QR. */
   placedBy: string | null;
+  /** The guest's own words, typed on their phone. Untrusted text. */
   guestNote?: string;
+  /**
+   * What the waiter was told at the table — an allergy, a preference.
+   *
+   * Kept apart from guestNote deliberately. "The guest typed this" and "a
+   * member of staff was told this and wrote it down" are different claims,
+   * and for an allergy the difference is the one a kitchen needs.
+   */
+  orderNote?: string;
   /** Taken off the whole bill. Absent means nothing was discounted. */
   discount?: OrderDiscount;
   updatedAt: string;
