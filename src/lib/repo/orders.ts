@@ -358,6 +358,16 @@ export function takePayment(input: {
   method: PaymentMethod;
   amountVnd: number;
   takenBy: string | null;
+  /**
+   * The card terminal's own reference, typed off the slip.
+   *
+   * The terminal settles separately from this app, so at close the two have
+   * to be reconciled by hand. Without a shared reference that means matching
+   * on amount and rough time, which stops working the moment two tables pay
+   * the same amount within a few minutes — which on a set menu is most of a
+   * Sunday.
+   */
+  providerRef?: string;
 }): Payment {
   const existing = getPayments(input.orderId);
   const payment: Payment = {
@@ -370,6 +380,7 @@ export function takePayment(input: {
     takenBy: input.takenBy,
     createdAt: new Date().toISOString(),
     confirmedAt: input.method === "cash" ? new Date().toISOString() : undefined,
+    providerRef: input.providerRef?.trim() || undefined,
   };
   writeList(PAYMENTS_KEY, [...readList<Payment>(PAYMENTS_KEY), payment]);
   return payment;

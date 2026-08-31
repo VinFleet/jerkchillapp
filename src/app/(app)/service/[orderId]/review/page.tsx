@@ -94,6 +94,8 @@ function ReviewContent() {
   const [received, setReceived] = useState("");
   const [manualKind, setManualKind] = useState<"percent" | "amount">("percent");
   const [manualValue, setManualValue] = useState("");
+  const [cardOpen, setCardOpen] = useState(false);
+  const [cardRef, setCardRef] = useState("");
 
   const load = useCallback(() => {
     setOrder(getOrder(orderId) ?? null);
@@ -167,7 +169,7 @@ function ReviewContent() {
     );
   };
 
-  const pay = (method: PaymentMethod) => {
+  const pay = (method: PaymentMethod, providerRef?: string) => {
     if (!bill || bill.outstandingVnd <= 0) return;
     // Sending on payment covers the waiter who takes the money first — the
     // kitchen must never learn about a round only after it is paid for.
@@ -178,6 +180,7 @@ function ReviewContent() {
       method,
       amountVnd: bill.outstandingVnd,
       takenBy: session?.name ?? null,
+      providerRef,
     });
 
     if (method === "vietqr") {
@@ -444,7 +447,9 @@ function ReviewContent() {
                 <span>
                   {METHOD_LABEL[p.method].en}
                   <span className="text-muted"> · {METHOD_LABEL[p.method].vi}</span>
-                  <span className="block text-xs text-muted font-mono">{p.reference}</span>
+                  <span className="block text-xs text-muted font-mono">
+                    {p.providerRef ? `${p.reference} · ${p.providerRef}` : p.reference}
+                  </span>
                 </span>
                 <span className="text-right shrink-0">
                   <span className="block font-bold tabular-nums">{vnd(p.amountVnd)}</span>
@@ -712,6 +717,43 @@ function ReviewContent() {
           </div>
         )}
 
+        {cardOpen && bill && bill.outstandingVnd > 0 && (
+          <div className="px-4 py-3 border-t border-border space-y-2">
+            <label htmlFor="card-ref" className="text-sm block">
+              Card slip reference <span className="text-muted">· Mã trên hoá đơn thẻ</span>
+            </label>
+            <input
+              id="card-ref"
+              value={cardRef}
+              onChange={(e) => setCardRef(e.target.value.toUpperCase().slice(0, 32))}
+              autoCapitalize="characters"
+              placeholder="Approval / trace no."
+              className="w-full min-h-[48px] rounded-xl border border-border px-3 font-mono tabular-nums"
+            />
+            <p className="text-xs text-muted">
+              The terminal settles separately, so this is what the closed order is
+              matched against at cash-up.
+              <br />
+              Máy thẻ đối soát riêng — mã này để khớp đơn khi chốt ca.
+            </p>
+            <button
+              onClick={() => {
+                pay("card", cardRef);
+                setCardOpen(false);
+                setCardRef("");
+              }}
+              className="w-full min-h-[52px] rounded-xl bg-success text-white font-semibold"
+            >
+              Take {vnd(bill.outstandingVnd)} on card · Nhận thẻ
+            </button>
+            {!cardRef && (
+              <p className="text-xs text-warning">
+                No reference — it will be harder to reconcile · Không có mã sẽ khó đối soát
+              </p>
+            )}
+          </div>
+        )}
+
         {mayTakeMoney && bill && bill.outstandingVnd > 0 && lines.length > 0 && (
           <div className="px-4 pb-3 flex gap-2">
             <button
@@ -731,8 +773,10 @@ function ReviewContent() {
               <QrCode size={17} /> Transfer
             </button>
             <button
-              onClick={() => pay("card")}
-              className="flex-1 min-h-[52px] rounded-xl border border-border font-semibold flex items-center justify-center gap-1.5"
+              onClick={() => setCardOpen((v) => !v)}
+              className={`flex-1 min-h-[52px] rounded-xl border font-semibold flex items-center justify-center gap-1.5 ${
+                cardOpen ? "border-brand text-brand" : "border-border"
+              }`}
             >
               <CreditCard size={17} /> Card
             </button>

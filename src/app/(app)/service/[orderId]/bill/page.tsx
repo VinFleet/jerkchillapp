@@ -147,7 +147,12 @@ function BillContent() {
             .filter((p) => p.status === "paid")
             .map((p) => (
               <div key={p.id} className="flex justify-between text-muted">
-                <span>{METHOD[p.method] ?? p.method}</span>
+                <span>
+                  {METHOD[p.method] ?? p.method}
+                  {p.providerRef && (
+                    <span className="block text-xs font-mono">{p.providerRef}</span>
+                  )}
+                </span>
                 <span className="tabular-nums">{vnd(p.amountVnd)}</span>
               </div>
             ))}
