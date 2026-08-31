@@ -666,6 +666,13 @@ export type MenuItem = {
   priceNote?: Bi;
   /** Asked when the item is added. Absent means the item has no variants. */
   options?: MenuOption[];
+  /**
+   * Public URL of the dish photo.
+   *
+   * Public rather than signed, because a guest's phone loads it with no
+   * session — see lib/menu/photos.ts.
+   */
+  imageUrl?: string;
 };
 
 export type PrintedMaterial = {
@@ -857,6 +864,14 @@ export type OrderLine = {
   note?: string;
   /** What was chosen when this line was added — spice level, mocktail, and so on. */
   choices?: OrderLineChoice[];
+  /**
+   * When this line was sent to the kitchen.
+   *
+   * Absent means the waiter is still building the round. Without this the
+   * pass saw every tap as it happened: a ticket would appear, grow, and have
+   * items vanish from it while a chef was reading it.
+   */
+  sentAt?: string;
 };
 
 export type Order = {

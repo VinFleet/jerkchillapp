@@ -148,6 +148,25 @@ export function updateMenuItem(id: string, patch: { name?: Bi; category?: MenuIt
 }
 
 /** Discontinued items are hidden, never deleted — old prices stay on record. Taking an item off the menu also means a reprint is due. */
+/**
+ * Point a menu item at its photo, or clear it.
+ *
+ * The URL is stored rather than the storage path: it is public and permanent,
+ * and every screen that shows a dish — including a guest's phone, which has
+ * no Supabase client of its own — can then just render it.
+ */
+export function setMenuItemImage(id: string, imageUrl: string | null) {
+  const all = readList<MenuItem>(MENU_KEY);
+  const idx = all.findIndex((m) => m.id === id);
+  if (idx < 0) return;
+  all[idx] = {
+    ...all[idx],
+    imageUrl: imageUrl ?? undefined,
+    updatedAt: new Date().toISOString(),
+  };
+  writeList(MENU_KEY, all);
+}
+
 export function setMenuItemActive(id: string, active: boolean) {
   const all = readList<MenuItem>(MENU_KEY);
   const idx = all.findIndex((m) => m.id === id);

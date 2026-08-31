@@ -88,7 +88,9 @@ function KitchenContent() {
             {orders.map((order) => {
               const age = minutesSince(order.placedAt);
               const late = age >= LATE_AFTER_MINUTES;
-              const open = order.lines.filter((l) => l.status !== "cancelled");
+              // Sent lines only. A round still being keyed at the table is not the
+              // kitchen's business until the waiter says so.
+              const open = order.lines.filter((l) => l.sentAt && l.status !== "cancelled");
 
               return (
                 <div

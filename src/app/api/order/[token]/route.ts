@@ -153,6 +153,10 @@ export async function POST(
         unitPriceVnd: price,
         qty,
         status: "placed",
+        // A guest has no "send" button — tapping order IS sending. Without
+        // this the ticket would sit unsent on the pass forever, waiting for
+        // a waiter who was never involved.
+        sentAt: new Date().toISOString(),
       });
     }
 

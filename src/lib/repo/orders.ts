@@ -76,8 +76,43 @@ export function getOrder(id: string): Order | undefined {
 /** Everything the kitchen still has work on. */
 export function getKitchenQueue(): Order[] {
   return getOrders()
-    .filter((o) => o.status === "placed" || o.status === "preparing" || o.status === "ready")
-    .sort((a, b) => (a.placedAt < b.placedAt ? -1 : 1)); // oldest first — a queue, not a feed
+    .filter((o) => o.status !== "closed" && o.status !== "cancelled")
+    // Only rounds the waiter actually sent. A line still being keyed is not
+    // the kitchen's business, and a ticket that grows and shrinks while a
+    // chef reads it is worse than one that arrives late.
+    .filter((o) => o.lines.some((l) => l.sentAt && l.status !== "cancelled"))
+    .sort((a, b) => (a.placedAt < b.placedAt ? -1 : 1));
+}
+
+/** Lines the waiter has keyed but not yet sent. */
+export function unsentLines(order: Order) {
+  return order.lines.filter((l) => !l.sentAt && l.status !== "cancelled");
+}
+
+/**
+ * Send the round to the kitchen.
+ *
+ * Stamps every unsent line at once, so a round arrives as a round. Returns
+ * how many went, which is what the waiter is told — silence after tapping
+ * "send" is indistinguishable from a broken button.
+ */
+export function sendToKitchen(orderId: string): number {
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return 0;
+
+  const now = new Date().toISOString();
+  let sent = 0;
+  const lines = all[idx].lines.map((l) => {
+    if (l.sentAt || l.status === "cancelled") return l;
+    sent += 1;
+    return { ...l, sentAt: now };
+  });
+  if (sent === 0) return 0;
+
+  all[idx] = { ...all[idx], lines, updatedAt: now };
+  writeList(ORDERS_KEY, all);
+  return sent;
 }
 
 /** Orders still open on a table, for the floor view. */

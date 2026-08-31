@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   Plus,
@@ -11,6 +12,8 @@ import {
   CreditCard,
   Check,
   AlertTriangle,
+  Send,
+  Printer,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
@@ -36,6 +39,8 @@ import {
   takePayment,
   closeOrder,
   confirmPaymentByReference,
+  sendToKitchen,
+  unsentLines,
   setDiscount,
 } from "@/lib/repo/orders";
 import { getMenuItems } from "@/lib/repo/menu";
@@ -257,6 +262,7 @@ function OrderContent() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [asking, setAsking] = useState<MenuItem | null>(null);
   const [showPromotions, setShowPromotions] = useState(false);
+  const [justSent, setJustSent] = useState(0);
 
   const load = useCallback(() => {
     setOrder(getOrder(orderId) ?? null);
@@ -351,11 +357,24 @@ function OrderContent() {
   }
 
   const liveLines = order.lines.filter((l) => l.status !== "cancelled");
+  const waiting = unsentLines(order);
 
-  // Everything goes through the panel. Consistency beats a saved tap: a
-  // waiter should not have to know which items ask questions and which drop
-  // straight onto the bill.
-  const add = (item: MenuItem) => setAsking(item);
+  /**
+   * A plain item lands on the bill in one tap.
+   *
+   * Only items with something to ask open the panel. Making everything go
+   * through it was tidier to reason about and worse to use: most of a round
+   * is beers and sides, and a screen that exists only to be dismissed is a
+   * tap tax on the common case.
+   */
+  const add = (item: MenuItem) => {
+    if (item.options?.length) {
+      setAsking(item);
+      return;
+    }
+    addLine(order.id, item.id, 1);
+    load();
+  };
 
   const addWithChoices = (
     item: MenuItem,
@@ -378,6 +397,14 @@ function OrderContent() {
   const cancelLine = (lineId: string) => {
     setLineStatus(order.id, lineId, "cancelled");
     load();
+  };
+
+  const send = () => {
+    const count = sendToKitchen(order.id);
+    setJustSent(count);
+    load();
+    // Silence after tapping "send" is indistinguishable from a broken button.
+    window.setTimeout(() => setJustSent(0), 2500);
   };
 
   const applyPromotion = (promotion: Promotion) => {
@@ -578,6 +605,11 @@ function OrderContent() {
                         </p>
                       ) : null}
                       {line.note && <p className="text-xs text-muted mt-0.5">{line.note}</p>}
+                      {!line.sentAt && (
+                        <p className="text-xs text-warning font-medium mt-0.5">
+                          Not sent yet · Chưa gửi bếp
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
@@ -682,6 +714,23 @@ function OrderContent() {
             </div>
           )}
 
+          {waiting.length > 0 && (
+            <div className="px-4 md:px-8 pt-2 pb-1">
+              <button
+                onClick={send}
+                className="w-full min-h-[52px] rounded-xl bg-brand text-white font-semibold flex items-center justify-center gap-2 active:scale-[0.98]"
+              >
+                <Send size={18} />
+                Send {waiting.length} to kitchen · Gửi {waiting.length} món xuống bếp
+              </button>
+            </div>
+          )}
+          {justSent > 0 && waiting.length === 0 && (
+            <p className="px-4 md:px-8 pt-2 pb-1 text-sm text-success flex items-center gap-2">
+              <Check size={16} /> Sent {justSent} to the kitchen · Đã gửi {justSent} món
+            </p>
+          )}
+
           <div className="px-4 md:px-8 pt-1 pb-2 flex items-end justify-between gap-3 border-t border-border">
             <span>
               <span className="block text-lg font-bold tabular-nums">
@@ -701,6 +750,13 @@ function OrderContent() {
             <div className="px-4 md:px-8 pb-3 flex gap-2">
               {bill.outstandingVnd > 0 ? (
                 <>
+                  <Link
+                    href={`/service/${order.id}/bill`}
+                    aria-label="Print the bill"
+                    className="min-h-[52px] w-14 rounded-xl border border-border grid place-items-center active:scale-[0.98]"
+                  >
+                    <Printer size={18} />
+                  </Link>
                   <button
                     onClick={() => setShowPromotions((v) => !v)}
                     aria-label="Discounts and promotions"
