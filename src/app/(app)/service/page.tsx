@@ -40,6 +40,8 @@ type TableCard = {
   totalVnd: number;
   outstandingVnd: number;
   awaitingConfirmation: boolean;
+  /** Dishes sitting at the pass, cooked and waiting to be carried. */
+  readyCount: number;
 };
 
 function ServiceContent() {
@@ -62,6 +64,9 @@ function ServiceContent() {
           totalVnd: bill?.totalVnd ?? 0,
           outstandingVnd: bill?.outstandingVnd ?? 0,
           awaitingConfirmation: bill?.awaitingConfirmation ?? false,
+          readyCount: order
+            ? order.lines.filter((l) => l.status === "ready").length
+            : 0,
         };
       })
     );
@@ -176,7 +181,14 @@ function ServiceContent() {
                 }`}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-lg font-bold">{card.table.tableNumber}</span>
+                  <span className="text-lg font-bold flex items-center gap-1.5">
+                    {card.table.tableNumber}
+                    {card.readyCount > 0 && (
+                      <span className="text-[10px] font-black bg-success text-white rounded-full px-2 py-0.5 animate-pulse">
+                        {card.readyCount} READY
+                      </span>
+                    )}
+                  </span>
                   <span className="text-xs text-muted">
                     {card.table.seats} <span className="opacity-70">seats · chỗ</span>
                   </span>

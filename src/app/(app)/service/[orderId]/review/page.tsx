@@ -184,6 +184,13 @@ function ReviewContent() {
     window.setTimeout(() => setNote(null), 2500);
   };
 
+  const serveAllReady = () => {
+    const ready = order?.lines.filter((l) => l.status === "ready") ?? [];
+    for (const line of ready) setLineStatus(order!.id, line.id, "served");
+    load();
+    flash(`Served ${ready.length} · Đã phục vụ ${ready.length} món`);
+  };
+
   const send = () => {
     const count = sendToKitchen(order.id);
     load();
@@ -610,9 +617,40 @@ function ReviewContent() {
                           Not sent yet · Chưa gửi bếp
                         </span>
                       )}
+                      {/* Where this line is in the kitchen. The waiter's half
+                          of the status conversation is the last step: the
+                          kitchen says ready, the waiter carries it and says
+                          served. Everything before that is read-only here —
+                          claiming a dish is the kitchen's tap, not the floor's. */}
+                      {line.sentAt && line.status === "placed" && (
+                        <span className="block text-xs text-muted mt-0.5">Queued · Chờ bếp</span>
+                      )}
+                      {line.status === "preparing" && (
+                        <span className="block text-xs text-warning font-semibold mt-0.5">
+                          Cooking · Đang nấu
+                        </span>
+                      )}
+                      {line.status === "served" && (
+                        <span className="block text-xs text-success font-medium mt-0.5">
+                          ✓ Served · Đã phục vụ
+                        </span>
+                      )}
                     </span>
-                    <span className="font-bold tabular-nums shrink-0">
-                      {vnd(line.unitPriceVnd * line.qty)}
+                    <span className="text-right shrink-0">
+                      <span className="block font-bold tabular-nums">
+                        {vnd(line.unitPriceVnd * line.qty)}
+                      </span>
+                      {line.status === "ready" && (
+                        <button
+                          onClick={() => {
+                            setLineStatus(order.id, line.id, "served");
+                            load();
+                          }}
+                          className="mt-1 min-h-[40px] px-3 rounded-lg bg-success text-white text-xs font-bold"
+                        >
+                          READY — served? · XONG
+                        </button>
+                      )}
                     </span>
                   </div>
                   <div className="flex items-center justify-end gap-2 mt-2">
@@ -882,6 +920,15 @@ function ReviewContent() {
               )}
             </div>
           </div>
+        )}
+
+        {lines.filter((l) => l.status === "ready").length > 1 && (
+          <button
+            onClick={serveAllReady}
+            className="mx-4 mt-2 mb-1 min-h-[48px] w-[calc(100%-2rem)] rounded-xl bg-success text-white text-sm font-bold"
+          >
+            Whole tray delivered · Đã mang hết {lines.filter((l) => l.status === "ready").length} món
+          </button>
         )}
 
         <div className="px-4 py-2 flex items-center justify-between gap-3 bg-brand-light">
