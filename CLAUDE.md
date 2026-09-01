@@ -294,24 +294,26 @@ marketing · shopping · deliveryPerformance · usageVariance.
 needs the pad. The real boundary is money: `canTakePayment` is what keeps the
 kitchen tablet away from closing a bill.
 
-**61 local collections** across `src/lib/repo/`, namespaced
+**62 local collections** across `src/lib/repo/`, namespaced
 `jc:{tenant}:{key}`. That count excludes ten `isSeeded()` migration guards
 and four device-local meta keys, which are storage but not collections.
 
-**21 sync**, in the two families:
+**22 sync**, in the two families:
 
 - *Last-write-wins:* `checklist_items`, `checklist_ticks`, `notices`,
   `notice_acks`, `stock_entries`, `orders`, `order_payments`, `menu_items`,
   `table_tokens`, `receipt_settings`, `printer_settings`, `payment_settings`
-- *Append-only:* `fs_temp_readings`, `fs_cook_logs`, `fs_delivery_logs`,
+- *Append-only:* `order_lines`, `fs_temp_readings`, `fs_cook_logs`, `fs_delivery_logs`,
   `fs_cleaning_signoffs`, `fs_inspections`, `fs_samples`,
   `fs_sample_destruction_checks`, `fs_pest`, `fs_complaints`
 
-Orders are last-write-wins rather than append-only, which is a deliberate
-choice and the riskier one: a line added on a waiter's phone while the kitchen
-marks another ready must not lose either edit. It holds because writes are
-per-record and the two devices touch different lines. If orders ever grow an
-operation that rewrites the whole line array at once, this stops being safe.
+The order header is last-write-wins (one device owns it at a time, and it
+holds nothing concurrent devices fight over); the LINES are individual
+`order_lines` records in the append-only union family with a reconciler —
+status only moves forward, a void is terminal, the kitchen keeps the earliest
+send. Two offline waiters adding to one table produce disjoint records that
+union with no conflict at all. Repos assemble `order.lines` at read time;
+screens never see the split. Never re-embed lines into the order record.
 
 ## The guest's phone knows nothing
 

@@ -11,7 +11,7 @@ import { ensureMenuSeeded } from "@/lib/repo/menu";
 import { ensureShoppingSeeded } from "@/lib/repo/shopping";
 import { ensureDeliveryPerformanceSeeded } from "@/lib/repo/deliveryPerformance";
 import { ensurePromotionsSeeded } from "@/lib/repo/promotions";
-import { repairVoidedOrders, backfillSentLines } from "@/lib/repo/orders";
+import { repairVoidedOrders, backfillSentLines, migrateEmbeddedLines } from "@/lib/repo/orders";
 
 export function ensureAllSeeded() {
   ensureRecipesSeeded();
@@ -27,6 +27,7 @@ export function ensureAllSeeded() {
   ensureShoppingSeeded();
   ensureDeliveryPerformanceSeeded();
   ensurePromotionsSeeded();
+  migrateEmbeddedLines();
   repairVoidedOrders();
   backfillSentLines();
 }

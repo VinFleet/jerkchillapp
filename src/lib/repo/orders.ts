@@ -13,6 +13,7 @@ import {
 import type {
   OrderLineChoice,
   OrderDiscount,
+  StoredOrderLine,
   Order,
   OrderLine,
   OrderSource,
@@ -58,21 +59,19 @@ const SENT_BACKFILL_KEY = "orders_sent_backfill_v1";
  */
 export function backfillSentLines() {
   if (isSeeded(SENT_BACKFILL_KEY)) return;
-  const all = readList<Order>(ORDERS_KEY);
+  // Runs after the embedded-lines migration, against the line store.
+  migrateEmbeddedLines();
+  const store = readLineStore();
+  const placedAt = new Map(readList<Order>(ORDERS_KEY).map((o) => [o.id, o.placedAt]));
   let changed = false;
-  const fixed = all.map((order) => {
-    if (!order.lines.some((l) => !l.sentAt)) return order;
+  for (const line of store) {
+    if (line.sentAt) continue;
+    line.sentAt = placedAt.get(line.orderId) ?? line.updatedAt;
     changed = true;
-    return {
-      ...order,
-      lines: order.lines.map((l) => (l.sentAt ? l : { ...l, sentAt: order.placedAt })),
-      updatedAt: new Date().toISOString(),
-    };
-  });
-  if (changed) writeList(ORDERS_KEY, fixed);
+  }
+  if (changed) writeList(LINES_KEY, store);
   markSeeded(SENT_BACKFILL_KEY);
 }
-
 const VOIDED_REPAIR_KEY = "orders_voided_repair_v1";
 
 /**
@@ -84,26 +83,107 @@ const VOIDED_REPAIR_KEY = "orders_voided_repair_v1";
  * stuck, and they will not fix themselves because nothing is going to touch
  * their lines again.
  */
+const LINES_KEY = "order_lines";
+const LINES_SPLIT_KEY = "orders_lines_split_v1";
+
+/**
+ * Lines live in their own store; orders are headers.
+ *
+ * Embedded lines made the whole order one last-write-wins blob, and two
+ * devices editing one table lost a side's items. Individual records union.
+ * Every read assembles the order back into the shape every screen expects,
+ * so the refactor is invisible above this file.
+ */
+function readLineStore(): StoredOrderLine[] {
+  return readList<StoredOrderLine>(LINES_KEY);
+}
+
+function writeLineRecord(record: StoredOrderLine) {
+  const all = readLineStore();
+  const idx = all.findIndex((l) => l.id === record.id);
+  if (idx >= 0) all[idx] = record;
+  else all.push(record);
+  writeList(LINES_KEY, all);
+}
+
+function linesFor(orderId: string, store = readLineStore()): StoredOrderLine[] {
+  return store
+    .filter((l) => l.orderId === orderId)
+    .sort((a, b) => (a.id < b.id ? -1 : 1));
+}
+
+/**
+ * Absorb lines still embedded in an order record — from this device's own
+ * history, or pulled from a server row written before the split. Id-keyed and
+ * idempotent; the order record itself is left alone (assembly overrides it),
+ * so absorption never causes a write loop.
+ */
+function absorbEmbedded(order: Order, store: StoredOrderLine[]): void {
+  if (!order.lines?.length) return;
+  const known = new Set(store.map((l) => l.id));
+  let changed = false;
+  for (const line of order.lines) {
+    if (known.has(line.id)) continue;
+    store.push({ ...line, orderId: order.id, updatedAt: order.updatedAt });
+    changed = true;
+  }
+  if (changed) writeList(LINES_KEY, store);
+}
+
+function assemble(order: Order, store = readLineStore()): Order {
+  absorbEmbedded(order, store);
+  return { ...order, lines: linesFor(order.id, store) };
+}
+
+/**
+ * After any line change: re-derive the header's status and bump its clock.
+ * The header is the only part of the order that is still last-write-wins,
+ * and it holds nothing a concurrent device would fight over.
+ */
+function touchOrder(orderId: string) {
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return;
+  const lines = linesFor(orderId);
+  all[idx] = {
+    ...all[idx],
+    lines: [],
+    status: deriveOrderStatus(all[idx].status, lines),
+    updatedAt: new Date().toISOString(),
+  };
+  writeList(ORDERS_KEY, all);
+}
+
+/** One-time move of every embedded line into the line store. */
+export function migrateEmbeddedLines() {
+  if (isSeeded(LINES_SPLIT_KEY)) return;
+  const store = readLineStore();
+  for (const order of readList<Order>(ORDERS_KEY)) absorbEmbedded(order, store);
+  markSeeded(LINES_SPLIT_KEY);
+}
+
 export function repairVoidedOrders() {
   if (isSeeded(VOIDED_REPAIR_KEY)) return;
+  migrateEmbeddedLines();
+  const store = readLineStore();
   const all = readList<Order>(ORDERS_KEY);
   let changed = false;
   const fixed = all.map((order) => {
     if (order.status === "closed" || order.status === "cancelled") return order;
-    if (!isVoided(order.lines)) return order;
+    if (!isVoided(linesFor(order.id, store))) return order;
     changed = true;
     return { ...order, status: "cancelled" as OrderStatus, updatedAt: new Date().toISOString() };
   });
   if (changed) writeList(ORDERS_KEY, fixed);
   markSeeded(VOIDED_REPAIR_KEY);
 }
-
 export function getOrders(): Order[] {
   return readList<Order>(ORDERS_KEY).sort((a, b) => (a.placedAt < b.placedAt ? 1 : -1));
 }
 
 export function getOrder(id: string): Order | undefined {
-  return readList<Order>(ORDERS_KEY).find((o) => o.id === id);
+  const order = readList<Order>(ORDERS_KEY).find((o) => o.id === id);
+  return order ? assemble(order) : undefined;
 }
 
 /** Everything the kitchen still has work on. */
@@ -130,24 +210,20 @@ export function unsentLines(order: Order) {
  * "send" is indistinguishable from a broken button.
  */
 export function sendToKitchen(orderId: string): number {
-  const all = readList<Order>(ORDERS_KEY);
-  const idx = all.findIndex((o) => o.id === orderId);
-  if (idx < 0) return 0;
-
   const now = new Date().toISOString();
+  const store = readLineStore();
   let sent = 0;
-  const lines = all[idx].lines.map((l) => {
-    if (l.sentAt || l.status === "cancelled") return l;
+  for (const line of store) {
+    if (line.orderId !== orderId || line.sentAt || line.status === "cancelled") continue;
+    line.sentAt = now;
+    line.updatedAt = now;
     sent += 1;
-    return { ...l, sentAt: now };
-  });
+  }
   if (sent === 0) return 0;
-
-  all[idx] = { ...all[idx], lines, updatedAt: now };
-  writeList(ORDERS_KEY, all);
+  writeList(LINES_KEY, store);
+  touchOrder(orderId);
   return sent;
 }
-
 /** Orders still open on a table, for the floor view. */
 export function getOpenOrderForTable(tableId: string): Order | undefined {
   return getOrders().find(
@@ -199,20 +275,20 @@ export function addLine(
   /** Spice level, mocktail — copied onto the line with their price effect. */
   choices?: OrderLineChoice[]
 ): OrderLine | null {
-  const all = readList<Order>(ORDERS_KEY);
-  const idx = all.findIndex((o) => o.id === orderId);
-  if (idx < 0) return null;
+  const order = readList<Order>(ORDERS_KEY).find((o) => o.id === orderId);
+  if (!order) return null;
 
   const item = getMenuItems().find((m) => m.id === menuItemId);
   if (!item) return null;
 
-  const price = item.pricesVnd[all[idx].channel];
+  const price = item.pricesVnd[order.channel];
   // A null price means this item is not sold on this channel. Selling it at
   // zero would be worse than refusing.
   if (price === null || price === undefined) return null;
 
-  const line: OrderLine = {
+  const line: StoredOrderLine = {
     id: newId("line"),
+    orderId,
     menuItemId,
     // Deltas are folded in now, so nothing downstream needs to know this line
     // had options at all.
@@ -221,10 +297,10 @@ export function addLine(
     status: "placed",
     note,
     choices: choices?.length ? choices : undefined,
+    updatedAt: new Date().toISOString(),
   };
-
-  all[idx] = { ...all[idx], lines: [...all[idx].lines, line], updatedAt: new Date().toISOString() };
-  writeList(ORDERS_KEY, all);
+  writeLineRecord(line);
+  touchOrder(orderId);
   return line;
 }
 
@@ -237,28 +313,18 @@ export function addLine(
  * kitchen or the bill should have to interpret.
  */
 export function setLineQty(orderId: string, lineId: string, qty: number) {
-  const all = readList<Order>(ORDERS_KEY);
-  const idx = all.findIndex((o) => o.id === orderId);
-  if (idx < 0) return;
-
+  const line = readLineStore().find((l) => l.id === lineId && l.orderId === orderId);
+  if (!line) return;
   const change = resolveQtyChange(qty);
-  const lines = all[idx].lines.map((l) =>
-    l.id === lineId
-      ? change.action === "cancel"
-        ? { ...l, status: "cancelled" as OrderLineStatus }
-        : { ...l, qty: change.qty }
-      : l
-  );
-
-  all[idx] = {
-    ...all[idx],
-    lines,
-    status: deriveOrderStatus(all[idx].status, lines),
+  writeLineRecord({
+    ...line,
+    ...(change.action === "cancel"
+      ? { status: "cancelled" as OrderLineStatus }
+      : { qty: change.qty }),
     updatedAt: new Date().toISOString(),
-  };
-  writeList(ORDERS_KEY, all);
+  });
+  touchOrder(orderId);
 }
-
 /**
  * Move a set of lines together — the KDS card's one big button.
  *
@@ -267,30 +333,21 @@ export function setLineQty(orderId: string, lineId: string, qty: number) {
  */
 export function setLinesStatus(orderId: string, lineIds: string[], status: OrderLineStatus) {
   if (lineIds.length === 0) return;
-  const all = readList<Order>(ORDERS_KEY);
-  const idx = all.findIndex((o) => o.id === orderId);
-  if (idx < 0) return;
   const wanted = new Set(lineIds);
-  const lines = all[idx].lines.map((l) => (wanted.has(l.id) ? { ...l, status } : l));
-  all[idx] = {
-    ...all[idx],
-    lines,
-    status: deriveOrderStatus(all[idx].status, lines),
-    updatedAt: new Date().toISOString(),
-  };
-  writeList(ORDERS_KEY, all);
+  const now = new Date().toISOString();
+  const store = readLineStore();
+  for (const line of store) {
+    if (line.orderId === orderId && wanted.has(line.id)) {
+      line.status = status;
+      line.updatedAt = now;
+    }
+  }
+  writeList(LINES_KEY, store);
+  touchOrder(orderId);
 }
-
 export function setLineStatus(orderId: string, lineId: string, status: OrderLineStatus) {
-  const all = readList<Order>(ORDERS_KEY);
-  const idx = all.findIndex((o) => o.id === orderId);
-  if (idx < 0) return;
-
-  const lines = all[idx].lines.map((l) => (l.id === lineId ? { ...l, status } : l));
-  all[idx] = { ...all[idx], lines, status: deriveOrderStatus(all[idx].status, lines), updatedAt: new Date().toISOString() };
-  writeList(ORDERS_KEY, all);
+  setLinesStatus(orderId, [lineId], status);
 }
-
 /**
  * The order's own status follows its lines.
  *
@@ -341,17 +398,12 @@ export function setOrderNote(orderId: string, note: string) {
  * chosen from a menu.
  */
 export function setLineNote(orderId: string, lineId: string, note: string) {
-  const all = readList<Order>(ORDERS_KEY);
-  const idx = all.findIndex((o) => o.id === orderId);
-  if (idx < 0) return;
+  const line = readLineStore().find((l) => l.id === lineId && l.orderId === orderId);
+  if (!line) return;
   const trimmed = note.trim().slice(0, 200);
-  const lines = all[idx].lines.map((l) =>
-    l.id === lineId ? { ...l, note: trimmed || undefined } : l
-  );
-  all[idx] = { ...all[idx], lines, updatedAt: new Date().toISOString() };
-  writeList(ORDERS_KEY, all);
+  writeLineRecord({ ...line, note: trimmed || undefined, updatedAt: new Date().toISOString() });
+  touchOrder(orderId);
 }
-
 export function moveOrderToTable(orderId: string, tableId: string) {
   const all = readList<Order>(ORDERS_KEY);
   const idx = all.findIndex((o) => o.id === orderId);
@@ -376,32 +428,39 @@ export function splitOrder(
   lineIds: string[],
   placedBy: string | null
 ): { ok: true; newOrderId: string } | { ok: false; reason: string } {
-  const all = readList<Order>(ORDERS_KEY);
-  const idx = all.findIndex((o) => o.id === orderId);
-  if (idx < 0) return { ok: false, reason: "missing" };
+  const source = getOrder(orderId);
+  if (!source) return { ok: false, reason: "missing" };
 
-  const source = all[idx];
   const verdict = canSplitOrder(source.status, source.lines, lineIds, getPayments(orderId));
   if (!verdict.ok) return { ok: false, reason: verdict.reason };
 
   const now = new Date().toISOString();
-  const moving = source.lines.filter((l) => lineIds.includes(l.id));
-  const staying = source.lines.filter((l) => !lineIds.includes(l.id));
-
   const split: Order = {
     id: newId("order"),
     tableId: source.tableId,
     source: source.source,
     channel: source.channel,
     status: "placed",
-    lines: moving,
+    lines: [],
     placedAt: source.placedAt,
     placedBy,
     updatedAt: now,
   };
+  writeList(ORDERS_KEY, [...readList<Order>(ORDERS_KEY), split]);
 
-  all[idx] = { ...source, lines: staying, updatedAt: now };
-  writeList(ORDERS_KEY, [...all, split]);
+  // Moving a line is a re-parenting of its record. Rare, manager-driven and
+  // single-device, so the later-write-wins on orderId is safe.
+  const wanted = new Set(lineIds);
+  const store = readLineStore();
+  for (const line of store) {
+    if (line.orderId === orderId && wanted.has(line.id)) {
+      line.orderId = split.id;
+      line.updatedAt = now;
+    }
+  }
+  writeList(LINES_KEY, store);
+  touchOrder(orderId);
+  touchOrder(split.id);
   return { ok: true, newOrderId: split.id };
 }
 
@@ -416,33 +475,39 @@ export function mergeOrders(
   intoId: string,
   fromId: string
 ): { ok: true } | { ok: false; reason: string } {
-  const all = readList<Order>(ORDERS_KEY);
-  const intoIdx = all.findIndex((o) => o.id === intoId);
-  const fromIdx = all.findIndex((o) => o.id === fromId);
-  if (intoIdx < 0 || fromIdx < 0) return { ok: false, reason: "missing" };
+  const into = getOrder(intoId);
+  const from = getOrder(fromId);
+  if (!into || !from) return { ok: false, reason: "missing" };
 
   const verdict = canMergeOrders(
     intoId,
     fromId,
-    all[intoIdx].status,
-    all[fromIdx].status,
+    into.status,
+    from.status,
     [...getPayments(intoId), ...getPayments(fromId)]
   );
   if (!verdict.ok) return { ok: false, reason: verdict.reason };
 
   const now = new Date().toISOString();
-  const notes = [all[intoIdx].orderNote, all[fromIdx].orderNote].filter(Boolean).join(" · ");
+  const store = readLineStore();
+  for (const line of store) {
+    if (line.orderId === fromId) {
+      line.orderId = intoId;
+      line.updatedAt = now;
+    }
+  }
+  writeList(LINES_KEY, store);
 
-  all[intoIdx] = {
-    ...all[intoIdx],
-    lines: [...all[intoIdx].lines, ...all[fromIdx].lines],
-    // Both tables' notes survive. Losing an allergy note in a merge is the
-    // one outcome this must never have.
-    orderNote: notes || undefined,
-    updatedAt: now,
-  };
+  const all = readList<Order>(ORDERS_KEY);
+  const intoIdx = all.findIndex((o) => o.id === intoId);
+  const fromIdx = all.findIndex((o) => o.id === fromId);
+  const notes = [all[intoIdx].orderNote, all[fromIdx].orderNote].filter(Boolean).join(" · ");
+  // Both tables' notes survive. Losing an allergy note in a merge is the
+  // one outcome this must never have.
+  all[intoIdx] = { ...all[intoIdx], orderNote: notes || undefined, updatedAt: now };
   all[fromIdx] = { ...all[fromIdx], status: "cancelled", lines: [], updatedAt: now };
   writeList(ORDERS_KEY, all);
+  touchOrder(intoId);
   return { ok: true };
 }
 
@@ -461,29 +526,24 @@ export function addAdHocLine(
   priceVnd: number,
   qty: number
 ): OrderLine | null {
-  const all = readList<Order>(ORDERS_KEY);
-  const idx = all.findIndex((o) => o.id === orderId);
-  if (idx < 0) return null;
+  const order = readList<Order>(ORDERS_KEY).find((o) => o.id === orderId);
+  if (!order) return null;
 
-  const line: OrderLine = {
+  const line: StoredOrderLine = {
     id: newId("line"),
+    orderId,
     // Not a menu id: nothing in the menu matches, and the variance report
     // needs to be able to tell these apart from a real dish.
     menuItemId: `adhoc:${name.trim().slice(0, 60)}`,
     unitPriceVnd: Math.max(0, Math.round(priceVnd)),
     qty: Math.max(1, Math.round(qty)),
     status: "placed",
-  };
-
-  all[idx] = {
-    ...all[idx],
-    lines: [...all[idx].lines, line],
     updatedAt: new Date().toISOString(),
   };
-  writeList(ORDERS_KEY, all);
+  writeLineRecord(line);
+  touchOrder(orderId);
   return line;
 }
-
 /** Who is sitting there, when it is worth recording. */
 export function setOrderCustomer(orderId: string, name: string, phone?: string) {
   const all = readList<Order>(ORDERS_KEY);

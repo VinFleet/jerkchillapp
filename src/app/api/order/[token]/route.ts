@@ -241,13 +241,23 @@ export async function POST(
     }
 
     const now = new Date().toISOString();
+    // Lines are individual records now — the same shape a device writes —
+    // so a guest's order merges through the identical union path.
+    const lineRows = lines.map((l) => ({
+      tenant_id: tenantId,
+      collection: "order_lines",
+      record_id: l.id,
+      data: { ...l, orderId: "", updatedAt: now },
+      deleted: false,
+    }));
+
     const order: Order = {
       id: newId("order"),
       tableId,
       source: "qr",
       channel: "dine_in",
       status: "placed",
-      lines,
+      lines: [],
       placedAt: now,
       // No name: a guest ordered this. That is what tells the pass and the
       // reports a QR order from a waiter's.
@@ -258,14 +268,18 @@ export async function POST(
       updatedAt: now,
     };
 
+    for (const row of lineRows) row.data.orderId = order.id;
     const { error } = await client.from("synced_records").upsert(
-      {
-        tenant_id: tenantId,
-        collection: "orders",
-        record_id: order.id,
-        data: order,
-        deleted: false,
-      },
+      [
+        {
+          tenant_id: tenantId,
+          collection: "orders",
+          record_id: order.id,
+          data: order,
+          deleted: false,
+        },
+        ...lineRows,
+      ],
       { onConflict: "tenant_id,collection,record_id" }
     );
 

@@ -882,6 +882,19 @@ export type OrderLine = {
   sentAt?: string;
 };
 
+/**
+ * A line as stored — its own record, not an entry in an array.
+ *
+ * Lines were embedded in the order and synced as one blob, which meant two
+ * devices editing one order were whole-record last-write-wins: one waiter's
+ * additions silently destroyed the other's. As individual records they union;
+ * the conflict the sync engine cannot solve stops existing in the schema.
+ */
+export type StoredOrderLine = OrderLine & {
+  orderId: string;
+  updatedAt: string;
+};
+
 export type Order = {
   id: string;
   /** Null for a counter or delivery order that isn't sitting at a table. */
@@ -890,6 +903,7 @@ export type Order = {
   /** Which price list applied. Copied so a channel change can't rewrite an old bill. */
   channel: MenuChannel;
   status: OrderStatus;
+  /** Assembled from order_lines records at read time; stored empty. */
   lines: OrderLine[];
   placedAt: string;
   /** Staff name for waiter/counter orders; null when a guest ordered by QR. */

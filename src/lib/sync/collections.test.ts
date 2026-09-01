@@ -79,3 +79,65 @@ test("both refunded keeps refunded — money cannot un-move", () => {
   const r2 = { ...base, status: "refunded" };
   assert.equal((reconcile(r1, r2) as P).status, "refunded");
 });
+
+// ---------- order lines ----------
+
+const lineReconcile = SYNCED_COLLECTIONS.order_lines.reconcile!;
+
+type Line = {
+  id: string;
+  orderId: string;
+  status: string;
+  qty: number;
+  sentAt?: string;
+  updatedAt: string;
+};
+
+const lineBase: Line = {
+  id: "line_1",
+  orderId: "order_1",
+  status: "placed",
+  qty: 1,
+  updatedAt: "2026-09-01T12:00:00Z",
+};
+
+test("a dish cannot become uncooked", () => {
+  const ready = { ...lineBase, status: "ready", updatedAt: "2026-09-01T12:05:00Z" };
+  const stale = { ...lineBase, status: "placed", updatedAt: "2026-09-01T12:06:00Z" };
+  // Even though the stale copy is NEWER, status only moves forward.
+  assert.equal((lineReconcile(ready, stale) as Line).status, "ready");
+  assert.equal((lineReconcile(stale, ready) as Line).status, "ready");
+});
+
+test("a void is terminal from either side", () => {
+  const voided = { ...lineBase, status: "cancelled", updatedAt: "2026-09-01T12:05:00Z" };
+  const served = { ...lineBase, status: "served", updatedAt: "2026-09-01T12:06:00Z" };
+  assert.equal((lineReconcile(voided, served) as Line).status, "cancelled");
+  assert.equal((lineReconcile(served, voided) as Line).status, "cancelled");
+});
+
+test("the kitchen keeps the earliest send", () => {
+  const early = { ...lineBase, sentAt: "2026-09-01T12:01:00Z" };
+  const late = { ...lineBase, sentAt: "2026-09-01T12:04:00Z", updatedAt: "2026-09-01T12:04:00Z" };
+  assert.equal((lineReconcile(early, late) as Line).sentAt, "2026-09-01T12:01:00Z");
+  assert.equal((lineReconcile(late, early) as Line).sentAt, "2026-09-01T12:01:00Z");
+});
+
+test("the later edit wins the mundane fields", () => {
+  const older = { ...lineBase, qty: 1 };
+  const newer = { ...lineBase, qty: 3, updatedAt: "2026-09-01T12:10:00Z" };
+  assert.equal((lineReconcile(older, newer) as Line).qty, 3);
+  assert.equal((lineReconcile(newer, older) as Line).qty, 3);
+});
+
+test("line merging is idempotent and order-free", () => {
+  const a = { ...lineBase, status: "preparing", sentAt: "2026-09-01T12:01:00Z" };
+  const b = { ...lineBase, qty: 2, updatedAt: "2026-09-01T12:09:00Z" };
+  const ab = lineReconcile(a, b) as Line;
+  const ba = lineReconcile(b, a) as Line;
+  assert.deepEqual(
+    { s: ab.status, q: ab.qty, sent: ab.sentAt },
+    { s: ba.status, q: ba.qty, sent: ba.sentAt }
+  );
+  assert.deepEqual(lineReconcile(ab, b), ab, "merging twice changes nothing");
+});

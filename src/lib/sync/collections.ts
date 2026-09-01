@@ -39,6 +39,7 @@ export type SyncedCollection =
   | "stock_entries"
   | "orders"
   | "order_payments"
+  | "order_lines"
   | "menu_items"
   | "table_tokens"
   | "receipt_settings"
@@ -150,6 +151,47 @@ function reconcilePayment(localRaw: unknown, remoteRaw: unknown): unknown {
   };
 }
 
+/**
+ * One order line, as edited by two devices.
+ *
+ * The line is the unit of truth the whole refactor exists for: two waiters
+ * adding to one table offline produce disjoint line records that union with
+ * no conflict at all, and this reconciler only has work when both devices
+ * touched the SAME line. Status moves forward (a dish cannot become uncooked),
+ * a void is terminal from either side, the kitchen keeps the earliest send,
+ * and the mundane fields follow whichever edit was later.
+ */
+function reconcileOrderLine(localRaw: unknown, remoteRaw: unknown): unknown {
+  type L = {
+    status: string;
+    sentAt?: string;
+    updatedAt?: string;
+    qty?: number;
+    note?: string;
+    orderId?: string;
+  };
+  const local = localRaw as L;
+  const remote = remoteRaw as L;
+
+  const rank = (s: string) =>
+    s === "served" ? 3 : s === "ready" ? 2 : s === "preparing" ? 1 : 0;
+  const cancelled = local.status === "cancelled" || remote.status === "cancelled";
+  const status = cancelled
+    ? "cancelled"
+    : rank(local.status) >= rank(remote.status)
+      ? local.status
+      : remote.status;
+
+  const later =
+    (local.updatedAt ?? "") >= (remote.updatedAt ?? "") ? local : remote;
+
+  return {
+    ...later,
+    status,
+    sentAt: earliest(local.sentAt, remote.sentAt),
+  };
+}
+
 /** A pest sighting can be resolved but never un-resolved. */
 function reconcilePest(localRaw: unknown, remoteRaw: unknown): unknown {
   const local = localRaw as PestSighting;
@@ -220,6 +262,19 @@ export const SYNCED_COLLECTIONS: Record<SyncedCollection, CollectionConfig> = {
     updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
     // An order is a living record — lines are added, statuses advance — so it
     // must be re-pushed on every change rather than pushed once.
+    mutable: true,
+  },
+  // Each line of an order is its own record — the append-only union that
+  // makes two offline waiters at one table safe. The order header stays
+  // last-write-wins because one device owns it at a time; the lines are
+  // where the pack's warning ("no sync engine solves this") gets solved in
+  // the schema instead.
+  order_lines: {
+    storageKey: "order_lines",
+    idOf: idField,
+    updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
+    policy: "append-only",
+    reconcile: reconcileOrderLine,
     mutable: true,
   },
   order_payments: {
