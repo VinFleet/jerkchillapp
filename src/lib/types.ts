@@ -940,6 +940,34 @@ export type Promotion = {
   updatedAt: string;
 };
 
+// ---------- Receipt setup ----------
+
+/**
+ * What prints on the bill, beyond the order itself.
+ *
+ * Entered once by the owner and synced, because the bill prints from
+ * whichever device is nearest the guest — a header typed on the laptop must
+ * come out identical on the kitchen tablet. The fields mirror what Vietnamese
+ * restaurants actually put on paper: name, address, phone, MST (tax code),
+ * the wifi, and a thank-you line.
+ */
+export type ReceiptSettings = {
+  /** Singleton — there is exactly one of these per restaurant. */
+  id: "receipt";
+  headerName: string;
+  addressLine: string;
+  phone: string;
+  /** Mã số thuế. Printed when present; hidden when empty. */
+  taxCode: string;
+  /** "Wifi: JerkChill / password" — the question every table asks. */
+  wifiNote: string;
+  footer: Bi;
+  showLogo: boolean;
+  /** Print a scan-to-pay VietQR for the outstanding amount on the bill. */
+  showPaymentQr: boolean;
+  updatedAt: string;
+};
+
 // ---------- Payments ----------
 
 /**

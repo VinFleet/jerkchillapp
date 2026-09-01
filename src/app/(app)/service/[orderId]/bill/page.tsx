@@ -8,7 +8,12 @@ import { BackLink } from "@/components/BackLink";
 import { getOrder, getPayments, getBill } from "@/lib/repo/orders";
 import { getMenuItems } from "@/lib/repo/menu";
 import { getCachedTables } from "@/lib/repo/tableCache";
-import { getPaymentSettings } from "@/lib/repo/paymentSettings";
+import Image from "next/image";
+import { getPaymentSettings, vietQrConfigured } from "@/lib/repo/paymentSettings";
+import { getReceiptSettings } from "@/lib/repo/receiptSettings";
+import { buildVietQrPayload } from "@/lib/payments/vietqr";
+import { VietQrCode } from "@/components/VietQrCode";
+import { orderCode } from "@/lib/repo/orderRules";
 import type { Order, MenuItem, Payment } from "@/lib/types";
 
 /**
@@ -61,6 +66,24 @@ function BillContent() {
   const bill = getBill(order.id);
   const lines = order.lines.filter((l) => l.status !== "cancelled");
   const bank = getPaymentSettings();
+  const receipt = getReceiptSettings();
+
+  // A QR for exactly what is still owed, so a guest can settle from the
+  // printed bill without flagging anyone down. Dynamic per print: paying half
+  // and reprinting yields a code for the remainder, never a double-charge.
+  let payQr: string | null = null;
+  if (receipt.showPaymentQr && vietQrConfigured() && bill && bill.outstandingVnd > 0) {
+    try {
+      payQr = buildVietQrPayload({
+        bankBin: bank.bankBin,
+        accountNumber: bank.accountNumber,
+        amountVnd: bill.outstandingVnd,
+        reference: `JC${orderCode(order.id)}`,
+      });
+    } catch {
+      payQr = null;
+    }
+  }
 
   return (
     <div className="pb-10">
@@ -71,8 +94,25 @@ function BillContent() {
       {/* 80mm at 203dpi is ~640px; this stays inside that and still reads on A4. */}
       <div className="mx-auto max-w-[420px] px-5 py-6 print:max-w-none print:px-0">
         <header className="text-center mb-5">
-          <h1 className="text-xl font-black tracking-tight">JERK &amp; CHILL</h1>
-          <p className="text-xs text-muted mt-0.5">Thảo Điền, District 2, HCMC</p>
+          {receipt.showLogo && (
+            <Image
+              src="/brand/logo-600.png"
+              alt=""
+              width={110}
+              height={78}
+              className="mx-auto mb-2"
+              priority
+            />
+          )}
+          <h1 className="text-xl font-black tracking-tight">{receipt.headerName}</h1>
+          {receipt.addressLine && <p className="text-xs text-muted mt-0.5">{receipt.addressLine}</p>}
+          {(receipt.phone || receipt.taxCode) && (
+            <p className="text-xs text-muted">
+              {[receipt.phone, receipt.taxCode && `MST: ${receipt.taxCode}`]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          )}
         </header>
 
         <div className="text-sm space-y-0.5 mb-4 pb-4 border-b border-dashed border-border">
@@ -165,16 +205,30 @@ function BillContent() {
           )}
         </div>
 
-        {bank.accountNumber && (
-          <div className="mt-4 pt-3 border-t border-dashed border-border text-xs text-muted text-center space-y-0.5">
-            <p>Bank transfer · Chuyển khoản</p>
-            <p className="font-mono tabular-nums">{bank.accountNumber}</p>
-            {bank.accountName && <p>{bank.accountName}</p>}
+        {payQr ? (
+          <div className="mt-4 pt-3 border-t border-dashed border-border text-center space-y-1">
+            <p className="text-xs font-semibold">
+              Scan to pay · Quét để thanh toán
+            </p>
+            <VietQrCode payload={payQr} size={180} />
+            {bank.accountName && <p className="text-xs text-muted">{bank.accountName}</p>}
           </div>
+        ) : (
+          bank.accountNumber && (
+            <div className="mt-4 pt-3 border-t border-dashed border-border text-xs text-muted text-center space-y-0.5">
+              <p>Bank transfer · Chuyển khoản</p>
+              <p className="font-mono tabular-nums">{bank.accountNumber}</p>
+              {bank.accountName && <p>{bank.accountName}</p>}
+            </div>
+          )
         )}
 
-        <p className="text-center text-xs text-muted mt-5">
-          Thank you · Cảm ơn quý khách
+        {receipt.wifiNote && (
+          <p className="text-center text-xs text-muted mt-3">{receipt.wifiNote}</p>
+        )}
+
+        <p className="text-center text-xs text-muted mt-4">
+          {receipt.footer.en} · {receipt.footer.vi}
         </p>
       </div>
 

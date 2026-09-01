@@ -259,15 +259,15 @@ marketing · shopping · deliveryPerformance · usageVariance.
 needs the pad. The real boundary is money: `canTakePayment` is what keeps the
 kitchen tablet away from closing a bill.
 
-**59 local collections** across `src/lib/repo/`, namespaced
+**60 local collections** across `src/lib/repo/`, namespaced
 `jc:{tenant}:{key}`. That count excludes ten `isSeeded()` migration guards
 and four device-local meta keys, which are storage but not collections.
 
-**18 sync**, in the two families:
+**19 sync**, in the two families:
 
 - *Last-write-wins:* `checklist_items`, `checklist_ticks`, `notices`,
   `notice_acks`, `stock_entries`, `orders`, `order_payments`, `menu_items`,
-  `table_tokens`
+  `table_tokens`, `receipt_settings`
 - *Append-only:* `fs_temp_readings`, `fs_cook_logs`, `fs_delivery_logs`,
   `fs_cleaning_signoffs`, `fs_inspections`, `fs_samples`,
   `fs_sample_destruction_checks`, `fs_pest`, `fs_complaints`

@@ -41,6 +41,7 @@ export type SyncedCollection =
   | "order_payments"
   | "menu_items"
   | "table_tokens"
+  | "receipt_settings"
   // food safety — append-only
   | "fs_temp_readings"
   | "fs_cook_logs"
@@ -241,6 +242,15 @@ export const SYNCED_COLLECTIONS: Record<SyncedCollection, CollectionConfig> = {
   // that the moment prices became editable.
   menu_items: {
     storageKey: "menu_items",
+    idOf: idField,
+    updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
+    mutable: true,
+  },
+  // The bill's letterhead — one record, owner-edited, printed everywhere.
+  // Syncs for the same reason menu_items does: a header typed on the laptop
+  // must print identically from the tablet.
+  receipt_settings: {
+    storageKey: "receipt_settings",
     idOf: idField,
     updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
     mutable: true,

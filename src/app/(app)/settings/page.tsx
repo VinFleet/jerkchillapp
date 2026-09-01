@@ -88,6 +88,18 @@ function SettingsContent() {
           <ChevronRight size={18} className="text-muted shrink-0" />
         </Link>
         <Link
+          href="/settings/receipt"
+          className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light mb-3"
+        >
+          <span>
+            <span className="block font-semibold text-sm">Receipt setup</span>
+            <span className="block text-xs text-muted">
+              Thiết lập hoá đơn — what prints on the bill
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-muted shrink-0" />
+        </Link>
+        <Link
           href="/settings/zalo"
           className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light"
         >
