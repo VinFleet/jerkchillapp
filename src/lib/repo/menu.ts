@@ -1,5 +1,5 @@
 import type { MenuItem, MenuChannel, PrintedMaterial, Bi } from "@/lib/types";
-import { readList, writeList, readValue, writeValue, isSeeded, markSeeded, newId, todayIso } from "@/lib/storage";
+import { readList, writeList, readValue, writeValue, isSeeded, markSeeded, newId, todayIso, isLegacyTenant } from "@/lib/storage";
 import { SEED_MENU_ITEMS, SEED_PRINTED_MATERIALS } from "@/lib/seed/menu";
 
 const MENU_KEY = "menu_items";
@@ -10,6 +10,18 @@ const KBLANC_NAME_FIX_KEY = "menu_kblanc_name_fix_v1";
 const OPTIONS_AND_DRINKS_KEY = "menu_options_and_drinks_v1";
 
 export function ensureMenuSeeded() {
+  // Jerk & Chill's data belongs to Jerk & Chill. A neutral branch starts
+  // empty here and its owner builds their own — the seed below is customer
+  // number one's restaurant, not a template.
+  if (!isLegacyTenant()) {
+    markSeeded(COCKTAIL_RECIPE_LINK_KEY);
+    markSeeded(KBLANC_NAME_FIX_KEY);
+    markSeeded(MATERIALS_KEY);
+    markSeeded(MENU_KEY);
+    markSeeded(OPTIONS_AND_DRINKS_KEY);
+    return;
+  }
+
   if (!isSeeded(MENU_KEY)) {
     writeList(MENU_KEY, SEED_MENU_ITEMS);
     markSeeded(MENU_KEY);

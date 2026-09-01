@@ -1,5 +1,5 @@
 import type { Recipe, RecipeFlag, Role } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, isLegacyTenant } from "@/lib/storage";
 import { SEED_RECIPES } from "@/lib/seed/recipes";
 
 // v3: pack sizes rewritten per-can so they stay correct when a recipe is
@@ -9,6 +9,14 @@ const KEY = "recipes_v3";
 const FLAGS_KEY = "recipe_flags";
 
 export function ensureRecipesSeeded() {
+  // Jerk & Chill's data belongs to Jerk & Chill. A neutral branch starts
+  // empty here and its owner builds their own — the seed below is customer
+  // number one's restaurant, not a template.
+  if (!isLegacyTenant()) {
+    markSeeded(KEY);
+    return;
+  }
+
   if (isSeeded(KEY)) return;
   writeList(KEY, SEED_RECIPES);
   markSeeded(KEY);

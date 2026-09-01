@@ -92,6 +92,10 @@ test("the receipt adds up on paper the way it does on screen", () => {
   assert.ok(s.includes("210.000d"));
   assert.ok(s.includes("-130.000d"), "the discount is shown, not silently subtracted");
   assert.ok(s.includes("TOTAL"));
+  assert.ok(
+    s.includes("KHONG PHAI HOA DON"),
+    "the not-a-tax-invoice line is a legal requirement until e-invoicing exists"
+  );
   assert.ok(!s.includes("STILL OWED"), "a settled bill does not nag");
   assert.ok(endsWithCut(bytes));
 });

@@ -1,5 +1,5 @@
 import type { License, Bi, Role } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso, isLegacyTenant } from "@/lib/storage";
 import { SEED_LICENSES } from "@/lib/seed/licensing";
 
 const LICENSES_KEY = "licenses";
@@ -30,6 +30,14 @@ export type LicenseActor = { name: string; role: Role };
 const MAX_HISTORY = 20;
 
 export function ensureLicensingSeeded() {
+  // Jerk & Chill's data belongs to Jerk & Chill. A neutral branch starts
+  // empty here and its owner builds their own — the seed below is customer
+  // number one's restaurant, not a template.
+  if (!isLegacyTenant()) {
+    markSeeded(LICENSES_KEY);
+    return;
+  }
+
   if (isSeeded(LICENSES_KEY)) return;
   writeList(LICENSES_KEY, SEED_LICENSES);
   markSeeded(LICENSES_KEY);

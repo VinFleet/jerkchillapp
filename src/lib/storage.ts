@@ -6,6 +6,20 @@
 const TENANT_KEY = "jc_active_tenant";
 const DEFAULT_TENANT = "jerk-and-chill-thao-dien";
 
+/**
+ * The branch that existed before branches did.
+ *
+ * Jerk & Chill's data — its menu, recipes, staff, fridges — ships in the
+ * seed files, and ONLY this tenant may receive it. Every other restaurant
+ * starts neutral: a new branch inheriting another restaurant's menu is not a
+ * quirk, it is someone else's business showing up inside yours.
+ */
+export const LEGACY_TENANT = DEFAULT_TENANT;
+
+export function isLegacyTenant(): boolean {
+  return getActiveTenant() === LEGACY_TENANT;
+}
+
 export function getActiveTenant(): string {
   if (typeof window === "undefined") return DEFAULT_TENANT;
   return window.localStorage.getItem(TENANT_KEY) || DEFAULT_TENANT;

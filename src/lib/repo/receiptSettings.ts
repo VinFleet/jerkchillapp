@@ -1,5 +1,5 @@
 import type { ReceiptSettings } from "@/lib/types";
-import { readList, writeList, getActiveTenant } from "@/lib/storage";
+import { readList, writeList, getActiveTenant, LEGACY_TENANT } from "@/lib/storage";
 
 /**
  * The bill's letterhead.
@@ -13,9 +13,6 @@ import { readList, writeList, getActiveTenant } from "@/lib/storage";
  */
 
 const KEY = "receipt_settings";
-
-/** The branch that existed before branches did, with the identity it always had. */
-const LEGACY_TENANT = "jerk-and-chill-thao-dien";
 
 /**
  * Defaults are per-branch, because this is a product now.

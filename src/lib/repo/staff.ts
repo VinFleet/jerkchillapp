@@ -14,7 +14,7 @@ import type {
   InterviewScorecard,
   ScorecardEntry,
 } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso, isLegacyTenant } from "@/lib/storage";
 import { INDUCTION_STEPS } from "@/lib/types";
 import type { StaffRole } from "@/lib/staffLabels";
 import { SEED_QUESTIONS, SEED_STAFF_MEMBERS } from "@/lib/seed/staff";
@@ -32,6 +32,23 @@ const SCORECARDS_KEY = "hiring_scorecards";
 const ROSTER_BACKFILL_KEY = "staff_roster_backfill_v1";
 
 export function ensureStaffSeeded() {
+  // A neutral branch gets no Jerk & Chill names — just enough placeholders
+  // that the "who's working" picker functions on day one. The owner renames
+  // or replaces them in Staff.
+  if (!isLegacyTenant()) {
+    if (!isSeeded(STAFF_KEY)) {
+      writeList<StaffMember>(STAFF_KEY, [
+        { id: "st_owner", name: "Owner (rename me) · Chủ", role: "Manager / Owner", active: true },
+        { id: "st_chef_1", name: "Chef 1 (rename me) · Bếp 1", role: "Chef / Kitchen", active: true },
+        { id: "st_foh_1", name: "Server 1 (rename me) · Phục vụ 1", role: "Bartender / FOH", active: true },
+      ]);
+      markSeeded(STAFF_KEY);
+    }
+    markSeeded(QUESTIONS_KEY);
+    markSeeded(STAFF_KEY);
+    return;
+  }
+
   if (!isSeeded(QUESTIONS_KEY)) {
     writeList(QUESTIONS_KEY, SEED_QUESTIONS);
     markSeeded(QUESTIONS_KEY);

@@ -1,11 +1,22 @@
 import type { Contact, ContactCategory } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, isLegacyTenant } from "@/lib/storage";
 import { SEED_CONTACTS } from "@/lib/seed/contacts";
 
 const CONTACTS_KEY = "contacts";
 const KAMEREO_ENRICH_KEY = "contacts_kamereo_enrich_v1";
 
 export function ensureContactsSeeded() {
+  // A neutral branch keeps only what is true everywhere in Vietnam: the
+  // national emergency numbers. Jerk & Chill's suppliers, landlord and staff
+  // numbers are customer number one's phone book, not a template.
+  if (!isLegacyTenant()) {
+    if (!isSeeded(CONTACTS_KEY)) {
+      writeList(CONTACTS_KEY, SEED_CONTACTS.filter((c) => c.category === "emergency"));
+      markSeeded(CONTACTS_KEY);
+    }
+    markSeeded(KAMEREO_ENRICH_KEY);
+    return;
+  }
   if (!isSeeded(CONTACTS_KEY)) {
     writeList(CONTACTS_KEY, SEED_CONTACTS);
     markSeeded(CONTACTS_KEY);

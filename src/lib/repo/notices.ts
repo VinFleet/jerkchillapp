@@ -1,5 +1,5 @@
 import type { Notice, NoticeAck, Role, NoticePriority } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, isLegacyTenant } from "@/lib/storage";
 import { SEED_NOTICES } from "@/lib/seed/notices";
 import { raiseAlert } from "@/lib/push/alert";
 
@@ -7,6 +7,14 @@ const NOTICES_KEY = "notices";
 const ACKS_KEY = "notice_acks";
 
 export function ensureNoticesSeeded() {
+  // Jerk & Chill's data belongs to Jerk & Chill. A neutral branch starts
+  // empty here and its owner builds their own — the seed below is customer
+  // number one's restaurant, not a template.
+  if (!isLegacyTenant()) {
+    markSeeded(NOTICES_KEY);
+    return;
+  }
+
   if (isSeeded(NOTICES_KEY)) return;
   writeList(NOTICES_KEY, SEED_NOTICES);
   markSeeded(NOTICES_KEY);

@@ -1,5 +1,5 @@
 import type { OrderingMeta, SupplyItem } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso, isLegacyTenant } from "@/lib/storage";
 import { SEED_SUPPLY_ITEMS } from "@/lib/seed/shopping";
 import { getStockItems, getBarOnHand } from "@/lib/repo/stock";
 import { getSuppliers } from "@/lib/repo/suppliers";
@@ -9,6 +9,15 @@ const SUPPLY_KEY = "supply_items";
 const RECONCILE_KEY = "supply_items_reconcile_v1";
 
 export function ensureShoppingSeeded() {
+  // Jerk & Chill's data belongs to Jerk & Chill. A neutral branch starts
+  // empty here and its owner builds their own — the seed below is customer
+  // number one's restaurant, not a template.
+  if (!isLegacyTenant()) {
+    markSeeded(RECONCILE_KEY);
+    markSeeded(SUPPLY_KEY);
+    return;
+  }
+
   if (!isSeeded(SUPPLY_KEY)) {
     writeList(SUPPLY_KEY, SEED_SUPPLY_ITEMS);
     markSeeded(SUPPLY_KEY);

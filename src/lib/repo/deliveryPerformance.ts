@@ -1,11 +1,20 @@
 import type { PlatformStats, BadgeRequirement, DeliveryPlatformId } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, isLegacyTenant } from "@/lib/storage";
 import { SEED_PLATFORM_STATS, SEED_BADGE_REQUIREMENTS } from "@/lib/seed/deliveryPerformance";
 
 const STATS_KEY = "delivery_platform_stats";
 const BADGES_KEY = "delivery_badge_requirements";
 
 export function ensureDeliveryPerformanceSeeded() {
+  // Jerk & Chill's data belongs to Jerk & Chill. A neutral branch starts
+  // empty here and its owner builds their own — the seed below is customer
+  // number one's restaurant, not a template.
+  if (!isLegacyTenant()) {
+    markSeeded(BADGES_KEY);
+    markSeeded(STATS_KEY);
+    return;
+  }
+
   if (!isSeeded(STATS_KEY)) {
     writeList(STATS_KEY, SEED_PLATFORM_STATS);
     markSeeded(STATS_KEY);

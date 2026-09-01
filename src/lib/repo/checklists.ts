@@ -1,5 +1,5 @@
 import type { ChecklistItem, ChecklistTick, ChecklistArea, ChecklistShift } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, isLegacyTenant } from "@/lib/storage";
 import { SEED_CHECKLIST_ITEMS } from "@/lib/seed/checklists";
 
 const ITEMS_KEY = "checklist_items";
@@ -8,6 +8,15 @@ const TICKS_KEY = "checklist_ticks";
 const RECONCILE_KEY = "checklist_items_reconcile_v2";
 
 export function ensureChecklistsSeeded() {
+  // Jerk & Chill's data belongs to Jerk & Chill. A neutral branch starts
+  // empty here and its owner builds their own — the seed below is customer
+  // number one's restaurant, not a template.
+  if (!isLegacyTenant()) {
+    markSeeded(ITEMS_KEY);
+    markSeeded(RECONCILE_KEY);
+    return;
+  }
+
   if (!isSeeded(ITEMS_KEY)) {
     writeList(ITEMS_KEY, SEED_CHECKLIST_ITEMS);
     markSeeded(ITEMS_KEY);

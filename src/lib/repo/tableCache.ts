@@ -1,4 +1,4 @@
-import { readList, writeList } from "@/lib/storage";
+import { readList, writeList, isLegacyTenant } from "@/lib/storage";
 import { STARTER_FLOOR_PLAN } from "@/lib/bookings/repo";
 
 /**
@@ -72,6 +72,11 @@ export function cacheTables(tables: CachedTable[]): void {
 export function getCachedTables(): CachedTable[] {
   const cached = readList<CachedTable>(CACHE_KEY);
   if (cached.length > 0) return cached;
+
+  // The compiled-in room is Jerk & Chill's. A neutral branch that has never
+  // been online has no floor plan yet, and showing it someone else's room
+  // would be worse than showing none.
+  if (!isLegacyTenant()) return [];
 
   // Never been online. The seed ids are synthetic — a real fetch replaces
   // them — but the numbers are what a waiter taps and what the kitchen reads.

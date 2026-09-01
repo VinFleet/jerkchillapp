@@ -1,5 +1,5 @@
 import type { PrinterSettings, PrinterConfig } from "@/lib/types";
-import { readList, writeList } from "@/lib/storage";
+import { readList, writeList, isLegacyTenant } from "@/lib/storage";
 
 /**
  * Where the printers live, as far as the app is concerned.
@@ -12,20 +12,24 @@ import { readList, writeList } from "@/lib/storage";
 
 const KEY = "printer_settings";
 
-export const DEFAULT_PRINTERS: PrinterSettings = {
-  id: "printers",
-  printers: [
-    { key: "kitchen", host: "192.168.1.199", width: 42, enabled: true },
-    { key: "receipt", host: "192.168.1.198", width: 42, enabled: true },
-  ],
-  autoPrintKitchen: true,
-  autoPrintReceiptOnClose: true,
-  updatedAt: new Date(0).toISOString(),
-};
+/** The 192.168.1.x addresses are Jerk & Chill's printers, not a template. */
+export function defaultPrinters(): PrinterSettings {
+  const legacy = isLegacyTenant();
+  return {
+    id: "printers",
+    printers: [
+      { key: "kitchen", host: legacy ? "192.168.1.199" : "", width: 42, enabled: legacy },
+      { key: "receipt", host: legacy ? "192.168.1.198" : "", width: 42, enabled: legacy },
+    ],
+    autoPrintKitchen: true,
+    autoPrintReceiptOnClose: true,
+    updatedAt: new Date(0).toISOString(),
+  };
+}
 
 export function getPrinterSettings(): PrinterSettings {
   const stored = readList<PrinterSettings>(KEY).find((r) => r.id === "printers");
-  return { ...DEFAULT_PRINTERS, ...stored };
+  return { ...defaultPrinters(), ...stored };
 }
 
 export function savePrinterSettings(

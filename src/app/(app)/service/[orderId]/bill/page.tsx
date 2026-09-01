@@ -117,6 +117,15 @@ function BillContent() {
           )}
         </header>
 
+        {/* Until e-invoicing exists, this document must say what it is NOT.
+            A bill that looks like a hóa đơn is worse than no bill — the
+            phrasing is the legally meaningful one, so it is not translated
+            loosely or shrunk. */}
+        <p className="text-center font-bold text-sm border-2 border-foreground rounded-lg px-2 py-1.5 mb-4">
+          PHIẾU TÍNH TIỀN — KHÔNG PHẢI HOÁ ĐƠN
+          <span className="block text-xs font-normal text-muted">Bill — not a tax invoice</span>
+        </p>
+
         <div className="text-sm space-y-0.5 mb-4 pb-4 border-b border-dashed border-border">
           <div className="flex justify-between">
             <span className="text-muted">Table · Bàn</span>

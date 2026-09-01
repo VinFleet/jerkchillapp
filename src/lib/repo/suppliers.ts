@@ -1,5 +1,5 @@
 import type { Supplier, RejectionRecord, SupplierEvaluation, SupplierCategory, SupplierQuote } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId, todayIso } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, todayIso, isLegacyTenant } from "@/lib/storage";
 import { SEED_SUPPLIERS, STANDARD_SUPPLIER_DOC_CHECKLIST } from "@/lib/seed/suppliers";
 
 const SUPPLIERS_KEY = "suppliers";
@@ -9,6 +9,15 @@ const QUOTES_KEY = "supplier_quotes";
 const KAMEREO_ENRICH_KEY = "suppliers_kamereo_enrich_v1";
 
 export function ensureSuppliersSeeded() {
+  // Jerk & Chill's data belongs to Jerk & Chill. A neutral branch starts
+  // empty here and its owner builds their own — the seed below is customer
+  // number one's restaurant, not a template.
+  if (!isLegacyTenant()) {
+    markSeeded(KAMEREO_ENRICH_KEY);
+    markSeeded(SUPPLIERS_KEY);
+    return;
+  }
+
   if (!isSeeded(SUPPLIERS_KEY)) {
     writeList(SUPPLIERS_KEY, SEED_SUPPLIERS);
     markSeeded(SUPPLIERS_KEY);

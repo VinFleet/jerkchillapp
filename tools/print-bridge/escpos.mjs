@@ -116,6 +116,10 @@ export function renderReceipt(job, width = 42) {
   parts.push(SIZE_BIG, line(job.headerName ?? ""), SIZE_NORMAL);
   if (job.addressLine) parts.push(line(job.addressLine));
   if (job.metaLine) parts.push(line(job.metaLine));
+  // Until e-invoicing is live, the paper must say what it is not. A receipt
+  // that could be mistaken for a hoa don is a tax problem for the customer.
+  parts.push(BOLD_ON, line("PHIEU TINH TIEN - KHONG PHAI HOA DON"), BOLD_OFF);
+  parts.push(line("Bill - not a tax invoice"));
   parts.push(ALIGN_LEFT, rule(width));
   parts.push(row(`Table ${job.table ?? "-"}`, job.time ?? "", width));
   if (job.servedBy) parts.push(line(job.servedBy));

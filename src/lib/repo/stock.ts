@@ -1,5 +1,5 @@
 import type { StockItem, StockDayEntry, StockSection, WasteLogEntry, WasteReason } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId, todayIso } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, todayIso, isLegacyTenant } from "@/lib/storage";
 import { SEED_STOCK_ITEMS } from "@/lib/seed/stock";
 import { getRecipe } from "@/lib/repo/recipes";
 
@@ -15,6 +15,14 @@ const ITEMS_KEY = "stock_items_v3";
 const ENTRIES_KEY = "stock_entries";
 
 export function ensureStockSeeded() {
+  // Jerk & Chill's data belongs to Jerk & Chill. A neutral branch starts
+  // empty here and its owner builds their own — the seed below is customer
+  // number one's restaurant, not a template.
+  if (!isLegacyTenant()) {
+    markSeeded(ITEMS_KEY);
+    return;
+  }
+
   if (isSeeded(ITEMS_KEY)) return;
   writeList(ITEMS_KEY, SEED_STOCK_ITEMS);
   markSeeded(ITEMS_KEY);
