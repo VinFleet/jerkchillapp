@@ -613,6 +613,51 @@ export function closeOrder(orderId: string): ReturnType<typeof canCloseOrder> {
 }
 
 /** Today's takings by method, for the sales module and the Z-report. */
+/**
+ * The day as the till saw it, for cash-up.
+ *
+ * Everything a manager reconciles at close in one read: money by method, the
+ * card payments one by one (matched against the terminal's settlement), the
+ * discounts given and by whom, and what was voided. This is derived, never
+ * stored — the orders and payments are the record, and a summary that could
+ * drift from them would be worse than none.
+ */
+export function cashUpForDate(date = todayIso()) {
+  const orders = getOrdersForDate(date);
+  const orderIds = new Set(orders.map((o) => o.id));
+  const payments = readList<Payment>(PAYMENTS_KEY).filter((p) => orderIds.has(p.orderId));
+
+  const totals: Record<PaymentMethod, number> = { cash: 0, vietqr: 0, card: 0 };
+  for (const p of payments) {
+    if (p.status === "paid") totals[p.method] += p.amountVnd;
+    if (p.status === "refunded") totals[p.method] -= p.amountVnd;
+  }
+
+  const discounts = orders
+    .filter((o) => o.discount && o.status !== "cancelled")
+    .map((o) => ({
+      orderId: o.id,
+      label: o.discount!.label,
+      appliedBy: o.discount!.appliedBy,
+      amountVnd: billState(o.lines, [], o.discount).discountVnd,
+    }));
+
+  const cancelled = orders.filter((o) => o.status === "cancelled" && o.lines.length > 0);
+  const stillOpen = orders.filter((o) => o.status !== "closed" && o.status !== "cancelled");
+
+  return {
+    totals,
+    totalVnd: totals.cash + totals.vietqr + totals.card,
+    cardPayments: payments.filter((p) => p.method === "card" && p.status === "paid"),
+    pending: payments.filter((p) => p.status === "pending"),
+    discounts,
+    discountVnd: discounts.reduce((sum, d) => sum + d.amountVnd, 0),
+    cancelledCount: cancelled.length,
+    stillOpenCount: stillOpen.length,
+    orderCount: orders.filter((o) => o.status === "closed").length,
+  };
+}
+
 export function takingsForDate(date = todayIso()): Record<PaymentMethod, number> {
   const orderIds = new Set(getOrdersForDate(date).map((o) => o.id));
   const totals: Record<PaymentMethod, number> = { cash: 0, vietqr: 0, card: 0 };

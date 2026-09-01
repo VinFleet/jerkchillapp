@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
+import { cashUpForDate } from "@/lib/repo/orders";
+import { cardSlipUrl } from "@/lib/payments/slips";
+import { Bi } from "@/components/Bi";
+import { Eye } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
 import { getOrCreateEntry, updateEntry, totalSalesVnd, expectedCashVnd, cashVarianceVnd, zReportVarianceVnd } from "@/lib/repo/sales";
@@ -74,6 +79,130 @@ function MoneyInput({ value, onChange, disabled }: { value: number; onChange: (v
   );
 }
 
+/**
+ * What the till actually took, above the manual entry.
+ *
+ * The manual channel entry below stays — Shopee and Grab settle outside the
+ * till, and their numbers still arrive by hand. But eat-in money is now the
+ * till's own record, so the person cashing up copies these figures instead of
+ * reconstructing them from a drawer and memory. Derived live from the orders,
+ * never stored: a summary that could drift from its source is worse than none.
+ */
+function TillCashUp({ date }: { date: string }) {
+  const [day, setDay] = useState<ReturnType<typeof cashUpForDate> | null>(null);
+
+  useEffect(() => {
+    setDay(cashUpForDate(date));
+  }, [date]);
+
+  if (!day) return null;
+  if (day.totalVnd === 0 && day.orderCount === 0 && day.stillOpenCount === 0) {
+    return null; // The till was not used that day — the manual entry is the whole story.
+  }
+
+  return (
+    <Card>
+      <p className="font-semibold text-sm mb-1">
+        From the till <span className="text-muted font-normal">· Từ máy tính tiền</span>
+      </p>
+      <p className="text-xs text-muted mb-3">
+        {day.orderCount} closed orders · {day.orderCount} đơn đã đóng
+        {day.stillOpenCount > 0 && (
+          <span className="text-warning font-semibold">
+            {" "}· {day.stillOpenCount} still open · còn mở
+          </span>
+        )}
+      </p>
+
+      <div className="grid grid-cols-3 gap-2 text-center mb-3">
+        {(
+          [
+            ["Cash · Tiền mặt", day.totals.cash],
+            ["Transfer · CK", day.totals.vietqr],
+            ["Card · Thẻ", day.totals.card],
+          ] as const
+        ).map(([label, amount]) => (
+          <div key={label} className="rounded-xl border border-border py-2">
+            <p className="text-[11px] text-muted">{label}</p>
+            <p className="font-bold tabular-nums">{vnd(amount)}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex justify-between text-sm font-bold border-t border-border pt-2">
+        <span>Till total · Tổng máy</span>
+        <span className="tabular-nums">{vnd(day.totalVnd)}</span>
+      </div>
+
+      {day.pending.length > 0 && (
+        <p className="text-xs text-warning font-semibold mt-2">
+          {day.pending.length} transfer{day.pending.length === 1 ? "" : "s"} still unconfirmed —
+          settle before closing · giao dịch chưa xác nhận
+        </p>
+      )}
+
+      {day.cardPayments.length > 0 && (
+        <div className="mt-3 pt-2 border-t border-border space-y-1">
+          <p className="text-xs font-semibold text-muted">
+            Card payments, one per slip · Thanh toán thẻ
+          </p>
+          {day.cardPayments.map((p) => (
+            <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
+              <span className="font-mono text-muted min-w-0 truncate">
+                {p.providerRef || p.reference}
+              </span>
+              <span className="flex items-center gap-2 shrink-0">
+                {p.slipPhotoPath && (
+                  <button
+                    onClick={async () => {
+                      const url = await cardSlipUrl(p.slipPhotoPath!);
+                      if (url) window.open(url, "_blank", "noopener,noreferrer");
+                    }}
+                    aria-label="View the slip"
+                    className="text-brand flex items-center gap-1"
+                  >
+                    <Eye size={12} /> slip
+                  </button>
+                )}
+                <span className="tabular-nums font-semibold">{vnd(p.amountVnd)}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {day.discounts.length > 0 && (
+        <div className="mt-3 pt-2 border-t border-border space-y-1">
+          <p className="text-xs font-semibold text-muted">
+            Discounts given · Giảm giá — {vnd(day.discountVnd)}
+          </p>
+          {day.discounts.map((d) => (
+            <div key={d.orderId} className="flex items-center justify-between gap-2 text-xs">
+              <span className="min-w-0 truncate">
+                <Bi value={d.label} mode="inline" />
+                <span className="text-muted"> — {d.appliedBy ?? "?"}</span>
+              </span>
+              <span className="tabular-nums shrink-0">−{vnd(d.amountVnd)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {day.cancelledCount > 0 && (
+        <p className="text-xs text-muted mt-2">
+          {day.cancelledCount} order{day.cancelledCount === 1 ? "" : "s"} voided · đơn đã huỷ
+        </p>
+      )}
+
+      {day.stillOpenCount > 0 && (
+        <Link href="/service" className="block text-center text-xs text-brand font-semibold mt-3">
+          Close the open tables first · Đóng bàn còn mở trước →
+        </Link>
+      )}
+    </Card>
+  );
+}
+
 function SalesContent() {
   const { session } = useSession();
   const [date, setDate] = useState(todayIso());
@@ -102,6 +231,7 @@ function SalesContent() {
       <DateNav date={date} onChange={setDate} />
 
       <div className="px-4 md:px-8 space-y-4">
+        <TillCashUp date={date} />
         <Card>
           <p className="font-semibold text-sm mb-3">Sales by channel · Doanh thu theo kênh</p>
           <div className="space-y-3">
