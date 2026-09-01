@@ -129,8 +129,8 @@ function KitchenContent() {
 
   const boardEmpty = board.length === 0;
 
-  const advance = (orderId: string, lineIds: string[], stage: "new" | "preparing" | "ready") => {
-    setLinesStatus(orderId, lineIds, stage === "new" ? "preparing" : stage === "preparing" ? "ready" : "served");
+  const advance = (orderId: string, lineIds: string[], to: "preparing" | "ready" | "served") => {
+    setLinesStatus(orderId, lineIds, to);
     load();
   };
 
@@ -325,8 +325,8 @@ function KitchenContent() {
                               ))}
                             </ul>
 
-                            <div className="px-3 pb-3 flex items-center justify-between gap-2">
-                              <span className="text-xs text-muted">
+                            <div className="px-3 pb-3 flex items-center gap-2">
+                              <span className="text-xs text-muted mr-auto">
                                 {order.source === "qr"
                                   ? "QR · Khách tự gọi"
                                   : order.source === "delivery"
@@ -335,20 +335,51 @@ function KitchenContent() {
                                       ? "Dine in · Tại bàn"
                                       : "Counter · Quầy"}
                               </span>
-                              <button
-                                onClick={() => {
-                                  advance(order.id, cardLines.map((l) => l.id), stage);
-                                }}
-                                className={`min-h-[44px] px-5 rounded-xl font-bold text-sm text-white active:scale-[0.97] ${
-                                  stage === "ready" ? "bg-success" : "bg-foreground"
-                                }`}
-                              >
-                                {stage === "new"
-                                  ? "Start · Làm"
-                                  : stage === "preparing"
-                                    ? "Ready · Xong"
-                                    : "Served · Đã đưa"}
-                              </button>
+                              {/* Two ways forward, not a forced march: the
+                                  next step, and the skip. A chef who plated
+                                  straight off the burner marks Ready without
+                                  ever having tapped Start, and a dish handed
+                                  across the pass goes straight to Done. */}
+                              {stage === "new" && (
+                                <>
+                                  <button
+                                    onClick={() => advance(order.id, cardLines.map((l) => l.id), "preparing")}
+                                    className="min-h-[44px] px-4 rounded-xl font-bold text-sm text-white bg-foreground active:scale-[0.97]"
+                                  >
+                                    Start · Làm
+                                  </button>
+                                  <button
+                                    onClick={() => advance(order.id, cardLines.map((l) => l.id), "ready")}
+                                    className="min-h-[44px] px-4 rounded-xl font-bold text-sm border-2 border-success text-success active:scale-[0.97]"
+                                  >
+                                    Ready · Xong
+                                  </button>
+                                </>
+                              )}
+                              {stage === "preparing" && (
+                                <>
+                                  <button
+                                    onClick={() => advance(order.id, cardLines.map((l) => l.id), "ready")}
+                                    className="min-h-[44px] px-4 rounded-xl font-bold text-sm text-white bg-foreground active:scale-[0.97]"
+                                  >
+                                    Ready · Xong
+                                  </button>
+                                  <button
+                                    onClick={() => advance(order.id, cardLines.map((l) => l.id), "served")}
+                                    className="min-h-[44px] px-4 rounded-xl font-bold text-sm border-2 border-success text-success active:scale-[0.97]"
+                                  >
+                                    Done · Hoàn thành
+                                  </button>
+                                </>
+                              )}
+                              {stage === "ready" && (
+                                <button
+                                  onClick={() => advance(order.id, cardLines.map((l) => l.id), "served")}
+                                  className="min-h-[44px] px-5 rounded-xl font-bold text-sm text-white bg-success active:scale-[0.97]"
+                                >
+                                  Done · Hoàn thành
+                                </button>
+                              )}
                             </div>
                           </article>
                         );
