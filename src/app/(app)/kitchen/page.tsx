@@ -1,16 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChefHat, Clock, Ban, LayoutList } from "lucide-react";
+import { ChefHat, Ban, LayoutList } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { useSession } from "@/lib/auth/RoleContext";
 import { onSyncedDataChanged, syncNow } from "@/lib/sync/engine";
-import { getKitchenQueue, setLineStatus, setOrderStatus } from "@/lib/repo/orders";
+import { getKitchenQueue, setLinesStatus } from "@/lib/repo/orders";
+import { orderCode } from "@/lib/repo/orderRules";
 import { getMenuItems, isSoldOut, setMenuItemSoldOut } from "@/lib/repo/menu";
 import { getCachedTables } from "@/lib/repo/tableCache";
 import { Bi } from "@/components/Bi";
-import type { Order, MenuItem } from "@/lib/types";
+import type { Order, MenuItem, OrderLine } from "@/lib/types";
 
 /**
  * The pass.
@@ -61,6 +62,7 @@ function KitchenContent() {
   // "I4", not a UUID; the id is the join key, never the label.
   const [tableNumbers, setTableNumbers] = useState<Record<string, string>>({});
   const [view, setView] = useState<"tickets" | "items" | "soldout">("tickets");
+  const [station, setStation] = useState<"all" | "food" | "drinks">("all");
   // Re-render on a timer so ticket ages climb without anyone touching the
   // screen — a stale "2 min" on a ticket that has been sitting ten is worse
   // than no age at all.
@@ -95,6 +97,43 @@ function KitchenContent() {
   if (!session) return null;
 
   const nameFor = (menuItemId: string) => menu.find((m) => m.id === menuItemId)?.name;
+
+  /**
+   * The board: each ticket sorted into NEW / PREPARING / READY by its own
+   * lines, seen through the station filter — the bar's board only counts
+   * drinks, so a table whose food is cooking but whose cocktails are
+   * untouched is NEW at the bar and PREPARING at the pass. Both are true.
+   */
+  const DRINK_CATEGORIES = new Set(["beverage", "cocktail"]);
+  const inStation = (line: OrderLine) => {
+    if (station === "all") return true;
+    const cat = menu.find((m) => m.id === line.menuItemId)?.category;
+    const isDrink = cat ? DRINK_CATEGORIES.has(cat) : false;
+    return station === "drinks" ? isDrink : !isDrink;
+  };
+
+  const board = orders
+    .map((order) => {
+      const lines = order.lines.filter(
+        (l) => l.sentAt && l.status !== "cancelled" && l.status !== "served" && inStation(l)
+      );
+      if (lines.length === 0) return null;
+      const stage: "new" | "preparing" | "ready" = lines.every((l) => l.status === "ready")
+        ? "ready"
+        : lines.some((l) => l.status === "preparing" || l.status === "ready")
+          ? "preparing"
+          : "new";
+      return { order, lines, stage, age: minutesSince(order.placedAt) };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
+  const boardEmpty = board.length === 0;
+
+  const advance = (orderId: string, lineIds: string[], stage: "new" | "preparing" | "ready") => {
+    setLinesStatus(orderId, lineIds, stage === "new" ? "preparing" : stage === "preparing" ? "ready" : "served");
+    load();
+  };
+
 
   return (
     <div className="pb-6">
@@ -176,132 +215,154 @@ function KitchenContent() {
       )}
 
       {view === "tickets" && (
-      <div className="px-4 md:px-8">
-        {orders.length === 0 ? (
-          <div className="text-center py-16">
-            <ChefHat size={40} className="text-muted mx-auto mb-3" />
-            <p className="font-semibold">Nothing waiting</p>
-            <p className="text-sm text-muted">Không có đơn nào</p>
+        <div className="px-4 md:px-8">
+          {/* Station chips: the bar and the pass read different halves of the
+              same board, and neither wants to scan past the other's tickets. */}
+          <div className="flex gap-2 mb-3">
+            {(
+              [
+                ["all", "All · Tất cả"],
+                ["food", "Food · Món ăn"],
+                ["drinks", "Drinks · Đồ uống"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setStation(key)}
+                className={`min-h-[44px] px-4 rounded-xl border text-sm font-semibold ${
+                  station === key ? "border-brand text-brand bg-brand-light" : "border-border"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {orders.map((order) => {
-              const age = minutesSince(order.placedAt);
-              const late = age >= LATE_AFTER_MINUTES;
-              // Sent lines only. A round still being keyed at the table is not the
-              // kitchen's business until the waiter says so.
-              const open = order.lines.filter((l) => l.sentAt && l.status !== "cancelled");
 
-              return (
-                <div
-                  key={order.id}
-                  className={`rounded-2xl border-2 p-4 bg-surface ${late ? "border-danger" : "border-border"}`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div>
-                      <p className="font-bold text-lg">
-                        {order.tableId
-                          ? // Falls back to the id only if the floor plan has
-                            // not loaded — unreadable, but better than blank.
-                            (tableNumbers[order.tableId] ?? order.tableId)
-                          : "Counter · Quầy"}
-                      </p>
-                      <p className="text-xs text-muted">
-                        {order.source === "qr" ? "Ordered by guest · Khách tự gọi" : order.placedBy ?? ""}
-                      </p>
+          {boardEmpty ? (
+            <div className="text-center py-16">
+              <ChefHat size={40} className="text-muted mx-auto mb-3" />
+              <p className="font-semibold">Nothing waiting</p>
+              <p className="text-sm text-muted">Không có đơn nào</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-3 items-start">
+              {(
+                [
+                  ["new", "NEW · MỚI", "danger"],
+                  ["preparing", "PREPARING · ĐANG LÀM", "warning"],
+                  ["ready", "READY · XONG", "success"],
+                ] as const
+              ).map(([stage, title, tone]) => {
+                const cards = board.filter((c) => c.stage === stage);
+                return (
+                  <section key={stage} className="rounded-2xl border border-border bg-background/60 p-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-sm font-black tracking-wide">{title}</h2>
+                      <span
+                        className={`min-w-[26px] h-[26px] px-1.5 rounded-lg grid place-items-center text-sm font-black text-white ${
+                          tone === "danger"
+                            ? "bg-danger"
+                            : tone === "warning"
+                              ? "bg-warning"
+                              : "bg-success"
+                        }`}
+                      >
+                        {cards.length}
+                      </span>
                     </div>
-                    <span
-                      className={`flex items-center gap-1 text-sm font-bold tabular-nums ${
-                        late ? "text-danger" : "text-muted"
-                      }`}
-                    >
-                      <Clock size={14} />
-                      {age}m
-                    </span>
-                  </div>
 
-                  {/* Both notes, labelled by who said it. For an allergy the
-                      difference between "the guest typed this" and "a waiter
-                      was told this at the table" is the one that matters. */}
-                  {order.orderNote && (
-                    <p className="text-sm bg-warning-tint text-warning rounded-xl px-3 py-2 mb-2 font-semibold">
-                      <span className="block text-xs font-normal opacity-80">
-                        From the table · Từ bàn
-                      </span>
-                      {order.orderNote}
-                    </p>
-                  )}
-                  {order.guestNote && (
-                    <p className="text-sm bg-warning-tint text-warning rounded-xl px-3 py-2 mb-3 font-semibold">
-                      <span className="block text-xs font-normal opacity-80">
-                        Guest wrote · Khách ghi
-                      </span>
-                      {order.guestNote}
-                    </p>
-                  )}
-
-                  <div className="space-y-2">
-                    {open.map((line) => {
-                      const name = nameFor(line.menuItemId);
-                      const done = line.status === "ready" || line.status === "served";
-                      return (
-                        <button
-                          key={line.id}
-                          onClick={() =>
-                            setLineStatus(
-                              order.id,
-                              line.id,
-                              line.status === "placed" ? "preparing" : line.status === "preparing" ? "ready" : "served"
-                            ) ?? load()
-                          }
-                          className={`w-full min-h-16 rounded-xl border-2 px-3 py-2 flex items-center gap-3 text-left ${
-                            done ? "border-success bg-success-tint" : line.status === "preparing" ? "border-warning bg-warning-tint" : "border-border"
-                          }`}
-                        >
-                          <span className="text-xl font-bold tabular-nums w-8 shrink-0">{line.qty}×</span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block font-semibold text-sm">
-                              {name?.en ?? line.menuItemId.replace("adhoc:", "")}
-                            </span>
-                            <span className="block text-xs text-muted">{name?.vi ?? ""}</span>
-                            {/* The choice is the cooking instruction — "Spicy",
-                                "Mocktail". A pass that hides it cooks the
-                                default and finds out at the table. */}
-                            {line.choices?.length ? (
-                              <span className="block text-xs font-bold text-brand mt-0.5">
-                                {line.choices.map((c) => `${c.label.en} · ${c.label.vi}`).join(" — ")}
+                    <div className="space-y-3">
+                      {cards.map(({ order, lines: cardLines, age }) => {
+                        const late = age >= LATE_AFTER_MINUTES;
+                        return (
+                          <article
+                            key={order.id}
+                            className={`rounded-xl bg-surface border border-border overflow-hidden border-l-4 ${
+                              stage === "new"
+                                ? "border-l-danger"
+                                : stage === "preparing"
+                                  ? "border-l-warning"
+                                  : "border-l-success"
+                            }`}
+                          >
+                            <div className="px-3 pt-2.5 flex items-center gap-2">
+                              <span className="font-black">#{orderCode(order.id)}</span>
+                              <span className="text-xs font-semibold bg-background border border-border rounded-lg px-2 py-1">
+                                {order.tableId
+                                  ? (tableNumbers[order.tableId] ?? "?")
+                                  : (order.customerName ?? "Counter · Quầy")}
                               </span>
-                            ) : null}
-                            {line.note && (
-                              <span className="block text-xs text-warning font-semibold mt-0.5">{line.note}</span>
-                            )}
-                          </span>
-                          <span className="text-xs font-bold uppercase shrink-0">
-                            {line.status === "placed" ? "Start" : line.status === "preparing" ? "Ready" : "Served"}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                              <span
+                                className={`ml-auto text-xs font-black rounded-lg px-2 py-1 text-white ${
+                                  late ? "bg-danger animate-pulse" : age >= 8 ? "bg-warning" : "bg-brand"
+                                }`}
+                              >
+                                {age} min
+                              </span>
+                            </div>
 
-                  {open.every((l) => l.status === "ready") && open.length > 0 && (
-                    <button
-                      onClick={() => {
-                        open.forEach((l) => setLineStatus(order.id, l.id, "served"));
-                        setOrderStatus(order.id, "served");
-                        load();
-                      }}
-                      className="w-full min-h-12 mt-3 rounded-xl bg-success text-white font-bold text-sm"
-                    >
-                      All served · Đã phục vụ hết
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                            {(order.orderNote || order.guestNote) && (
+                              <p className="mx-3 mt-2 text-xs font-bold bg-warning-tint text-warning rounded-lg px-2 py-1.5">
+                                {[order.orderNote, order.guestNote].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
+
+                            <ul className="px-3 py-2 space-y-1.5">
+                              {cardLines.map((line) => (
+                                <li key={line.id} className="leading-tight">
+                                  <span className="font-bold">
+                                    {line.qty} × {nameFor(line.menuItemId)?.en ?? line.menuItemId.replace("adhoc:", "")}
+                                  </span>
+                                  {line.choices?.length ? (
+                                    <span className="block text-xs font-bold text-brand">
+                                      {line.choices.map((c) => `${c.label.en} · ${c.label.vi}`).join(" — ")}
+                                    </span>
+                                  ) : null}
+                                  {line.note && (
+                                    <span className="block text-xs text-warning font-semibold">{line.note}</span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+
+                            <div className="px-3 pb-3 flex items-center justify-between gap-2">
+                              <span className="text-xs text-muted">
+                                {order.source === "qr"
+                                  ? "QR · Khách tự gọi"
+                                  : order.source === "delivery"
+                                    ? "Delivery · Giao đi"
+                                    : order.tableId
+                                      ? "Dine in · Tại bàn"
+                                      : "Counter · Quầy"}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  advance(order.id, cardLines.map((l) => l.id), stage);
+                                }}
+                                className={`min-h-[44px] px-5 rounded-xl font-bold text-sm text-white active:scale-[0.97] ${
+                                  stage === "ready" ? "bg-success" : "bg-foreground"
+                                }`}
+                              >
+                                {stage === "new"
+                                  ? "Start · Làm"
+                                  : stage === "preparing"
+                                    ? "Ready · Xong"
+                                    : "Served · Đã đưa"}
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                      {cards.length === 0 && (
+                        <p className="text-center text-xs text-muted py-6">— · Trống</p>
+                      )}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

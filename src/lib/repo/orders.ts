@@ -259,6 +259,28 @@ export function setLineQty(orderId: string, lineId: string, qty: number) {
   writeList(ORDERS_KEY, all);
 }
 
+/**
+ * Move a set of lines together — the KDS card's one big button.
+ *
+ * One write for the whole tray, not one per line: the board's "Start all" on
+ * a six-line ticket must not race itself through six store round-trips.
+ */
+export function setLinesStatus(orderId: string, lineIds: string[], status: OrderLineStatus) {
+  if (lineIds.length === 0) return;
+  const all = readList<Order>(ORDERS_KEY);
+  const idx = all.findIndex((o) => o.id === orderId);
+  if (idx < 0) return;
+  const wanted = new Set(lineIds);
+  const lines = all[idx].lines.map((l) => (wanted.has(l.id) ? { ...l, status } : l));
+  all[idx] = {
+    ...all[idx],
+    lines,
+    status: deriveOrderStatus(all[idx].status, lines),
+    updatedAt: new Date().toISOString(),
+  };
+  writeList(ORDERS_KEY, all);
+}
+
 export function setLineStatus(orderId: string, lineId: string, status: OrderLineStatus) {
   const all = readList<Order>(ORDERS_KEY);
   const idx = all.findIndex((o) => o.id === orderId);
