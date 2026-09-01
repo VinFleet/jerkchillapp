@@ -67,7 +67,7 @@ import { buildVietQrPayload } from "@/lib/payments/vietqr";
 import { VietQrCode } from "@/components/VietQrCode";
 import { changeDueVnd, cashSuggestionsVnd, orderCode, clampPartialPayment } from "@/lib/repo/orderRules";
 import { uploadCardSlip, cardSlipUrl } from "@/lib/payments/slips";
-import { printKitchenTicket, printReceipt } from "@/lib/print/jobs";
+import { printKitchenTicket, printReceipt, printVoidTicket, bridgeSeenAt, bridgeLooksDown } from "@/lib/print/jobs";
 import { getPrinterSettings } from "@/lib/repo/printerSettings";
 import { getActiveTenant } from "@/lib/storage";
 import type { Order, MenuItem, Payment, PaymentMethod, Promotion } from "@/lib/types";
@@ -170,6 +170,20 @@ function ReviewContent() {
     };
   }, [pendingRefs, load]);
 
+  // The bridge's pulse, checked as the screen opens: a waiter about to tap
+  // Send deserves "tickets will not print" BEFORE the round, not after.
+  const [bridgeDown, setBridgeDown] = useState(false);
+  useEffect(() => {
+    if (!getPrinterSettings().autoPrintKitchen) return;
+    let alive = true;
+    void bridgeSeenAt().then((seen) => {
+      if (alive) setBridgeDown(bridgeLooksDown(seen));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const tableId = order?.tableId ?? null;
   const tables = useMemo(() => getCachedTables(), []);
   const tableNumber = useMemo(
@@ -187,6 +201,7 @@ function ReviewContent() {
     setNote(message);
     window.setTimeout(() => setNote(null), 2500);
   };
+
 
   const serveAllReady = () => {
     const ready = order?.lines.filter((l) => l.status === "ready") ?? [];
@@ -322,6 +337,13 @@ function ReviewContent() {
       {problem && (
         <p className="mx-4 mt-3 text-sm rounded-xl border border-warning bg-warning-tint text-warning px-3 py-2 flex items-start gap-2">
           <AlertTriangle size={16} className="shrink-0 mt-0.5" /> {problem}
+        </p>
+      )}
+      {bridgeDown && (
+        <p className="mx-4 mt-3 text-sm rounded-xl border border-warning bg-warning-tint text-warning px-3 py-2 flex items-start gap-2">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          Printer bridge offline — tickets will queue, tell the kitchen yourself · Máy in chưa
+          chạy — báo bếp trực tiếp
         </p>
       )}
 
@@ -698,6 +720,11 @@ function ReviewContent() {
                   <div className="flex items-center justify-end gap-2 mt-2">
                     <button
                       onClick={() => {
+                        // If the kitchen already has this line, paper must
+                        // chase paper: a HUY ticket to the same station.
+                        if (line.sentAt && getPrinterSettings().autoPrintKitchen) {
+                          void printVoidTicket(order, line);
+                        }
                         setLineStatus(order.id, line.id, "cancelled");
                         load();
                       }}

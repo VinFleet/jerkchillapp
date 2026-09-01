@@ -33,6 +33,63 @@ export function toAscii(text) {
     .replace(/[^\x20-\x7e\n]/g, "?");
 }
 
+/**
+ * Windows-1258 — the code page built for Vietnamese, and the reason it fits
+ * in one byte table: letters with a shape (â ă ơ ư ê ô đ) are precomposed,
+ * and the five TONES are combining bytes printed after the letter. So "ế" is
+ * two bytes: ê then acute. Printers with a CP1258 font overstrike them.
+ */
+const CP1258_TONE = { "̀": 0xcc, "́": 0xec, "̃": 0xde, "̉": 0xd2, "̣": 0xf2 };
+const CP1258_SHAPE = new Set(["̂", "̆", "̛"]); // circumflex, breve, horn
+const CP1258_EXTRA = { "Ă": 0xc3, "ă": 0xe3, "Ơ": 0xd5, "ơ": 0xf5, "Ư": 0xdd, "ư": 0xfd, "Đ": 0xd0, "đ": 0xf0, "₫": 0xfe, "€": 0x80 };
+// Latin-1 positions CP1258 reassigned — these may NOT pass through by codepoint.
+const CP1258_REPLACED = new Set([0xc3, 0xcc, 0xd0, 0xd2, 0xd5, 0xdd, 0xde, 0xe3, 0xec, 0xf0, 0xf2, 0xf5, 0xfd, 0xfe]);
+
+export function encodeCp1258(str) {
+  const out = [];
+  const s = String(str).normalize("NFD");
+  let i = 0;
+  while (i < s.length) {
+    let base = s[i];
+    i += 1;
+    const tones = [];
+    while (i < s.length) {
+      const mark = s[i];
+      if (CP1258_SHAPE.has(mark)) {
+        base = (base + mark).normalize("NFC");
+        i += 1;
+      } else if (CP1258_TONE[mark] !== undefined) {
+        tones.push(CP1258_TONE[mark]);
+        i += 1;
+      } else if (/[̀-ͯ]/.test(mark)) {
+        i += 1; // a mark the page has no byte for: drop it, keep the letter
+      } else {
+        break;
+      }
+    }
+    const cp = base.codePointAt(0);
+    let byte;
+    if (CP1258_EXTRA[base] !== undefined) byte = CP1258_EXTRA[base];
+    else if ((cp >= 0x20 && cp <= 0x7e) || base === "\n") byte = cp;
+    else if (cp >= 0xa0 && cp <= 0xff && !CP1258_REPLACED.has(cp)) byte = cp;
+    if (byte === undefined) {
+      for (const b of new TextEncoder().encode(toAscii(base))) out.push(b);
+    } else {
+      out.push(byte, ...tones);
+    }
+  }
+  return Uint8Array.from(out);
+}
+
+export function encodeText(s, encoding) {
+  return encoding === "cp1258" ? encodeCp1258(s) : new TextEncoder().encode(toAscii(s));
+}
+
+/** ESC t n — select the printer's font page. Only ever sent for cp1258. */
+export function codepage(n) {
+  return Uint8Array.from([ESC, 0x74, n & 0xff]);
+}
+
 export function text(s) {
   return new TextEncoder().encode(toAscii(s));
 }
@@ -85,67 +142,99 @@ export function qr(payload) {
 const vnd = (n) => `${Number(n).toLocaleString("en-US").replace(/,/g, ".")}d`;
 
 /**
- * The kitchen ticket. No money on it, ever — the table, the time, the items,
- * and above them the things that change how a dish is cooked.
+ * Renderers take a width (the old call shape) or an options object with the
+ * printer's encoding. The helpers returned here are the same line/row/rule
+ * as the exported ones, bound to that encoding — CP1258 tone bytes are
+ * zero-width on paper, so padding counts CLUSTERS, not bytes.
  */
-export function renderKitchenTicket(job, width = 42) {
-  const parts = [INIT, ALIGN_LEFT];
-  parts.push(SIZE_BIG, line(job.table ?? "COUNTER"), SIZE_NORMAL);
-  parts.push(row(job.code ?? "", job.time ?? "", width));
-  if (job.placedBy) parts.push(line(job.placedBy));
-  parts.push(rule(width));
+function renderOpts(widthOrOpts) {
+  const o = typeof widthOrOpts === "number" ? { width: widthOrOpts } : { ...widthOrOpts };
+  const width = o.width ?? 42;
+  const encoding = o.encoding === "cp1258" ? "cp1258" : "ascii";
+  const printed = (s) => (encoding === "cp1258" ? String(s).normalize("NFC").replace(/[̀-ͯ]/g, "") : toAscii(s));
+  const tx = (s) => encodeText(s, encoding);
+  const ln = (s = "") => tx(s + "\n");
+  const rw = (left, right, w) => {
+    const visL = printed(left);
+    const visR = printed(right);
+    const keepL = visL.slice(0, w - visR.length - 1);
+    const space = Math.max(1, w - keepL.length - visR.length);
+    return ln(keepL + " ".repeat(space) + visR);
+  };
+  const setup = [INIT];
+  if (encoding === "cp1258") setup.push(codepage(o.codepageByte ?? 94));
+  return { width, tx, ln, rw, rl: (w) => ln("-".repeat(w)), setup };
+}
+
+/**
+ * The kitchen ticket. No money on it, ever — the table, the time, the items,
+ * and above them the things that change how a dish is cooked. A void ticket
+ * is the same ticket wearing a banner: the pass reads WHAT to stop making in
+ * the same layout it read what to make.
+ */
+export function renderKitchenTicket(job, widthOrOpts = 42) {
+  const { width, ln, rw, rl, setup } = renderOpts(widthOrOpts);
+  const parts = [...setup, ALIGN_LEFT];
+  if (job.void) {
+    parts.push(ALIGN_CENTER, SIZE_BIG, BOLD_ON, ln("** HUY MON **"), ln("** VOID **"), BOLD_OFF, SIZE_NORMAL, ALIGN_LEFT);
+  }
+  parts.push(SIZE_BIG, ln(job.table ?? "COUNTER"), SIZE_NORMAL);
+  parts.push(rw(job.code ?? "", job.time ?? "", width));
+  if (job.placedBy) parts.push(ln(job.placedBy));
+  parts.push(rl(width));
 
   for (const note of job.notes ?? []) {
-    parts.push(BOLD_ON, line(`!! ${note}`), BOLD_OFF);
+    parts.push(BOLD_ON, ln(`!! ${note}`), BOLD_OFF);
   }
-  if ((job.notes ?? []).length) parts.push(rule(width));
+  if ((job.notes ?? []).length) parts.push(rl(width));
 
   for (const item of job.lines ?? []) {
-    parts.push(SIZE_BIG, line(`${item.qty}x ${item.name}`), SIZE_NORMAL);
-    if (item.detail) parts.push(BOLD_ON, line(`   ${item.detail}`), BOLD_OFF);
-    if (item.note) parts.push(BOLD_ON, line(`   -> ${item.note}`), BOLD_OFF);
+    parts.push(SIZE_BIG, ln(`${item.qty}x ${item.name}`), SIZE_NORMAL);
+    if (item.detail) parts.push(BOLD_ON, ln(`   ${item.detail}`), BOLD_OFF);
+    if (item.note) parts.push(BOLD_ON, ln(`   -> ${item.note}`), BOLD_OFF);
   }
 
-  parts.push(line(), CUT);
+  parts.push(ln(), CUT);
   return concat(parts);
 }
 
 /** The guest's receipt — the same content as the on-screen bill. */
-export function renderReceipt(job, width = 42) {
-  const parts = [INIT, ALIGN_CENTER];
-  parts.push(SIZE_BIG, line(job.headerName ?? ""), SIZE_NORMAL);
-  if (job.addressLine) parts.push(line(job.addressLine));
-  if (job.metaLine) parts.push(line(job.metaLine));
+export function renderReceipt(job, widthOrOpts = 42) {
+  const { width, ln, rw, rl, setup } = renderOpts(widthOrOpts);
+  const parts = [...setup, ALIGN_CENTER];
+  parts.push(SIZE_BIG, ln(job.headerName ?? ""), SIZE_NORMAL);
+  if (job.addressLine) parts.push(ln(job.addressLine));
+  if (job.metaLine) parts.push(ln(job.metaLine));
   // Until e-invoicing is live, the paper must say what it is not. A receipt
   // that could be mistaken for a hoa don is a tax problem for the customer.
-  parts.push(BOLD_ON, line("PHIEU TINH TIEN - KHONG PHAI HOA DON"), BOLD_OFF);
-  parts.push(line("Bill - not a tax invoice"));
-  parts.push(ALIGN_LEFT, rule(width));
-  parts.push(row(`Table ${job.table ?? "-"}`, job.time ?? "", width));
-  if (job.servedBy) parts.push(line(job.servedBy));
-  parts.push(rule(width));
+  parts.push(BOLD_ON, ln("PHIEU TINH TIEN - KHONG PHAI HOA DON"), BOLD_OFF);
+  parts.push(ln("Bill - not a tax invoice"));
+  parts.push(ALIGN_LEFT, rl(width));
+  parts.push(rw(`Table ${job.table ?? "-"}`, job.time ?? "", width));
+  if (job.servedBy) parts.push(ln(job.servedBy));
+  parts.push(rl(width));
 
   for (const item of job.lines ?? []) {
-    parts.push(row(`${item.qty}x ${item.name}`, vnd(item.totalVnd), width));
-    if (item.detail) parts.push(line(`   ${item.detail}`));
+    parts.push(rw(`${item.qty}x ${item.name}`, vnd(item.totalVnd), width));
+    if (item.detail) parts.push(ln(`   ${item.detail}`));
   }
 
-  parts.push(rule(width));
-  if (job.discount) parts.push(row(job.discount.label, `-${vnd(job.discount.amountVnd)}`, width));
-  parts.push(BOLD_ON, row("TOTAL / TONG CONG", vnd(job.totalVnd ?? 0), width), BOLD_OFF);
+  parts.push(rl(width));
+  if (job.discount) parts.push(rw(job.discount.label, `-${vnd(job.discount.amountVnd)}`, width));
+  parts.push(BOLD_ON, rw("TOTAL / TONG CONG", vnd(job.totalVnd ?? 0), width), BOLD_OFF);
   for (const p of job.payments ?? []) {
-    parts.push(row(p.label, vnd(p.amountVnd), width));
+    parts.push(rw(p.label, vnd(p.amountVnd), width));
   }
   if (job.outstandingVnd > 0) {
-    parts.push(BOLD_ON, row("STILL OWED / CON LAI", vnd(job.outstandingVnd), width), BOLD_OFF);
+    parts.push(BOLD_ON, rw("STILL OWED / CON LAI", vnd(job.outstandingVnd), width), BOLD_OFF);
   }
 
   if (job.qrPayload) {
-    parts.push(ALIGN_CENTER, line(), line("Scan to pay / Quet de thanh toan"), qr(job.qrPayload));
+    parts.push(ALIGN_CENTER, ln(), ln("Scan to pay / Quet de thanh toan"), qr(job.qrPayload));
   }
-  if (job.wifiNote) parts.push(ALIGN_CENTER, line(), line(job.wifiNote));
-  if (job.footer) parts.push(ALIGN_CENTER, line(), line(job.footer));
+  if (job.wifiNote) parts.push(ALIGN_CENTER, ln(), ln(job.wifiNote));
+  if (job.footer) parts.push(ALIGN_CENTER, ln(), ln(job.footer));
 
-  parts.push(line(), CUT);
+  parts.push(ln(), CUT);
   return concat(parts);
 }

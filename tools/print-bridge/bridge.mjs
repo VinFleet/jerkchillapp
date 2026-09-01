@@ -80,7 +80,14 @@ async function refreshPrinters() {
     if (saved?.printers?.length) {
       const next = {};
       for (const p of saved.printers) {
-        if (p.enabled !== false && p.host) next[p.key] = { host: p.host, width: p.width ?? 42 };
+        if (p.enabled !== false && p.host) {
+          next[p.key] = {
+            host: p.host,
+            width: p.width ?? 42,
+            encoding: p.encoding ?? "ascii",
+            codepageByte: p.codepageByte,
+          };
+        }
       }
       if (Object.keys(next).length) {
         const summary = Object.entries(next).map(([k, v]) => `${k}=${v.host}`).join(", ");
@@ -105,7 +112,7 @@ const HEADERS = {
 async function rest(method, path, body) {
   const res = await fetch(`${URL_}/rest/v1/${path}`, {
     method,
-    headers: { ...HEADERS, Prefer: "return=representation" },
+    headers: { ...HEADERS, Prefer: "return=representation,resolution=merge-duplicates" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${await res.text()}`);
@@ -153,7 +160,33 @@ async function finish(id, ok, error) {
   });
 }
 
+let lastHeartbeat = 0;
+const HEARTBEAT_MS = 15000;
+
+/**
+ * The pulse the app checks before a waiter taps Send. A stale row means
+ * "tickets will queue, not print" — said up front, not discovered later.
+ */
+async function heartbeat() {
+  if (Date.now() - lastHeartbeat < HEARTBEAT_MS) return;
+  lastHeartbeat = Date.now();
+  try {
+    await rest("POST", "print_bridge_status?on_conflict=tenant_id", [
+      {
+        tenant_id: TENANT,
+        seen_at: new Date().toISOString(),
+        printers: Object.fromEntries(
+          Object.entries(printers).map(([k, v]) => [k, v.host])
+        ),
+      },
+    ]);
+  } catch (err) {
+    console.error(`heartbeat failed: ${err?.message ?? err}`);
+  }
+}
+
 async function tick() {
+  await heartbeat();
   await refreshPrinters();
   const job = await claimNext();
   if (!job) return;
@@ -172,10 +205,13 @@ async function tick() {
   }
 
   try {
-    const bytes =
-      job.printer === "kitchen"
-        ? renderKitchenTicket(job.payload, printer.width ?? 42)
-        : renderReceipt(job.payload, printer.width ?? 42);
+    // The bar prints kitchen-style tickets; only the receipt printer needs money.
+    const render = job.printer === "receipt" ? renderReceipt : renderKitchenTicket;
+    const bytes = render(job.payload, {
+      width: printer.width ?? 42,
+      encoding: printer.encoding,
+      codepageByte: printer.codepageByte,
+    });
     await printTo(printer.host, bytes, printer.port ?? 9100);
     await finish(job.id, true);
     console.log(`printed ${job.printer} job ${job.id} -> ${printer.host}`);
@@ -188,7 +224,6 @@ async function tick() {
 console.log(`print bridge up — branch ${TENANT}, watching ${URL_} every ${POLL_MS / 1000}s`);
 console.log(`printers: ${Object.entries(printers).map(([k, v]) => `${k}=${v.host}`).join(", ")}`);
 
-// eslint-disable-next-line no-constant-condition
 while (true) {
   try {
     await tick();

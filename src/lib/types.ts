@@ -996,12 +996,24 @@ export type ReceiptSettings = {
 
 /** One physical printer, by the job it does. */
 export type PrinterConfig = {
-  /** Matches the print_jobs check constraint — the two jobs a restaurant has. */
-  key: "kitchen" | "receipt";
+  /** Matches the print_jobs check constraint. Bar is optional — when disabled, drinks print at the kitchen. */
+  key: "kitchen" | "receipt" | "bar";
   host: string;
   /** Characters per line: 42 or 48 for 80mm paper, 32 for 58mm. */
   width: number;
   enabled: boolean;
+  /**
+   * How text is encoded on the wire. "ascii" (default) transliterates
+   * diacritics away and works on any printer; "cp1258" prints real Vietnamese
+   * on printers whose firmware has that code page.
+   */
+  encoding?: "ascii" | "cp1258";
+  /**
+   * The ESC t page number that selects CP1258 on this printer's firmware —
+   * manufacturers disagree (94, 30 and 21 are all in the wild), so it is a
+   * setting, not a constant. Only used when encoding is "cp1258".
+   */
+  codepageByte?: number;
 };
 
 /**

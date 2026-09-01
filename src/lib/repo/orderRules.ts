@@ -369,3 +369,16 @@ export function clampPartialPayment(requestedVnd: number, outstandingVnd: number
   if (!Number.isFinite(requestedVnd) || requestedVnd <= 0) return owed;
   return Math.min(owed, Math.round(requestedVnd));
 }
+
+/**
+ * Which categories are made at the bar, not the pass.
+ *
+ * One definition shared by the kitchen board's station filter and the
+ * printer routing, because "the bar's board" and "the bar's printer" must
+ * never disagree about whose drink it is.
+ */
+export const DRINK_CATEGORIES: ReadonlySet<string> = new Set(["beverage", "cocktail"]);
+
+export function isDrinkCategory(category: string | undefined): boolean {
+  return category !== undefined && DRINK_CATEGORIES.has(category);
+}

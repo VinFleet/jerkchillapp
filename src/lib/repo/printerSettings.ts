@@ -20,6 +20,8 @@ export function defaultPrinters(): PrinterSettings {
     printers: [
       { key: "kitchen", host: legacy ? "192.168.1.199" : "", width: 42, enabled: legacy },
       { key: "receipt", host: legacy ? "192.168.1.198" : "", width: 42, enabled: legacy },
+      // Off until a bar printer exists; while off, drinks print at the kitchen.
+      { key: "bar", host: "", width: 42, enabled: false },
     ],
     autoPrintKitchen: true,
     autoPrintReceiptOnClose: true,
@@ -28,8 +30,15 @@ export function defaultPrinters(): PrinterSettings {
 }
 
 export function getPrinterSettings(): PrinterSettings {
+  const defaults = defaultPrinters();
   const stored = readList<PrinterSettings>(KEY).find((r) => r.id === "printers");
-  return { ...defaultPrinters(), ...stored };
+  if (!stored) return defaults;
+  // Merge the printer list by key, not wholesale: a record saved before a
+  // station existed (bar arrived after kitchen/receipt) must still show it.
+  const printers = defaults.printers.map(
+    (d) => stored.printers?.find((p) => p.key === d.key) ?? d
+  );
+  return { ...defaults, ...stored, printers };
 }
 
 export function savePrinterSettings(

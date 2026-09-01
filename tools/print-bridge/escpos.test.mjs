@@ -12,7 +12,8 @@ import assert from "node:assert/strict";
 import {
   toAscii,
   row,
-  qr,
+
+  encodeCp1258,
   renderKitchenTicket,
   renderReceipt,
   CUT,
@@ -120,4 +121,67 @@ test("the big-type command wraps the table number", () => {
   const bytes = renderKitchenTicket({ table: "O2", lines: [] });
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(" ");
   assert.ok(hex.includes(Array.from(SIZE_BIG, (b) => b.toString(16).padStart(2, "0")).join(" ")));
+});
+
+// ---------- Vietnamese (CP1258) ----------
+
+test("CP1258 encodes shaped letters precomposed and tones as trailing bytes", () => {
+  // ở = ơ (0xF5) + hook above (0xD2); ế = ê (0xEA) + acute (0xEC)
+  assert.deepEqual(Array.from(encodeCp1258("Phở")), [0x50, 0x68, 0xf5, 0xd2]);
+  assert.deepEqual(Array.from(encodeCp1258("ế")), [0xea, 0xec]);
+  assert.deepEqual(Array.from(encodeCp1258("đ")), [0xf0]);
+  assert.deepEqual(Array.from(encodeCp1258("Ăn")), [0xc3, 0x6e]);
+  // bò = b + o + grave (0xCC); ạ = a + dot below (0xF2)
+  assert.deepEqual(Array.from(encodeCp1258("bò")), [0x62, 0x6f, 0xcc]);
+  assert.deepEqual(Array.from(encodeCp1258("ạ")), [0x61, 0xf2]);
+});
+
+test("CP1258 falls back to transliteration for characters off the page", () => {
+  assert.deepEqual(Array.from(encodeCp1258("A₫")), [0x41, 0xfe]);
+  const bytes = Array.from(encodeCp1258("→"));
+  assert.deepEqual(bytes, [0x3f], "unknown symbols become ?, never a wrong glyph");
+});
+
+test("a cp1258 printer gets ESC t before any text; ascii printers never do", () => {
+  const vn = renderKitchenTicket({ table: "B1", lines: [] }, { width: 42, encoding: "cp1258", codepageByte: 30 });
+  const hexVn = Array.from(vn, (b) => b.toString(16).padStart(2, "0")).join(" ");
+  assert.ok(hexVn.includes("1b 74 1e"), "ESC t 30 selects the configured page");
+  const plain = renderKitchenTicket({ table: "B1", lines: [] }, 42);
+  const hexPlain = Array.from(plain, (b) => b.toString(16).padStart(2, "0")).join(" ");
+  assert.ok(!hexPlain.includes("1b 74"), "ascii mode must not switch code pages");
+});
+
+test("row padding counts printed columns, not bytes, under cp1258", () => {
+  // "Phở bò" is 6 columns on paper but 8 bytes; right edge must still align.
+  const bytes = renderReceipt(
+    { headerName: "X", lines: [{ qty: 1, name: "Phở bò", totalVnd: 65000 }], totalVnd: 65000, outstandingVnd: 0 },
+    { width: 32, encoding: "cp1258" }
+  );
+  // Find the item row: strip to a per-line structure by scanning for the price.
+  const arr = Array.from(bytes);
+  const lineStarts = [];
+  let cur = [];
+  for (const b of arr) {
+    if (b === 0x0a) { lineStarts.push(cur); cur = []; } else cur.push(b);
+  }
+  const item = lineStarts.find((l) => {
+    const s = l.map((b) => String.fromCharCode(b)).join("");
+    return s.includes("65.000d");
+  });
+  assert.ok(item, "the item row exists");
+  const printable = item.filter((b) => b >= 0x20 || b >= 0x80).length
+    - item.filter((b) => [0xcc, 0xec, 0xde, 0xd2, 0xf2].includes(b)).length;
+  assert.equal(printable, 32, "the row fills exactly the printer width in columns");
+});
+
+test("a void ticket wears the HUY banner; a normal ticket never does", () => {
+  const voided = renderKitchenTicket({
+    void: true, table: "O2", code: "#12", lines: [{ qty: 1, name: "Jerk Chicken" }],
+  });
+  const s1 = ascii(voided);
+  assert.ok(s1.includes("HUY MON"));
+  assert.ok(s1.includes("VOID"));
+  assert.ok(s1.includes("Jerk Chicken"), "the pass reads WHAT to stop making");
+  const normal = renderKitchenTicket({ table: "O2", lines: [{ qty: 1, name: "Jerk Chicken" }] });
+  assert.ok(!ascii(normal).includes("VOID"));
 });

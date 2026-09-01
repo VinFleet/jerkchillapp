@@ -4,9 +4,10 @@ import { getMenuItems } from "@/lib/repo/menu";
 import { getCachedTables } from "@/lib/repo/tableCache";
 import { getReceiptSettings } from "@/lib/repo/receiptSettings";
 import { getPaymentSettings, vietQrConfigured } from "@/lib/repo/paymentSettings";
+import { getPrinterSettings, printerFor } from "@/lib/repo/printerSettings";
 import { buildVietQrPayload } from "@/lib/payments/vietqr";
-import { orderCode } from "@/lib/repo/orderRules";
-import type { Order } from "@/lib/types";
+import { orderCode, isDrinkCategory } from "@/lib/repo/orderRules";
+import type { Order, OrderLine } from "@/lib/types";
 
 /**
  * Handing a ticket to the print bridge.
@@ -22,7 +23,7 @@ import type { Order } from "@/lib/types";
 
 import { getActiveTenant } from "@/lib/storage";
 
-async function enqueue(printer: "kitchen" | "receipt", payload: unknown): Promise<boolean> {
+async function enqueue(printer: "kitchen" | "receipt" | "bar", payload: unknown): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase.from("print_jobs").insert({
     tenant_id: getActiveTenant(),
@@ -30,6 +31,19 @@ async function enqueue(printer: "kitchen" | "receipt", payload: unknown): Promis
     payload,
   });
   return !error;
+}
+
+/**
+ * Which station makes this line. Drinks go to the bar's printer only when a
+ * bar printer is actually enabled — otherwise everything prints at the
+ * kitchen, which is every restaurant until the day it isn't.
+ */
+function ticketStation(menuItemId: string): "kitchen" | "bar" {
+  const bar = printerFor(getPrinterSettings(), "bar");
+  if (!bar?.enabled || !bar.host) return "kitchen";
+  if (menuItemId.startsWith("adhoc:")) return "kitchen";
+  const category = getMenuItems(false).find((m) => m.id === menuItemId)?.category;
+  return isDrinkCategory(category) ? "bar" : "kitchen";
 }
 
 const hhmm = (iso: string) =>
@@ -42,32 +56,61 @@ function tableLabel(order: Order): string {
 }
 
 /** The round that was just sent — only those lines, so a second round is a second ticket. */
-export function kitchenTicketPayload(order: Order, lineIds: string[]) {
+export function kitchenTicketPayload(order: Order, lines: OrderLine[], voided = false) {
   const menu = getMenuItems(false);
   const nameOf = (id: string) =>
     id.startsWith("adhoc:") ? id.slice(6) : (menu.find((m) => m.id === id)?.name.en ?? id);
 
   return {
+    void: voided || undefined,
     table: tableLabel(order),
     code: orderCode(order.id),
     time: hhmm(new Date().toISOString()),
     placedBy: order.placedBy ?? "QR — guest ordered",
-    notes: [order.orderNote, order.guestNote].filter(Boolean),
-    lines: order.lines
-      .filter((l) => lineIds.includes(l.id) && l.status !== "cancelled")
-      .map((l) => ({
-        qty: l.qty,
-        name: nameOf(l.menuItemId),
-        detail: (l.choices ?? []).map((c) => c.label.en).join(", ") || undefined,
-        note: l.note,
-      })),
+    notes: voided ? [] : [order.orderNote, order.guestNote].filter(Boolean),
+    lines: lines.map((l) => ({
+      qty: l.qty,
+      name: nameOf(l.menuItemId),
+      detail: (l.choices ?? []).map((c) => c.label.en).join(", ") || undefined,
+      note: l.note,
+    })),
   };
 }
 
+/**
+ * One send can be two tickets: the pass gets the food, the bar gets the
+ * drinks, each ticket naming only its own station's work. Returns false if
+ * ANY ticket failed to queue, because "partly printed" needs the same rescue
+ * (the on-screen fallback) as "not printed".
+ */
+async function enqueueByStation(order: Order, lines: OrderLine[], voided: boolean): Promise<boolean> {
+  const byStation = new Map<"kitchen" | "bar", OrderLine[]>();
+  for (const line of lines) {
+    const station = ticketStation(line.menuItemId);
+    byStation.set(station, [...(byStation.get(station) ?? []), line]);
+  }
+  const results = await Promise.all(
+    [...byStation.entries()].map(([station, stationLines]) =>
+      enqueue(station, kitchenTicketPayload(order, stationLines, voided))
+    )
+  );
+  return results.every(Boolean);
+}
+
 export async function printKitchenTicket(order: Order, lineIds: string[]): Promise<boolean> {
-  const payload = kitchenTicketPayload(order, lineIds);
-  if (payload.lines.length === 0) return true;
-  return enqueue("kitchen", payload);
+  const lines = order.lines.filter((l) => lineIds.includes(l.id) && l.status !== "cancelled");
+  if (lines.length === 0) return true;
+  return enqueueByStation(order, lines, false);
+}
+
+/**
+ * The HỦY ticket. Cancelling a line the kitchen already has does not
+ * un-print the first ticket — someone is cooking off that paper. The void
+ * ticket is how the pass learns to stop, and it goes to whichever station
+ * got the original.
+ */
+export async function printVoidTicket(order: Order, line: OrderLine): Promise<boolean> {
+  return enqueueByStation(order, [line], true);
 }
 
 export async function printReceipt(order: Order): Promise<boolean> {
@@ -125,16 +168,21 @@ export async function printReceipt(order: Order): Promise<boolean> {
 }
 
 /** A labelled test ticket, so "did that work" never needs a real order. */
-export async function printTest(printer: "kitchen" | "receipt"): Promise<boolean> {
+export async function printTest(printer: "kitchen" | "receipt" | "bar"): Promise<boolean> {
   const now = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  if (printer === "kitchen") {
-    return enqueue("kitchen", {
+  if (printer === "kitchen" || printer === "bar") {
+    return enqueue(printer, {
       table: "TEST",
       code: "APP",
       time: now,
       placedBy: "Test from Settings",
       notes: ["IF YOU CAN READ THIS, PRINTING WORKS"],
-      lines: [{ qty: 1, name: "Test ticket - Phieu thu" }],
+      lines: [
+        { qty: 1, name: "Test ticket - Phieu thu" },
+        // Real diacritics on purpose: with Vietnamese (CP1258) on, this line
+        // is the proof it works; on ASCII it prints "Pho bo - An o day".
+        { qty: 1, name: "Phở bò — Ăn ở đây", detail: "kiểm tra tiếng Việt" },
+      ],
     });
   }
   const receipt = getReceiptSettings();
@@ -158,19 +206,39 @@ export type PrintJobRow = {
   created_at: string;
 };
 
-/**
- * The queue's recent tail — how the app knows whether a bridge is alive.
- *
- * There is no heartbeat on purpose: jobs sitting "queued" for more than half
- * a minute IS the bridge being down, told from data that cannot disagree
- * with reality.
- */
+/** The queue's recent tail — what happened to the last few tickets. */
 export async function recentPrintJobs(limit = 8): Promise<PrintJobRow[]> {
   if (!supabase) return [];
   const { data } = await supabase
     .from("print_jobs")
     .select("id, printer, status, error, created_at")
+    .eq("tenant_id", getActiveTenant())
     .order("created_at", { ascending: false })
     .limit(limit);
   return (data as PrintJobRow[] | null) ?? [];
+}
+
+/**
+ * The bridge's pulse, written by the bridge every 15 seconds.
+ *
+ * This exists so a waiter hears "tickets will not print" BEFORE tapping
+ * Send, not from the kitchen ten minutes later. Null means no bridge has
+ * ever run for this branch; a seenAt older than a minute means it is down
+ * right now. Errors count as "unknown", not "offline" — a phone in a wifi
+ * dead spot must not cry wolf about the bridge.
+ */
+export async function bridgeSeenAt(): Promise<string | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("print_bridge_status")
+    .select("seen_at")
+    .eq("tenant_id", getActiveTenant())
+    .maybeSingle();
+  if (error) return null;
+  return (data as { seen_at: string } | null)?.seen_at ?? null;
+}
+
+export function bridgeLooksDown(seenAt: string | null, now = Date.now()): boolean {
+  if (!seenAt) return false; // never seen — probably never set up; don't nag every send
+  return now - new Date(seenAt).getTime() > 60_000;
 }

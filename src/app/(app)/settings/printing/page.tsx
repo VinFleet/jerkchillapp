@@ -10,7 +10,7 @@ import {
   savePrinterSettings,
   looksLikeHost,
 } from "@/lib/repo/printerSettings";
-import { printTest, recentPrintJobs, type PrintJobRow } from "@/lib/print/jobs";
+import { printTest, recentPrintJobs, bridgeSeenAt, bridgeLooksDown, type PrintJobRow } from "@/lib/print/jobs";
 import type { PrinterSettings } from "@/lib/types";
 
 /**
@@ -21,14 +21,15 @@ import type { PrinterSettings } from "@/lib/types";
  * else, and the bridge picks them up within fifteen seconds — changing a
  * printer never means touching the machine in the corner.
  *
- * Bridge health is inferred from the queue rather than a heartbeat: a job
- * sitting "queued" for half a minute IS the bridge being down, told from data
- * that cannot disagree with reality.
+ * Bridge health comes from two directions that cannot both lie: the bridge's
+ * own 15-second heartbeat, and the queue itself — a job sitting "queued" for
+ * half a minute is a down bridge whatever the heartbeat says.
  */
 
 const PRINTER_LABEL: Record<string, { en: string; vi: string }> = {
   kitchen: { en: "Kitchen ticket printer", vi: "Máy in bếp" },
   receipt: { en: "Receipt printer", vi: "Máy in hoá đơn" },
+  bar: { en: "Bar printer (drinks)", vi: "Máy in quầy bar (đồ uống)" },
 };
 
 function PrintingContent() {
@@ -39,12 +40,14 @@ function PrintingContent() {
   const [note, setNote] = useState<string | null>(null);
   const [jobs, setJobs] = useState<PrintJobRow[]>([]);
   const [fetchedAt, setFetchedAt] = useState(0);
+  const [heartbeat, setHeartbeat] = useState<string | null>(null);
 
   const loadJobs = useCallback(() => {
     void recentPrintJobs().then((rows) => {
       setJobs(rows);
       setFetchedAt(Date.now());
     });
+    void bridgeSeenAt().then(setHeartbeat);
   }, []);
 
   useEffect(() => {
@@ -78,6 +81,8 @@ function PrintingContent() {
     (j) => j.status === "queued" && fetchedAt - new Date(j.created_at).getTime() > 30_000
   ).length;
   const lastDone = jobs.find((j) => j.status === "done");
+  const heartbeatDown = fetchedAt > 0 && bridgeLooksDown(heartbeat, fetchedAt);
+  const heartbeatFresh = fetchedAt > 0 && heartbeat !== null && !heartbeatDown;
 
   return (
     <div className="pb-10">
@@ -89,13 +94,21 @@ function PrintingContent() {
 
       <div className="px-4 md:px-8 max-w-xl space-y-4">
         {/* Bridge health, from the queue itself */}
-        {stuckQueued > 0 ? (
+        {stuckQueued > 0 || heartbeatDown ? (
           <p className="flex items-start gap-2 text-sm rounded-xl border border-warning bg-warning-tint text-warning px-3 py-2.5">
             <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-            {stuckQueued} job{stuckQueued === 1 ? "" : "s"} waiting over 30s — the print bridge
-            looks offline. Is it running on its machine?
+            {stuckQueued > 0
+              ? `${stuckQueued} job${stuckQueued === 1 ? "" : "s"} waiting over 30s — the print bridge looks offline. Is it running on its machine?`
+              : "The bridge has stopped checking in — tickets will queue, not print."}
             <br />
             Cầu in có vẻ chưa chạy — kiểm tra máy chạy bridge.
+          </p>
+        ) : heartbeatFresh ? (
+          <p className="flex items-center gap-2 text-sm rounded-xl border border-border px-3 py-2.5 text-muted">
+            <CheckCircle2 size={16} className="text-success shrink-0" />
+            Bridge alive — checked in{" "}
+            {Math.max(0, Math.round((fetchedAt - new Date(heartbeat!).getTime()) / 1000))}s
+            ago · Cầu in đang chạy
           </p>
         ) : lastDone ? (
           <p className="flex items-center gap-2 text-sm rounded-xl border border-border px-3 py-2.5 text-muted">
@@ -152,6 +165,45 @@ function PrintingContent() {
                 </button>
               ))}
             </div>
+
+            {/* Vietnamese needs the printer's firmware to have code page 1258.
+                ASCII always works, so it stays the default; the test print
+                carries a diacritics line that proves the toggle either way. */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() =>
+                  patchPrinter(printer.key, {
+                    encoding: (printer.encoding ?? "ascii") === "ascii" ? "cp1258" : "ascii",
+                  })
+                }
+                className={`flex-1 min-h-[44px] rounded-xl border text-sm ${
+                  printer.encoding === "cp1258" ? "border-brand text-brand font-bold" : "border-border"
+                }`}
+              >
+                {printer.encoding === "cp1258"
+                  ? "Tiếng Việt có dấu · CP1258"
+                  : "No diacritics · Không dấu (ASCII)"}
+              </button>
+              {printer.encoding === "cp1258" && (
+                <label className="flex items-center gap-1.5 text-xs text-muted">
+                  ESC t
+                  <input
+                    value={printer.codepageByte ?? 94}
+                    onChange={(e) =>
+                      patchPrinter(printer.key, { codepageByte: Number(e.target.value) || 0 })
+                    }
+                    inputMode="numeric"
+                    className="w-16 min-h-[44px] rounded-xl border border-border px-2 text-center font-mono tabular-nums text-sm text-foreground"
+                  />
+                </label>
+              )}
+            </div>
+            {printer.encoding === "cp1258" && (
+              <p className="text-xs text-muted">
+                If the test prints symbols instead of dấu, try 94, 30 or 21 — printers disagree.
+                · Nếu in ra ký hiệu lạ, thử 94, 30 hoặc 21.
+              </p>
+            )}
 
             <button
               onClick={() => {

@@ -30,6 +30,8 @@ import {
   setLineStatus,
   unsentLines,
 } from "@/lib/repo/orders";
+import { getPrinterSettings } from "@/lib/repo/printerSettings";
+import { printVoidTicket } from "@/lib/print/jobs";
 import { getMenuItems, isSoldOut } from "@/lib/repo/menu";
 import { getCachedTables } from "@/lib/repo/tableCache";
 import { linePriceVnd } from "@/lib/repo/orderRules";
@@ -335,6 +337,11 @@ function OrderContent() {
   };
 
   const cancelLine = (lineId: string) => {
+    const line = order.lines.find((l) => l.id === lineId);
+    // A line the kitchen already has needs paper to chase paper: HUY ticket.
+    if (line?.sentAt && getPrinterSettings().autoPrintKitchen) {
+      void printVoidTicket(order, line);
+    }
     setLineStatus(order.id, lineId, "cancelled");
     load();
   };
