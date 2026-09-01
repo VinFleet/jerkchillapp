@@ -46,8 +46,9 @@ create policy "members see their billing status" on org_billing
 -- Three tiers, priced per restaurant per month: the charge for an
 -- organization is tier price x branch count x months. Prices live here and
 -- are edited in the admin console, not in code — a price change is a
--- business decision, not a deploy. The placeholder amounts below are
--- deliberately obviously-placeholder; set the real ones in /admin.
+-- business decision, not a deploy. The amounts below are the real launch
+-- prices (set 2 Sep 2026); on-conflict-do-nothing means an existing
+-- database keeps whatever the console has set since.
 
 create table if not exists support_packages (
   id                   text   primary key,
@@ -57,9 +58,9 @@ create table if not exists support_packages (
 );
 
 insert into support_packages (id, name, price_per_branch_vnd, sort) values
-  ('basic',    'Basic',    500000,  1),
-  ('standard', 'Standard', 1000000, 2),
-  ('premium',  'Premium',  2000000, 3)
+  ('basic',    'Basic',    350000, 1),
+  ('standard', 'Standard', 550000, 2),
+  ('premium',  'Premium',  750000, 3)
 on conflict (id) do nothing;
 
 alter table support_packages enable row level security;
