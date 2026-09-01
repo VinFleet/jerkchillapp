@@ -523,7 +523,9 @@ export type StaffMember = {
   /** VND per hour — Owner-only visibility, enforced in the UI, not just hidden. */
   hourlyRateVnd?: number;
   /**
-   * 4 digits, for the few actions that are personally theirs. Not a security
+   * Salted hash of the 4-digit PIN ("sha256:salt:digest" — see lib/auth/pin),
+   * for the few actions that are personally theirs. Legacy records may still
+   * hold plaintext until first successful use rehashes them. Not a security
    * boundary — the device is — but it stops one person acknowledging a policy
    * or opening a disciplinary record on someone else's behalf.
    */

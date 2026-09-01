@@ -15,6 +15,7 @@ import type {
   ScorecardEntry,
 } from "@/lib/types";
 import { readList, writeList, isSeeded, markSeeded, newId, todayIso, addDaysIso, isLegacyTenant } from "@/lib/storage";
+import { hashPin, newSalt, isHashedPin } from "@/lib/auth/pin";
 import { INDUCTION_STEPS } from "@/lib/types";
 import type { StaffRole } from "@/lib/staffLabels";
 import { SEED_QUESTIONS, SEED_STAFF_MEMBERS } from "@/lib/seed/staff";
@@ -135,9 +136,19 @@ export function setStaffActive(id: string, active: boolean) {
  * Anything genuinely sensitive (wages, costs) sits behind the manager station's
  * real password instead.
  */
-export function setStaffPin(id: string, pin: string) {
+export async function setStaffPin(id: string, pin: string) {
   if (!/^\d{4}$/.test(pin)) return;
-  updateStaffMember(id, { pin });
+  updateStaffMember(id, { pin: await hashPin(pin, newSalt()) });
+}
+
+/**
+ * Upgrade a legacy plaintext PIN in place, called after that PIN just
+ * verified — the one moment the digits are legitimately in hand.
+ */
+export async function rehashStaffPin(id: string, verifiedPin: string) {
+  const member = getStaff(false).find((s) => s.id === id);
+  if (!member?.pin || isHashedPin(member.pin)) return;
+  updateStaffMember(id, { pin: await hashPin(verifiedPin, newSalt()) });
 }
 
 /** Reminders should stop when someone leaves, so they're scoped to active staff. */

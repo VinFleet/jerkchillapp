@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Lock, Delete } from "lucide-react";
+import { verifyPin, isHashedPin } from "@/lib/auth/pin";
+import { rehashStaffPin } from "@/lib/repo/staff";
 import type { StaffMember } from "@/lib/types";
 
 /**
@@ -39,12 +41,17 @@ export function PinGate({
     setEntered(next);
     setError(false);
     if (next.length === 4) {
-      if (next === member.pin) {
-        onVerified();
-      } else {
-        setError(true);
-        setTimeout(() => setEntered(""), 600);
-      }
+      void verifyPin(next, member.pin).then((ok) => {
+        if (ok) {
+          // A plaintext PIN that just proved itself is upgraded on the spot —
+          // the only moment the digits are legitimately in hand.
+          if (!isHashedPin(member.pin)) void rehashStaffPin(member.id, next);
+          onVerified();
+        } else {
+          setError(true);
+          setTimeout(() => setEntered(""), 600);
+        }
+      });
     }
   };
 

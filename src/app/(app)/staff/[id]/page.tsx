@@ -288,10 +288,11 @@ function PinSection({ staff, onChanged }: { staff: StaffMember; onChanged: () =>
             className="min-h-11 text-sm"
             disabled={!valid}
             onClick={() => {
-              setStaffPin(staff.id, value);
-              setValue("");
-              setEditing(false);
-              onChanged();
+              void setStaffPin(staff.id, value).then(() => {
+                setValue("");
+                setEditing(false);
+                onChanged();
+              });
             }}
           >
             Save · Lưu
