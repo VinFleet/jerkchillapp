@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
+import { requireOrgRole } from "@/lib/admin/orgAuth";
 
 export const runtime = "nodejs";
 
@@ -15,43 +15,11 @@ export const runtime = "nodejs";
  * Allowed for owners and managers of the organization that owns the branch,
  * proven from their session token — not from anything the client claims.
  */
-async function gate(request: Request, branch: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-
-  const client = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: userData } = await client.auth.getUser(token);
-  const userId = userData?.user?.id;
-  if (!userId) return null;
-
-  const { data: branchRow } = await client
-    .from("branches")
-    .select("org_id")
-    .eq("id", branch)
-    .maybeSingle();
-  if (!branchRow) return null;
-
-  const { data: membership } = await client
-    .from("org_members")
-    .select("role")
-    .eq("org_id", (branchRow as { org_id: string }).org_id)
-    .eq("user_id", userId)
-    .maybeSingle();
-  const role = (membership as { role?: string } | null)?.role;
-  if (role !== "owner" && role !== "manager") return null;
-
-  return client;
-}
-
 export async function GET(request: Request) {
   const branch = new URL(request.url).searchParams.get("branch") ?? "";
-  const client = await gate(request, branch);
-  if (!client) return NextResponse.json({ error: "no" }, { status: 401 });
+  const gate = await requireOrgRole(request, { branchId: branch }, ["owner", "manager"]);
+  if (!gate.ok) return NextResponse.json({ error: "no" }, { status: gate.status });
+  const client = gate.client;
 
   const { data } = await client
     .from("branch_secrets")
@@ -66,8 +34,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const branch = new URL(request.url).searchParams.get("branch") ?? "";
-  const client = await gate(request, branch);
-  if (!client) return NextResponse.json({ error: "no" }, { status: 401 });
+  const gate = await requireOrgRole(request, { branchId: branch }, ["owner", "manager"]);
+  if (!gate.ok) return NextResponse.json({ error: "no" }, { status: gate.status });
+  const client = gate.client;
 
   const secret = randomBytes(32).toString("hex");
   const { error } = await client

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { VinposWordmark } from "@/components/VinposWordmark";
 import { useRouter } from "next/navigation";
 import { ChefHat, Wine, ShieldCheck, ChevronLeft, CheckCircle2 } from "lucide-react";
@@ -144,6 +145,12 @@ export default function LoginPage() {
               <br />
               Bạn sẽ chọn tên bên trong — không cần đăng nhập/đăng xuất liên tục trong ca.
             </p>
+        <p className="text-center text-xs text-muted mt-4">
+          New restaurant?{" "}
+          <Link href="/signup" className="text-brand font-semibold">
+            Start on VINPOS · Bắt đầu
+          </Link>
+        </p>
           </>
         ) : (
           <>

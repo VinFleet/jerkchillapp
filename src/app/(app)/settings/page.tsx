@@ -36,7 +36,9 @@ function SettingsContent() {
 
   if (!session) return null;
 
-  if (session.role !== "owner") {
+  // Managers get in: Team viewing, receipts and printing are theirs too. The
+  // money-adjacent cards below stay owner-only individually.
+  if (session.role !== "owner" && session.role !== "manager") {
     return (
       <div className="p-6 flex flex-col items-center text-center gap-3 mt-16">
         <ShieldAlert size={40} className="text-muted" />
@@ -50,8 +52,9 @@ function SettingsContent() {
 
   return (
     <div className="pb-6">
-      <PageHeader title="Settings · Cài Đặt" subtitle="Owner only · Chỉ chủ nhà hàng" />
+      <PageHeader title="Settings · Cài Đặt" subtitle="Owner & manager · Chủ và quản lý" />
       <div className="px-4 md:px-8">
+        {session.role === "owner" && (
         <Card className="flex items-center justify-between gap-4">
           <div>
             <p className="font-semibold text-sm">Manager sees cost & margin</p>
@@ -70,11 +73,13 @@ function SettingsContent() {
             }}
           />
         </Card>
+        )}
         <Link href="/changelog" className="block text-center text-xs text-muted mt-4">
           App version v{CURRENT_VERSION} · What&apos;s new · Có gì mới
         </Link>
       </div>
       <div className="px-4 md:px-8 mt-3">
+        {session.role === "owner" && (
         <Link
           href="/settings/payments"
           className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light mb-3"
@@ -87,6 +92,20 @@ function SettingsContent() {
           </span>
           <ChevronRight size={18} className="text-muted shrink-0" />
         </Link>
+        )}
+        <Link
+          href="/settings/team"
+          className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light mb-3"
+        >
+          <span>
+            <span className="block font-semibold text-sm">Team</span>
+            <span className="block text-xs text-muted">
+              Đội ngũ — logins for this restaurant
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-muted shrink-0" />
+        </Link>
+        {session.role === "owner" && (
         <Link
           href="/settings/branches"
           className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light mb-3"
@@ -99,6 +118,7 @@ function SettingsContent() {
           </span>
           <ChevronRight size={18} className="text-muted shrink-0" />
         </Link>
+        )}
         <Link
           href="/settings/printing"
           className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light mb-3"

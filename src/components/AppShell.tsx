@@ -153,7 +153,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mb-3">
             <WhoIsWorking />
           </div>
-          {session.role === "owner" && (
+          {(session.role === "owner" || session.role === "manager") && (
             <Link href="/settings" className="flex items-center gap-2 text-sm text-foreground font-semibold mb-3">
               <Settings size={16} /> Settings / Cài đặt
             </Link>

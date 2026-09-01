@@ -45,7 +45,7 @@ export default function MorePage() {
             <BellRing size={24} className="text-brand" />
             <Bi value={{ en: "Alerts", vi: "Thông báo" }} className="text-sm font-semibold mt-2" />
           </Link>
-          {session.role === "owner" && (
+          {(session.role === "owner" || session.role === "manager") && (
             <Link
               href="/settings"
               className="min-h-24 bg-surface border border-border rounded-2xl p-4 flex flex-col items-start justify-between active:bg-brand-light transition-colors"
