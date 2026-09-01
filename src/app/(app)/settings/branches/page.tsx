@@ -13,6 +13,8 @@ import {
   switchBranch,
   todaysTakingsByBranch,
   getMyBilling,
+  getSupportPackages,
+  type SupportPackage,
   type Branch,
   type Organization,
 } from "@/lib/repo/branches";
@@ -36,13 +38,15 @@ function BranchesContent() {
   const [problem, setProblem] = useState<string | null>(null);
   const active = getActiveTenant();
   const [takings, setTakings] = useState<Record<string, number>>({});
-  const [billing, setBilling] = useState<{ setupPaidAt: string | null; supportUntil: string | null; packageName: string | null } | null>(null);
+  const [billing, setBilling] = useState<{ setupPaidAt: string | null; supportUntil: string | null; packageName: string | null; packageId: string | null } | null>(null);
+  const [packages, setPackages] = useState<SupportPackage[]>([]);
 
   const load = useCallback(() => {
     void getMyOrganization().then(setOrg);
     void getMyBranches().then(setBranches);
     void todaysTakingsByBranch(todayIso()).then(setTakings);
     void getMyBilling().then(setBilling);
+    void getSupportPackages().then(setPackages);
   }, []);
 
   useEffect(() => load(), [load]);
@@ -85,6 +89,50 @@ function BranchesContent() {
             </span>
           </p>
         )}
+        {/* The tiers, priced for THIS organization's size. The interesting
+            number is not the unit price but "what would Premium cost me" —
+            so each row multiplies by the branch count in front of it. */}
+        {packages.length > 0 && branches.length > 0 && (
+          <div className="rounded-2xl border border-border bg-surface p-4 space-y-2">
+            <p className="text-sm font-semibold">
+              Support packages{" "}
+              <span className="text-muted font-normal">
+                · Gói hỗ trợ — {branches.length} restaurant{branches.length === 1 ? "" : "s"}
+              </span>
+            </p>
+            {packages.map((pkg) => {
+              const current = billing?.packageId === pkg.id;
+              const monthly = pkg.price_per_branch_vnd * branches.length;
+              return (
+                <div
+                  key={pkg.id}
+                  className={`flex items-center justify-between gap-3 rounded-xl border-2 px-3 py-2.5 ${
+                    current ? "border-brand bg-brand-light" : "border-border"
+                  }`}
+                >
+                  <span className="text-sm font-semibold">
+                    {pkg.name}
+                    {current && <span className="text-brand text-xs font-bold"> · your plan · gói của bạn</span>}
+                  </span>
+                  <span className="text-right shrink-0">
+                    <span className="block text-sm font-bold tabular-nums">
+                      {monthly.toLocaleString("vi-VN")}₫
+                      <span className="text-muted font-normal text-xs"> / month · tháng</span>
+                    </span>
+                    <span className="block text-[11px] text-muted tabular-nums">
+                      {pkg.price_per_branch_vnd.toLocaleString("vi-VN")}₫ × {branches.length}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+            <p className="text-xs text-muted">
+              To change plans, contact VINPOS — payment is by bank QR. · Đổi gói: liên hệ VINPOS,
+              thanh toán qua QR ngân hàng.
+            </p>
+          </div>
+        )}
+
         {branches.length === 0 && (
           <p className="text-sm text-muted rounded-xl border border-border px-4 py-3">
             No branches visible. Run supabase/saas-schema.sql once, then reload — this device&apos;s

@@ -99,6 +99,7 @@ export async function getMyBilling(): Promise<{
   setupPaidAt: string | null;
   supportUntil: string | null;
   packageName: string | null;
+  packageId: string | null;
 } | null> {
   if (!supabase) return null;
   const { data } = await supabase
@@ -113,6 +114,7 @@ export async function getMyBilling(): Promise<{
     package_id: string | null;
   };
   let packageName: string | null = null;
+  const packageId = row.package_id;
   if (row.package_id) {
     const { data: pkg } = await supabase
       .from("support_packages")
@@ -121,5 +123,23 @@ export async function getMyBilling(): Promise<{
       .maybeSingle();
     packageName = (pkg as { name?: string } | null)?.name ?? null;
   }
-  return { setupPaidAt: row.setup_paid_at, supportUntil: row.support_until, packageName };
+  return { setupPaidAt: row.setup_paid_at, supportUntil: row.support_until, packageName, packageId };
+}
+
+export type SupportPackage = { id: string; name: string; price_per_branch_vnd: number };
+
+/**
+ * The price list, as the customer sees it.
+ *
+ * Readable by design — the tiers are a menu, and an upgrade conversation
+ * starts sooner when the numbers are already on the customer's own screen
+ * next to their branch count.
+ */
+export async function getSupportPackages(): Promise<SupportPackage[]> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("support_packages")
+    .select("id, name, price_per_branch_vnd")
+    .order("sort");
+  return (data as SupportPackage[] | null) ?? [];
 }
