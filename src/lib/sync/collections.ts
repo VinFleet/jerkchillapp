@@ -43,6 +43,7 @@ export type SyncedCollection =
   | "table_tokens"
   | "receipt_settings"
   | "printer_settings"
+  | "payment_settings"
   // food safety — append-only
   | "fs_temp_readings"
   | "fs_cook_logs"
@@ -260,6 +261,18 @@ export const SYNCED_COLLECTIONS: Record<SyncedCollection, CollectionConfig> = {
   // edited at the till, read by the print bridge from the shared store.
   printer_settings: {
     storageKey: "printer_settings",
+    idOf: idField,
+    updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
+    mutable: true,
+  },
+  // The bank account VietQR pays into — per BRANCH, not per device. A QR
+  // raised on the kitchen tablet must name the same account the owner typed
+  // on the laptop; before this it used whatever that tablet happened to hold.
+  // The webhook secret is deliberately NOT here: synced rows are readable by
+  // every branch member, and the secret can forge paid confirmations. It
+  // lives in branch_secrets, service-role only.
+  payment_settings: {
+    storageKey: "payment_settings",
     idOf: idField,
     updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
     mutable: true,

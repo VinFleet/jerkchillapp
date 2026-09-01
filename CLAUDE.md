@@ -215,8 +215,11 @@ Jerk & Chill is customer number one and keeps its branding as branch data.
   `getActiveTenant()` (device-local); switching branch = set + full reload,
   and a fresh branch seeds itself like a new install. Server routes derive
   the tenant from data (a table token knows its restaurant) — never from a
-  constant. The two payment routes are still single-tenant on purpose until
-  per-branch bank config exists.
+  constant. Payments are per-branch: bank details sync as
+  `payment_settings`, and each branch's webhook secret lives in
+  `branch_secrets` — service-role only, because a synced row is readable by
+  every member and this secret can forge paid confirmations. The env secret
+  remains the legacy branch's fallback.
 - **Branding is branch data.** Chrome, guest page and bill wear
   `receipt_settings` (name/logo); the legacy branch defaults to the J&C
   logo; new branches start neutral and show the VINPOS wordmark until named.
@@ -284,11 +287,11 @@ kitchen tablet away from closing a bill.
 `jc:{tenant}:{key}`. That count excludes ten `isSeeded()` migration guards
 and four device-local meta keys, which are storage but not collections.
 
-**20 sync**, in the two families:
+**21 sync**, in the two families:
 
 - *Last-write-wins:* `checklist_items`, `checklist_ticks`, `notices`,
   `notice_acks`, `stock_entries`, `orders`, `order_payments`, `menu_items`,
-  `table_tokens`, `receipt_settings`, `printer_settings`
+  `table_tokens`, `receipt_settings`, `printer_settings`, `payment_settings`
 - *Append-only:* `fs_temp_readings`, `fs_cook_logs`, `fs_delivery_logs`,
   `fs_cleaning_signoffs`, `fs_inspections`, `fs_samples`,
   `fs_sample_destruction_checks`, `fs_pest`, `fs_complaints`

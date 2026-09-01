@@ -5,6 +5,8 @@ import { ShieldAlert, Check, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { BackLink } from "@/components/BackLink";
 import { useSession } from "@/lib/auth/RoleContext";
+import { supabase } from "@/lib/supabase/client";
+import { getActiveTenant } from "@/lib/storage";
 import {
   getPaymentSettings,
   savePaymentSettings,
@@ -45,9 +47,21 @@ function PaymentsContent() {
   const [form, setForm] = useState<PaymentSettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [hookState, setHookState] = useState<{ configured: boolean } | null>(null);
+  const [hookReveal, setHookReveal] = useState<{ secret: string; webhookUrl: string } | null>(null);
+  const [hookBusy, setHookBusy] = useState(false);
 
   useEffect(() => {
     setForm(getPaymentSettings());
+    void (async () => {
+      if (!supabase) return;
+      const { data } = await supabase.auth.getSession();
+      const res = await fetch(
+        `/api/payments/webhook-secret?branch=${encodeURIComponent(getActiveTenant())}`,
+        { headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` } }
+      );
+      if (res.ok) setHookState((await res.json()) as { configured: boolean });
+    })();
   }, []);
 
   if (!session) return null;
@@ -183,6 +197,66 @@ function PaymentsContent() {
             className="flex-1 min-h-[52px] rounded-xl border border-border font-semibold active:scale-[0.98] disabled:opacity-40"
           >
             Test QR · Thử mã
+          </button>
+        </div>
+
+        {/* Transfer self-confirmation: the branch's own webhook. The secret
+            shows exactly once — a secret that can be re-read from a screen is
+            a secret on every screenshot. */}
+        <div className="rounded-2xl border border-border bg-surface p-4 space-y-2">
+          <p className="text-sm font-semibold">
+            Automatic confirmation <span className="text-muted font-normal">· Tự xác nhận chuyển khoản</span>
+          </p>
+          <p className="text-xs text-muted">
+            A SePay or Casso account watching this bank account calls VINPOS when money lands, and
+            the bill settles itself. Generate the key, paste both values into the provider.
+            <br />
+            Tài khoản SePay/Casso theo dõi ngân hàng sẽ tự xác nhận hoá đơn.
+          </p>
+          {hookState && (
+            <p className="text-xs">
+              {hookState.configured ? (
+                <span className="text-success font-semibold">Key set for this branch · Đã có khoá</span>
+              ) : (
+                <span className="text-warning font-semibold">
+                  No key yet — transfers need a waiter&apos;s eye until this is done · Chưa có khoá
+                </span>
+              )}
+            </p>
+          )}
+          {hookReveal && (
+            <div className="rounded-xl border border-warning bg-warning-tint p-3 space-y-1 text-xs">
+              <p className="font-bold text-warning">Shown once — copy both now · Chỉ hiện một lần</p>
+              <p className="font-mono break-all select-all">{hookReveal.secret}</p>
+              <p className="font-mono break-all select-all">{hookReveal.webhookUrl}</p>
+            </div>
+          )}
+          <button
+            onClick={async () => {
+              if (!supabase) return;
+              setHookBusy(true);
+              const { data } = await supabase.auth.getSession();
+              const res = await fetch(
+                `/api/payments/webhook-secret?branch=${encodeURIComponent(getActiveTenant())}`,
+                {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+                }
+              );
+              setHookBusy(false);
+              if (res.ok) {
+                setHookReveal((await res.json()) as { secret: string; webhookUrl: string });
+                setHookState({ configured: true });
+              } else {
+                setTestResult("Could not generate — owner or manager sign-in required.");
+              }
+            }}
+            disabled={hookBusy}
+            className="w-full min-h-[48px] rounded-xl border border-border font-semibold text-sm disabled:opacity-50"
+          >
+            {hookState?.configured
+              ? "Rotate the key · Đổi khoá (old one stops working)"
+              : "Generate the key · Tạo khoá"}
           </button>
         </div>
 

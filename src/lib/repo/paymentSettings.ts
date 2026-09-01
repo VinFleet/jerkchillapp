@@ -1,4 +1,4 @@
-import { readValue, writeValue } from "@/lib/storage";
+import { readList, writeList, readValue } from "@/lib/storage";
 
 /**
  * The account a VietQR code pays into.
@@ -17,6 +17,8 @@ import { readValue, writeValue } from "@/lib/storage";
 const KEY = "payment_settings";
 
 export type PaymentSettings = {
+  /** Singleton record id, for the sync engine. */
+  id: "settings";
   /** Napas six-digit bank identifier, e.g. 970436 for Vietcombank. */
   bankBin: string;
   accountNumber: string;
@@ -24,27 +26,49 @@ export type PaymentSettings = {
   accountName: string;
   /** Whether the card rail is switched on at all. */
   cardEnabled: boolean;
+  updatedAt: string;
 };
 
 const EMPTY: PaymentSettings = {
+  id: "settings",
   bankBin: "",
   accountNumber: "",
   accountName: "",
   cardEnabled: false,
+  updatedAt: new Date(0).toISOString(),
 };
 
 export function getPaymentSettings(): PaymentSettings {
-  return readValue<PaymentSettings>(KEY, EMPTY);
+  const stored = readList<PaymentSettings>(KEY);
+  // The pre-sync shape was a bare object rather than a singleton list. Adopt
+  // it once, so an account someone already typed survives the upgrade —
+  // resetting a bank account silently is how money goes to the wrong place.
+  if (!Array.isArray(stored)) {
+    const legacy = readValue<Omit<PaymentSettings, "id" | "updatedAt">>(KEY, EMPTY);
+    const adopted: PaymentSettings = {
+      ...EMPTY,
+      ...legacy,
+      id: "settings",
+      updatedAt: new Date().toISOString(),
+    };
+    writeList(KEY, [adopted]);
+    return adopted;
+  }
+  return { ...EMPTY, ...stored.find((r) => r.id === "settings") };
 }
 
-export function savePaymentSettings(next: PaymentSettings): void {
-  writeValue(KEY, {
-    ...next,
-    bankBin: next.bankBin.trim(),
-    // Vietnamese account numbers are digits; people paste them with spaces.
-    accountNumber: next.accountNumber.replace(/\s+/g, ""),
-    accountName: next.accountName.trim().toUpperCase(),
-  });
+export function savePaymentSettings(next: Omit<PaymentSettings, "id" | "updatedAt">): void {
+  writeList(KEY, [
+    {
+      ...next,
+      id: "settings" as const,
+      bankBin: next.bankBin.trim(),
+      // Vietnamese account numbers are digits; people paste them with spaces.
+      accountNumber: next.accountNumber.replace(/\s+/g, ""),
+      accountName: next.accountName.trim().toUpperCase(),
+      updatedAt: new Date().toISOString(),
+    },
+  ]);
 }
 
 /**

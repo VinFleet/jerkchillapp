@@ -69,6 +69,7 @@ import { changeDueVnd, cashSuggestionsVnd, orderCode, clampPartialPayment } from
 import { uploadCardSlip, cardSlipUrl } from "@/lib/payments/slips";
 import { printKitchenTicket, printReceipt } from "@/lib/print/jobs";
 import { getPrinterSettings } from "@/lib/repo/printerSettings";
+import { getActiveTenant } from "@/lib/storage";
 import type { Order, MenuItem, Payment, PaymentMethod, Promotion } from "@/lib/types";
 
 /**
@@ -149,7 +150,7 @@ function ReviewContent() {
     const check = async () => {
       for (const reference of refs) {
         try {
-          const res = await fetch(`/api/payments/status?reference=${encodeURIComponent(reference)}`);
+          const res = await fetch(`/api/payments/status?reference=${encodeURIComponent(reference)}&branch=${encodeURIComponent(getActiveTenant())}`);
           if (!res.ok) continue;
           const body = (await res.json()) as { status?: string; providerRef?: string; provider?: string };
           if (body.status === "paid" && body.providerRef) {

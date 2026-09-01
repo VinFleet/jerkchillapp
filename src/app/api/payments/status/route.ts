@@ -16,14 +16,15 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-// Deliberately still one branch: the webhook secret and the bank account are
-// this restaurant's. Multi-tenant payments means per-branch bank config and
-// per-branch webhook credentials — its own piece of work, tracked, not
-// something to half-do by guessing a tenant from an unauthenticated callback.
-const TENANT_ID = "jerk-and-chill-thao-dien";
+const LEGACY_TENANT = "jerk-and-chill-thao-dien";
 
 export async function GET(request: Request) {
-  const reference = new URL(request.url).searchParams.get("reference");
+  const requestUrl = new URL(request.url);
+  const reference = requestUrl.searchParams.get("reference");
+  // Scoped per branch: references are six characters plus a sequence, which
+  // is unguessable enough for one restaurant and collision-prone across a
+  // whole platform of them.
+  const tenantId = requestUrl.searchParams.get("branch") ?? LEGACY_TENANT;
 
   // Shaped like ours or not at all — this refuses to be a general query
   // interface over the payments table.
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
   const { data, error } = await client
     .from("payment_webhook_events")
     .select("provider, provider_ref, amount_vnd, received_at")
-    .eq("tenant_id", TENANT_ID)
+    .eq("tenant_id", tenantId)
     .eq("reference", reference)
     .order("received_at", { ascending: false })
     .limit(1)

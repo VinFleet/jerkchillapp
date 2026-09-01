@@ -21,11 +21,12 @@ import { verifyWebhook } from "@/lib/payments/webhookAuth";
 
 export const runtime = "nodejs";
 
-// Deliberately still one branch: the webhook secret and the bank account are
-// this restaurant's. Multi-tenant payments means per-branch bank config and
-// per-branch webhook credentials — its own piece of work, tracked, not
-// something to half-do by guessing a tenant from an unauthenticated callback.
-const TENANT_ID = "jerk-and-chill-thao-dien";
+// Which branch this callback is for comes from the URL the provider was
+// given — each branch pastes its own webhook URL, and the secret that URL is
+// verified against lives in branch_secrets for that tenant. The original
+// restaurant predates all of this, so a call with no branch parameter falls
+// back to it and to the env secret it has always used.
+const LEGACY_TENANT = "jerk-and-chill-thao-dien";
 
 function db() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -61,8 +62,27 @@ export async function POST(request: Request) {
   // whitespace, and the signature would never match again.
   const raw = await request.text();
 
+  const tenantId = new URL(request.url).searchParams.get("branch") ?? LEGACY_TENANT;
+
+  // The branch's own secret, or the env secret for the legacy tenant. Looked
+  // up BEFORE verification so a wrong branch id fails exactly like a wrong
+  // signature — uniformly, telling a prober nothing.
+  let secret = tenantId === LEGACY_TENANT ? process.env.PAYMENT_WEBHOOK_SECRET : undefined;
+  {
+    const lookup = db();
+    if (lookup) {
+      const { data } = await lookup
+        .from("branch_secrets")
+        .select("webhook_secret")
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      const stored = (data as { webhook_secret?: string } | null)?.webhook_secret;
+      if (stored) secret = stored;
+    }
+  }
+
   const verdict = verifyWebhook(
-    process.env.PAYMENT_WEBHOOK_SECRET,
+    secret,
     raw,
     request.headers.get("x-signature") ??
       request.headers.get("x-sepay-signature") ??
@@ -101,7 +121,7 @@ export async function POST(request: Request) {
   }
 
   const { error } = await client.from("payment_webhook_events").insert({
-    tenant_id: TENANT_ID,
+    tenant_id: tenantId,
     provider,
     provider_ref: providerRef,
     reference,
