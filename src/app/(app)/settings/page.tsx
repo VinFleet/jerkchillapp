@@ -88,6 +88,18 @@ function SettingsContent() {
           <ChevronRight size={18} className="text-muted shrink-0" />
         </Link>
         <Link
+          href="/settings/printing"
+          className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light mb-3"
+        >
+          <span>
+            <span className="block font-semibold text-sm">Printing</span>
+            <span className="block text-xs text-muted">
+              In ấn — printers, test prints, auto-print
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-muted shrink-0" />
+        </Link>
+        <Link
           href="/settings/receipt"
           className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light mb-3"
         >

@@ -123,3 +123,54 @@ export async function printReceipt(order: Order): Promise<boolean> {
     footer: `${receipt.footer.en} - ${receipt.footer.vi}`,
   });
 }
+
+/** A labelled test ticket, so "did that work" never needs a real order. */
+export async function printTest(printer: "kitchen" | "receipt"): Promise<boolean> {
+  const now = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  if (printer === "kitchen") {
+    return enqueue("kitchen", {
+      table: "TEST",
+      code: "APP",
+      time: now,
+      placedBy: "Test from Settings",
+      notes: ["IF YOU CAN READ THIS, PRINTING WORKS"],
+      lines: [{ qty: 1, name: "Test ticket - Phieu thu" }],
+    });
+  }
+  const receipt = getReceiptSettings();
+  return enqueue("receipt", {
+    headerName: receipt.headerName,
+    addressLine: receipt.addressLine,
+    table: "TEST",
+    time: now,
+    lines: [{ qty: 1, name: "Test receipt - Hoa don thu", totalVnd: 0 }],
+    totalVnd: 0,
+    outstandingVnd: 0,
+    footer: "If you can read this, printing works",
+  });
+}
+
+export type PrintJobRow = {
+  id: string;
+  printer: string;
+  status: string;
+  error: string | null;
+  created_at: string;
+};
+
+/**
+ * The queue's recent tail — how the app knows whether a bridge is alive.
+ *
+ * There is no heartbeat on purpose: jobs sitting "queued" for more than half
+ * a minute IS the bridge being down, told from data that cannot disagree
+ * with reality.
+ */
+export async function recentPrintJobs(limit = 8): Promise<PrintJobRow[]> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("print_jobs")
+    .select("id, printer, status, error, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data as PrintJobRow[] | null) ?? [];
+}

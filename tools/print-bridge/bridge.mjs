@@ -11,7 +11,10 @@
  *   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
  *   node tools/print-bridge/bridge.mjs
  *
- * Printers are configured in printers.json next to this file:
+ * Printers are configured IN THE APP (Settings -> Printing) and read from
+ * the shared store, so changing an IP never means touching this machine.
+ * printers.json next to this file is the fallback for a store that has no
+ * saved settings yet:
  *   { "kitchen": { "host": "192.168.1.50", "width": 42 },
  *     "receipt": { "host": "192.168.1.51", "width": 42 } }
  *
@@ -32,14 +35,48 @@ if (!URL_ || !KEY) {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-let printers;
+let fallbackPrinters = {};
 try {
-  printers = JSON.parse(readFileSync(join(here, "printers.json"), "utf8"));
+  fallbackPrinters = JSON.parse(readFileSync(join(here, "printers.json"), "utf8"));
 } catch {
-  console.error(`No printers.json next to bridge.mjs. Create it like:
-  { "kitchen": { "host": "192.168.1.50", "width": 42 },
-    "receipt": { "host": "192.168.1.51", "width": 42 } }`);
-  process.exit(1);
+  // Fine — the app's own settings are the real source.
+}
+
+let printers = fallbackPrinters;
+let lastConfigFetch = 0;
+const CONFIG_REFRESH_MS = 15000;
+
+/**
+ * The app's printer settings, from the shared store.
+ *
+ * Cached and refreshed on a slow cycle, and a fetch failure keeps the last
+ * good copy — a Supabase blip must not turn into "the bridge forgot where
+ * the printers are" mid-service.
+ */
+async function refreshPrinters() {
+  if (Date.now() - lastConfigFetch < CONFIG_REFRESH_MS) return;
+  lastConfigFetch = Date.now();
+  try {
+    const rows = await rest(
+      "GET",
+      `synced_records?collection=eq.printer_settings&record_id=eq.printers&select=data&limit=1`
+    );
+    const saved = rows?.[0]?.data;
+    if (saved?.printers?.length) {
+      const next = {};
+      for (const p of saved.printers) {
+        if (p.enabled !== false && p.host) next[p.key] = { host: p.host, width: p.width ?? 42 };
+      }
+      if (Object.keys(next).length) {
+        const summary = Object.entries(next).map(([k, v]) => `${k}=${v.host}`).join(", ");
+        const before = Object.entries(printers).map(([k, v]) => `${k}=${v.host}`).join(", ");
+        if (summary !== before) console.log(`printer config from app: ${summary}`);
+        printers = next;
+      }
+    }
+  } catch (err) {
+    console.error(`could not refresh printer config, keeping last known: ${err?.message ?? err}`);
+  }
 }
 
 const POLL_MS = 3000;
@@ -102,6 +139,7 @@ async function finish(id, ok, error) {
 }
 
 async function tick() {
+  await refreshPrinters();
   const job = await claimNext();
   if (!job) return;
 

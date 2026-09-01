@@ -242,6 +242,18 @@ export async function POST(
       return NextResponse.json({ error: "not_saved" }, { status: 503 });
     }
 
+    // Whether the till wants kitchen tickets on paper at all.
+    const { data: printerPrefs } = await client
+      .from("synced_records")
+      .select("data")
+      .eq("tenant_id", TENANT_ID)
+      .eq("collection", "printer_settings")
+      .eq("record_id", "printers")
+      .maybeSingle();
+    const autoPrintKitchen =
+      (printerPrefs as { data?: { autoPrintKitchen?: boolean } } | null)?.data
+        ?.autoPrintKitchen !== false;
+
     // The kitchen ticket, straight to the printer. Same fire-and-forget rule
     // as the push alert: the order is already saved, and a print failure must
     // not become an error the guest sees — the ticket also reaches the pass
@@ -255,6 +267,7 @@ export async function POST(
       .eq("id", tableId)
       .maybeSingle();
 
+    if (autoPrintKitchen)
     void client
       .from("print_jobs")
       .insert({

@@ -42,6 +42,7 @@ export type SyncedCollection =
   | "menu_items"
   | "table_tokens"
   | "receipt_settings"
+  | "printer_settings"
   // food safety — append-only
   | "fs_temp_readings"
   | "fs_cook_logs"
@@ -251,6 +252,14 @@ export const SYNCED_COLLECTIONS: Record<SyncedCollection, CollectionConfig> = {
   // must print identically from the tablet.
   receipt_settings: {
     storageKey: "receipt_settings",
+    idOf: idField,
+    updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
+    mutable: true,
+  },
+  // Printer IPs and auto-print behaviour — same reasoning as receipt_settings:
+  // edited at the till, read by the print bridge from the shared store.
+  printer_settings: {
+    storageKey: "printer_settings",
     idOf: idField,
     updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
     mutable: true,

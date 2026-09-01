@@ -259,15 +259,15 @@ marketing · shopping · deliveryPerformance · usageVariance.
 needs the pad. The real boundary is money: `canTakePayment` is what keeps the
 kitchen tablet away from closing a bill.
 
-**60 local collections** across `src/lib/repo/`, namespaced
+**61 local collections** across `src/lib/repo/`, namespaced
 `jc:{tenant}:{key}`. That count excludes ten `isSeeded()` migration guards
 and four device-local meta keys, which are storage but not collections.
 
-**19 sync**, in the two families:
+**20 sync**, in the two families:
 
 - *Last-write-wins:* `checklist_items`, `checklist_ticks`, `notices`,
   `notice_acks`, `stock_entries`, `orders`, `order_payments`, `menu_items`,
-  `table_tokens`, `receipt_settings`
+  `table_tokens`, `receipt_settings`, `printer_settings`
 - *Append-only:* `fs_temp_readings`, `fs_cook_logs`, `fs_delivery_logs`,
   `fs_cleaning_signoffs`, `fs_inspections`, `fs_samples`,
   `fs_sample_destruction_checks`, `fs_pest`, `fs_complaints`
@@ -339,7 +339,10 @@ Tests: `npm run test:all` runs all nine suites; individually
 
 The app never talks to a printer. A browser cannot: there are no raw sockets,
 Chrome blacklists port 9100 outright, and an HTTPS page may not call
-`http://192.168.x.x`. Instead devices (and the guest API, service-role side)
+`http://192.168.x.x`. Printers are configured
+in-app (Settings → Printing, the synced `printer_settings` record); the bridge
+re-reads them every ~15s, with `printers.json` only as a fallback. Devices
+(and the guest API, service-role side)
 insert rows into `print_jobs` in Postgres, and `tools/print-bridge/bridge.mjs`
 — a dependency-free Node process on any always-on machine inside the
 restaurant — claims jobs by compare-and-swap and speaks ESC/POS to the LAN

@@ -68,6 +68,7 @@ import { VietQrCode } from "@/components/VietQrCode";
 import { changeDueVnd, cashSuggestionsVnd, orderCode, clampPartialPayment } from "@/lib/repo/orderRules";
 import { uploadCardSlip, cardSlipUrl } from "@/lib/payments/slips";
 import { printKitchenTicket, printReceipt } from "@/lib/print/jobs";
+import { getPrinterSettings } from "@/lib/repo/printerSettings";
 import type { Order, MenuItem, Payment, PaymentMethod, Promotion } from "@/lib/types";
 
 /**
@@ -199,7 +200,7 @@ function ReviewContent() {
     const roundIds = unsentLines(order).map((l) => l.id);
     const count = sendToKitchen(order.id);
     load();
-    if (count > 0 && roundIds.length > 0) {
+    if (count > 0 && roundIds.length > 0 && getPrinterSettings().autoPrintKitchen) {
       const fresh = getOrder(order.id);
       if (fresh)
         void printKitchenTicket(fresh, roundIds).then((queued) => {
@@ -221,7 +222,7 @@ function ReviewContent() {
     if (unsentIds.length > 0) {
       sendToKitchen(order.id);
       const fresh = getOrder(order.id);
-      if (fresh) void printKitchenTicket(fresh, unsentIds);
+      if (fresh && getPrinterSettings().autoPrintKitchen) void printKitchenTicket(fresh, unsentIds);
     }
 
     // Half the table pays cash, the rest goes on a QR: each payment takes
@@ -258,6 +259,9 @@ function ReviewContent() {
   const finish = () => {
     const verdict = closeOrder(order.id);
     if (verdict.ok) {
+      // The receipt goes to paper as the table closes — the guest is standing
+      // up. Enqueued before navigating so the payload still has the order.
+      if (getPrinterSettings().autoPrintReceiptOnClose) void printReceipt(order);
       router.push("/service");
       return;
     }

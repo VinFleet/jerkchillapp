@@ -976,6 +976,36 @@ export type ReceiptSettings = {
   updatedAt: string;
 };
 
+// ---------- Printing ----------
+
+/** One physical printer, by the job it does. */
+export type PrinterConfig = {
+  /** Matches the print_jobs check constraint — the two jobs a restaurant has. */
+  key: "kitchen" | "receipt";
+  host: string;
+  /** Characters per line: 42 or 48 for 80mm paper, 32 for 58mm. */
+  width: number;
+  enabled: boolean;
+};
+
+/**
+ * Printing, decided in the app rather than in a file on the bridge machine.
+ *
+ * Synced for the same reason the receipt letterhead is: the person changing a
+ * printer's IP is standing at the till, not at the machine the bridge runs
+ * on. The bridge reads this from the shared store and falls back to its local
+ * printers.json only when nothing has ever been saved here.
+ */
+export type PrinterSettings = {
+  id: "printers";
+  printers: PrinterConfig[];
+  /** Print the kitchen ticket the moment a round is sent. */
+  autoPrintKitchen: boolean;
+  /** Print the receipt when a table is closed. */
+  autoPrintReceiptOnClose: boolean;
+  updatedAt: string;
+};
+
 // ---------- Payments ----------
 
 /**
