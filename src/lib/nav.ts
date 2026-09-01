@@ -20,6 +20,7 @@ import {
   Receipt,
   ChefHat,
 } from "lucide-react";
+import { History, ShieldCheck as ShieldCheck2 } from "lucide-react";
 import type { ModuleId } from "@/lib/auth/permissions";
 import type { Bi } from "@/lib/types";
 
@@ -84,4 +85,83 @@ export function mobilePrimaryModules(station: "kitchen" | "foh" | "manager"): Mo
 /** Where the orders module lands for this station — the pad or the pass. */
 export function ordersHref(station: "kitchen" | "foh" | "manager"): string {
   return station === "kitchen" ? "/kitchen" : "/service";
+}
+
+// ---------- The launcher ----------
+
+/**
+ * The tiles a person sees after signing in, grouped by the job they came to
+ * do rather than by module name. "Why am I here" has about four answers in a
+ * restaurant — serving, cooking, checking, and paperwork — and the launcher
+ * is organised around exactly those, in the order that station cares.
+ */
+export type LaunchGroup = {
+  id: "service" | "kitchen" | "checks" | "team" | "office";
+  title: Bi;
+  items: NavItem[];
+};
+
+export const LAUNCH_GROUPS: LaunchGroup[] = [
+  {
+    id: "service",
+    title: { en: "Service", vi: "Phục vụ" },
+    items: [
+      { href: "/service", label: { en: "Till · Tables", vi: "Máy tính tiền" }, icon: Receipt, module: "orders" },
+      { href: "/bookings", label: { en: "Bookings", vi: "Đặt bàn" }, icon: CalendarDays, module: "bookings" },
+      { href: "/service/history", label: { en: "Closed orders", vi: "Đơn đã đóng" }, icon: History, module: "orders" },
+    ],
+  },
+  {
+    id: "kitchen",
+    title: { en: "Kitchen", vi: "Bếp" },
+    items: [
+      { href: "/kitchen", label: { en: "Kitchen pass", vi: "Màn hình bếp" }, icon: ChefHat, module: "orders" },
+      { href: "/recipes", label: { en: "Recipes", vi: "Công thức" }, icon: BookOpen, module: "recipes" },
+      { href: "/planner", label: { en: "Prep planner", vi: "Kế hoạch" }, icon: CalendarClock, module: "planner" },
+    ],
+  },
+  {
+    id: "checks",
+    title: { en: "Checks", vi: "Kiểm tra" },
+    items: [
+      { href: "/checklists", label: { en: "Open / close", vi: "Mở / đóng ca" }, icon: CheckSquare, module: "checklists" },
+      { href: "/food-safety", label: { en: "Food safety", vi: "An toàn TP" }, icon: ShieldCheck2, module: "foodSafety" },
+      { href: "/stock", label: { en: "Stock count", vi: "Tồn kho" }, icon: ClipboardList, module: "stock" },
+    ],
+  },
+  {
+    id: "team",
+    title: { en: "Team", vi: "Đội ngũ" },
+    items: [
+      { href: "/notices", label: { en: "Notices", vi: "Thông báo" }, icon: Megaphone, module: "notices" },
+      { href: "/contacts", label: { en: "Contacts", vi: "Danh bạ" }, icon: Contact, module: "contacts" },
+    ],
+  },
+  {
+    id: "office",
+    title: { en: "Office", vi: "Văn phòng" },
+    items: [
+      { href: "/sales", label: { en: "Sales & cash-up", vi: "Doanh thu" }, icon: Wallet, module: "sales" },
+      { href: "/menu", label: { en: "Menu & pricing", vi: "Thực đơn & giá" }, icon: UtensilsCrossed, module: "menu" },
+      { href: "/staff", label: { en: "Staff", vi: "Nhân viên" }, icon: Users, module: "staff" },
+      { href: "/suppliers", label: { en: "Suppliers", vi: "Nhà cung cấp" }, icon: Truck, module: "suppliers" },
+      { href: "/shopping", label: { en: "Shopping list", vi: "Đặt hàng" }, icon: ShoppingCart, module: "shopping" },
+      { href: "/marketing", label: { en: "Marketing", vi: "Marketing" }, icon: Sparkle, module: "marketing" },
+      { href: "/licensing", label: { en: "Licensing", vi: "Giấy phép" }, icon: BadgeCheck, module: "licensing" },
+      { href: "/delivery-performance", label: { en: "Delivery platforms", vi: "Nền tảng giao" }, icon: Bike, module: "deliveryPerformance" },
+      { href: "/usage-variance", label: { en: "Usage variance", vi: "Chênh lệch" }, icon: Scale, module: "usageVariance" },
+    ],
+  },
+];
+
+/** Which job comes first depends on where you stand. */
+export function launchOrder(station: "kitchen" | "foh" | "manager"): LaunchGroup["id"][] {
+  switch (station) {
+    case "kitchen":
+      return ["kitchen", "checks", "service", "team", "office"];
+    case "foh":
+      return ["service", "checks", "kitchen", "team", "office"];
+    case "manager":
+      return ["service", "office", "kitchen", "checks", "team"];
+  }
 }

@@ -10,6 +10,8 @@ import { canAccessModule } from "@/lib/auth/permissions";
 import { NAV_ITEMS } from "@/lib/nav";
 import { STATION_LABEL } from "@/lib/auth/RoleContext";
 import { getDueToday, type DueTask } from "@/lib/repo/dueToday";
+import { LAUNCH_GROUPS, launchOrder } from "@/lib/nav";
+import { cashUpForDate } from "@/lib/repo/orders";
 import { PortionTracker } from "@/components/PortionTracker";
 import { getCompletion } from "@/lib/repo/checklists";
 import { getNotices, isAckedBy } from "@/lib/repo/notices";
@@ -51,6 +53,7 @@ export default function HomePage() {
   const [bookingsToday, setBookingsToday] = useState(0);
   const [salesMissing, setSalesMissing] = useState(false);
   const [due, setDue] = useState<DueTask[]>([]);
+  const [till, setTill] = useState<ReturnType<typeof cashUpForDate> | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -72,6 +75,7 @@ export default function HomePage() {
         .catch(() => setBookingsToday(0));
     }
     if (session.role === "owner" || session.role === "manager") {
+      setTill(cashUpForDate(todayIso()));
       setLicensesNeeding(getLicensesNeedingAttention().length);
       setReprintNeeded(getReprintFlag());
       setHealthCertsExpiring(getExpiringHealthCerts().length);
@@ -154,6 +158,83 @@ export default function HomePage() {
             </div>
           </div>
         )}
+
+        {/* Sapo's own overview opens with today's money, and the habit is
+            right: an owner glancing at their phone wants the number before
+            the navigation. Live from the till, tap through for the detail. */}
+        {till && (till.totalVnd > 0 || till.stillOpenCount > 0) && (
+          <Link href="/sales">
+            <Card className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted">Today from the till · Hôm nay</p>
+                <p className="text-xl font-black tabular-nums">
+                  {till.totalVnd.toLocaleString("vi-VN")}₫
+                </p>
+                <p className="text-xs text-muted">
+                  {till.orderCount} closed · đơn
+                  {till.stillOpenCount > 0 && (
+                    <span className="text-warning font-semibold">
+                      {" "}· {till.stillOpenCount} open · đang mở
+                    </span>
+                  )}
+                  {till.discountVnd > 0 && ` · −${till.discountVnd.toLocaleString("vi-VN")}₫ giảm`}
+                </p>
+              </div>
+              <ChevronRight size={18} className="text-muted shrink-0" />
+            </Card>
+          </Link>
+        )}
+
+        {/* The launcher. Four or five answers to "why am I here", as tiles a
+            new hire can read on day one — grouped by the job, ordered by the
+            station, and showing only what this role can open. */}
+        {launchOrder(session.station).map((groupId) => {
+          const group = LAUNCH_GROUPS.find((g) => g.id === groupId)!;
+          const visible = group.items.filter((item) =>
+            canAccessModule(session.role, item.module as Exclude<typeof item.module, "home">)
+          );
+          if (visible.length === 0) return null;
+          return (
+            <div key={group.id}>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted mb-2 mt-1">
+                {group.title.en} · {group.title.vi}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {visible.map((item) => {
+                  const Icon = item.icon;
+                  const badge =
+                    item.href === "/notices" && unread.length > 0
+                      ? unread.length
+                      : item.href === "/bookings" && bookingsToday > 0
+                        ? bookingsToday
+                        : item.href === "/shopping" && shoppingListCount > 0
+                          ? shoppingListCount
+                          : null;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="relative min-h-[76px] rounded-2xl border border-border bg-surface p-3 flex flex-col justify-between active:scale-[0.98]"
+                    >
+                      <Icon size={20} className="text-brand" />
+                      <span>
+                        <span className="block text-sm font-semibold leading-tight">
+                          {item.label.en}
+                        </span>
+                        <span className="block text-xs text-muted">{item.label.vi}</span>
+                      </span>
+                      {badge !== null && (
+                        <span className="absolute top-2 right-2 min-w-[22px] h-[22px] px-1.5 rounded-full bg-danger text-white text-xs font-bold grid place-items-center">
+                          {badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
 
         {/* Counting portions at both ends is what tells a chef how many to make
             tomorrow. It sits under the compliance checks but above the status
