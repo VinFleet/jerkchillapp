@@ -281,8 +281,14 @@ of these produces a failure that is hard to trace back to its cause.*
    person is picked from a dropdown and stamped onto every record. A PIN is
    required only where the record is personally someone's.
 
-9. **No cron or background jobs.** Alerts ride on the action that produced them,
-   and the device that caused an event is excluded from its own fan-out.
+9. **No cron or background jobs**, with one deliberate exception. Alerts ride
+   on the action that produced them, and the device that caused an event is
+   excluded from its own fan-out. The exception is `/api/cron/daily` (Vercel
+   cron, 06:00 VN, `CRON_SECRET` bearer): it sweeps only the failures whose
+   defining feature is that no action ever happens — a dead print bridge
+   cannot announce itself, and a ticket that never printed has nobody left to
+   notice it. It only reads what Postgres can see; local-first compliance
+   reminders still ride on app-open.
 
 ## Layout
 
