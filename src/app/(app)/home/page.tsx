@@ -13,6 +13,7 @@ import { getDueToday, type DueTask } from "@/lib/repo/dueToday";
 import { LAUNCH_GROUPS, launchOrder } from "@/lib/nav";
 import { cashUpForDate } from "@/lib/repo/orders";
 import { PortionTracker } from "@/components/PortionTracker";
+import { GettingStarted } from "@/components/GettingStarted";
 import { getCompletion } from "@/lib/repo/checklists";
 import { getNotices, isAckedBy } from "@/lib/repo/notices";
 import { getReorderFlags } from "@/lib/repo/planner";
@@ -114,6 +115,10 @@ export default function HomePage() {
       </div>
 
       <div className="px-4 md:px-8 mt-3 space-y-3">
+        {/* A fresh branch's first hour — renders only while setup is unfinished,
+            and only for the roles that can finish it. */}
+        {(session.role === "owner" || session.role === "manager") && <GettingStarted />}
+
         {/* The checks you still owe, before anything else on the screen.
             Everything below this reports a *problem* — an out-of-range reading,
             an overdue sample. A check nobody has done yet is not a problem
