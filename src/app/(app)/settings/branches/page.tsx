@@ -12,6 +12,7 @@ import {
   createBranch,
   switchBranch,
   todaysTakingsByBranch,
+  getMyBilling,
   type Branch,
   type Organization,
 } from "@/lib/repo/branches";
@@ -35,11 +36,13 @@ function BranchesContent() {
   const [problem, setProblem] = useState<string | null>(null);
   const active = getActiveTenant();
   const [takings, setTakings] = useState<Record<string, number>>({});
+  const [billing, setBilling] = useState<{ setupPaidAt: string | null; supportUntil: string | null } | null>(null);
 
   const load = useCallback(() => {
     void getMyOrganization().then(setOrg);
     void getMyBranches().then(setBranches);
     void todaysTakingsByBranch(todayIso()).then(setTakings);
+    void getMyBilling().then(setBilling);
   }, []);
 
   useEffect(() => load(), [load]);
@@ -64,6 +67,24 @@ function BranchesContent() {
       />
 
       <div className="px-4 md:px-8 max-w-xl space-y-3">
+        {billing && (
+          <p className="text-xs rounded-xl border border-border px-4 py-2.5 flex flex-wrap gap-x-4 gap-y-1">
+            <span className={billing.setupPaidAt ? "text-success font-semibold" : "text-muted"}>
+              {billing.setupPaidAt ? "Setup complete · Đã cài đặt" : "Setup pending · Chờ cài đặt"}
+            </span>
+            <span
+              className={
+                billing.supportUntil && billing.supportUntil >= todayIso()
+                  ? "text-success font-semibold"
+                  : "text-warning font-semibold"
+              }
+            >
+              {billing.supportUntil
+                ? `VINPOS support until · Hỗ trợ đến ${billing.supportUntil}`
+                : "No support plan · Chưa có gói hỗ trợ"}
+            </span>
+          </p>
+        )}
         {branches.length === 0 && (
           <p className="text-sm text-muted rounded-xl border border-border px-4 py-3">
             No branches visible. Run supabase/saas-schema.sql once, then reload — this device&apos;s

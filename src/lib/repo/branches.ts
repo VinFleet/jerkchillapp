@@ -93,3 +93,19 @@ export async function todaysTakingsByBranch(
   }
   return totals;
 }
+
+/** The organization's standing with VINPOS — readable by its own members. */
+export async function getMyBilling(): Promise<{
+  setupPaidAt: string | null;
+  supportUntil: string | null;
+} | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from("org_billing")
+    .select("setup_paid_at, support_until")
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  const row = data as { setup_paid_at: string | null; support_until: string | null };
+  return { setupPaidAt: row.setup_paid_at, supportUntil: row.support_until };
+}

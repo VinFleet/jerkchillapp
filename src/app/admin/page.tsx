@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ShieldAlert, Building2, Plus, Loader2, MapPin, UserPlus, Ban, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { VinposWordmark } from "@/components/VinposWordmark";
+import { VietQrCode } from "@/components/VietQrCode";
+import { buildVietQrPayload } from "@/lib/payments/vietqr";
 
 /**
  * The platform console — VINPOS's side of the counter.
@@ -18,6 +20,18 @@ type Overview = {
   orgs: { id: string; name: string; active: boolean }[];
   branches: { id: string; org_id: string; name: string }[];
   members: { org_id: string; user_id: string; role: string }[];
+  billing: { org_id: string; setup_paid_at: string | null; support_until: string | null }[];
+};
+
+/**
+ * VINPOS's own bank account, for the charge QR a customer scans. Public env
+ * on purpose — an account number is what goes on an invoice, not a secret.
+ * Unset means the QR button simply does not appear.
+ */
+const PLATFORM_BANK = {
+  bin: process.env.NEXT_PUBLIC_VINPOS_BANK_BIN ?? "",
+  account: process.env.NEXT_PUBLIC_VINPOS_BANK_ACCOUNT ?? "",
+  name: process.env.NEXT_PUBLIC_VINPOS_BANK_NAME ?? "",
 };
 
 async function adminFetch(path: string, init?: RequestInit) {
@@ -42,6 +56,8 @@ export default function AdminPage() {
   const [form, setForm] = useState({ name: "", branchName: "", ownerEmail: "", ownerPassword: "" });
   const [userForm, setUserForm] = useState({ orgId: "", email: "", password: "", role: "manager" });
   const [branchForm, setBranchForm] = useState({ orgId: "", name: "" });
+  const [billingForm, setBillingForm] = useState({ orgId: "", kind: "support", amountVnd: "", months: "1", reference: "" });
+  const [chargeQr, setChargeQr] = useState<{ orgId: string; payload: string; amount: number } | null>(null);
 
   const load = useCallback(async () => {
     const res = await adminFetch("/api/admin/orgs");
@@ -206,7 +222,125 @@ export default function AdminPage() {
                 ))}
               </div>
 
+              {(() => {
+                const bill = overview.billing.find((b) => b.org_id === org.id);
+                const today = new Date().toISOString().slice(0, 10);
+                const supported = Boolean(bill?.support_until && bill.support_until >= today);
+                return (
+                  <p className="text-xs flex flex-wrap gap-x-3 gap-y-1">
+                    <span className={bill?.setup_paid_at ? "text-success font-semibold" : "text-muted"}>
+                      {bill?.setup_paid_at ? "Setup paid" : "Setup unpaid"}
+                    </span>
+                    <span className={supported ? "text-success font-semibold" : "text-danger font-semibold"}>
+                      {bill?.support_until
+                        ? `Support until ${bill.support_until}${supported ? "" : " — LAPSED"}`
+                        : "No support plan"}
+                    </span>
+                  </p>
+                );
+              })()}
+
+              {chargeQr?.orgId === org.id && (
+                <div className="rounded-xl border-2 border-brand p-3 text-center space-y-2">
+                  <p className="text-sm font-semibold">
+                    Customer scans this — {chargeQr.amount.toLocaleString("vi-VN")}₫
+                  </p>
+                  <VietQrCode payload={chargeQr.payload} size={200} />
+                  <p className="text-xs text-muted font-mono">memo: VINPOS {org.id}</p>
+                  <button onClick={() => setChargeQr(null)} className="text-xs text-muted">
+                    close
+                  </button>
+                </div>
+              )}
+
+              {billingForm.orgId === org.id && (
+                <div className="flex flex-wrap gap-2 items-center rounded-xl border border-border p-2">
+                  <select
+                    value={billingForm.kind}
+                    onChange={(e) => setBillingForm({ ...billingForm, kind: e.target.value })}
+                    className="min-h-[40px] rounded-lg border border-border px-2 text-sm"
+                  >
+                    <option value="support">support</option>
+                    <option value="setup">setup</option>
+                  </select>
+                  <input
+                    value={billingForm.amountVnd}
+                    onChange={(e) => setBillingForm({ ...billingForm, amountVnd: e.target.value.replace(/[^\d]/g, "") })}
+                    placeholder="Amount ₫"
+                    inputMode="numeric"
+                    className="min-h-[40px] w-32 rounded-lg border border-border px-3 text-sm tabular-nums"
+                  />
+                  {billingForm.kind === "support" && (
+                    <input
+                      value={billingForm.months}
+                      onChange={(e) => setBillingForm({ ...billingForm, months: e.target.value.replace(/[^\d]/g, "") })}
+                      placeholder="Months"
+                      inputMode="numeric"
+                      className="min-h-[40px] w-20 rounded-lg border border-border px-3 text-sm tabular-nums"
+                    />
+                  )}
+                  {PLATFORM_BANK.bin && PLATFORM_BANK.account && (
+                    <button
+                      onClick={() => {
+                        const amount = Number(billingForm.amountVnd || 0);
+                        if (!amount) return;
+                        try {
+                          setChargeQr({
+                            orgId: org.id,
+                            amount,
+                            payload: buildVietQrPayload({
+                              bankBin: PLATFORM_BANK.bin,
+                              accountNumber: PLATFORM_BANK.account,
+                              amountVnd: amount,
+                              reference: `VINPOS ${org.id}`.slice(0, 25),
+                            }),
+                          });
+                        } catch {
+                          flash("Check NEXT_PUBLIC_VINPOS_BANK_* values");
+                        }
+                      }}
+                      className="min-h-[40px] px-3 rounded-lg border border-brand text-brand text-sm font-semibold"
+                    >
+                      Show QR
+                    </button>
+                  )}
+                  <button
+                    onClick={async () => {
+                      const res = await adminFetch("/api/admin/billing", {
+                        method: "POST",
+                        body: JSON.stringify({
+                          orgId: org.id,
+                          kind: billingForm.kind,
+                          amountVnd: Number(billingForm.amountVnd || 0),
+                          months: Number(billingForm.months || 0),
+                          reference: billingForm.reference || `VINPOS ${org.id}`,
+                        }),
+                      });
+                      const body = await res.json();
+                      flash(res.ok ? "Payment recorded" : `Failed: ${body.error}`);
+                      setBillingForm({ orgId: "", kind: "support", amountVnd: "", months: "1", reference: "" });
+                      setChargeQr(null);
+                      void load();
+                    }}
+                    className="min-h-[40px] px-3 rounded-lg bg-success text-white text-sm font-semibold"
+                  >
+                    Money arrived
+                  </button>
+                  <button onClick={() => setBillingForm({ ...billingForm, orgId: "" })} className="min-h-[40px] px-2 text-muted">
+                    ✕
+                  </button>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2 pt-1">
+                {billingForm.orgId !== org.id && (
+                  <button
+                    onClick={() => setBillingForm({ ...billingForm, orgId: org.id })}
+                    className="min-h-[40px] px-3 rounded-lg border border-border text-xs font-semibold"
+                  >
+                    ₫ Billing
+                  </button>
+                )}
                 {branchForm.orgId === org.id ? (
                   <>
                     <input

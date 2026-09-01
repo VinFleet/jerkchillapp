@@ -19,8 +19,16 @@ export async function GET(request: Request) {
   const { data: members } = await gate.client
     .from("org_members")
     .select("org_id, user_id, role");
+  const { data: billing } = await gate.client
+    .from("org_billing")
+    .select("org_id, setup_paid_at, support_until");
 
-  return NextResponse.json({ orgs: orgs ?? [], branches: branches ?? [], members: members ?? [] });
+  return NextResponse.json({
+    orgs: orgs ?? [],
+    branches: branches ?? [],
+    members: members ?? [],
+    billing: billing ?? [],
+  });
 }
 
 type CreateBody = {
