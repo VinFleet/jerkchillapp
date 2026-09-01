@@ -1,4 +1,11 @@
 {
-  "kitchen": { "host": "192.168.1.199", "width": 42 },
-  "receipt": { "host": "192.168.1.198", "width": 42 }
+  "tenant": "jerk-and-chill-thao-dien",
+  "kitchen": {
+    "host": "192.168.1.199",
+    "width": 42
+  },
+  "receipt": {
+    "host": "192.168.1.198",
+    "width": 42
+  }
 }

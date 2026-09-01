@@ -42,6 +42,21 @@ try {
   // Fine — the app's own settings are the real source.
 }
 
+/**
+ * Which branch this bridge serves. A bridge is a physical box in ONE
+ * restaurant, and it must claim only that restaurant's jobs — the service
+ * role can see every tenant's queue, so the scoping has to happen here.
+ * Without it, the first ticket another restaurant enqueues prints in this
+ * kitchen.
+ */
+const TENANT =
+  process.env.BRIDGE_TENANT ??
+  fallbackPrinters.tenant ??
+  "jerk-and-chill-thao-dien";
+
+// The tenant key is bridge identity, not a printer.
+delete fallbackPrinters.tenant;
+
 let printers = fallbackPrinters;
 let lastConfigFetch = 0;
 const CONFIG_REFRESH_MS = 15000;
@@ -59,7 +74,7 @@ async function refreshPrinters() {
   try {
     const rows = await rest(
       "GET",
-      `synced_records?collection=eq.printer_settings&record_id=eq.printers&select=data&limit=1`
+      `synced_records?tenant_id=eq.${encodeURIComponent(TENANT)}&collection=eq.printer_settings&record_id=eq.printers&select=data&limit=1`
     );
     const saved = rows?.[0]?.data;
     if (saved?.printers?.length) {
@@ -118,13 +133,13 @@ async function claimNext() {
   // do not both print the same ticket.
   const rows = await rest(
     "GET",
-    `print_jobs?status=eq.queued&order=created_at.asc&limit=1&select=*`
+    `print_jobs?status=eq.queued&tenant_id=eq.${encodeURIComponent(TENANT)}&order=created_at.asc&limit=1&select=*`
   );
   if (!rows?.length) return null;
   const job = rows[0];
   const claimed = await rest(
     "PATCH",
-    `print_jobs?id=eq.${job.id}&status=eq.queued`,
+    `print_jobs?id=eq.${job.id}&status=eq.queued&tenant_id=eq.${encodeURIComponent(TENANT)}`,
     { status: "printing", claimed_at: new Date().toISOString() }
   );
   return claimed?.length ? claimed[0] : null; // someone else got there first
@@ -170,7 +185,7 @@ async function tick() {
   }
 }
 
-console.log(`print bridge up — watching ${URL_} every ${POLL_MS / 1000}s`);
+console.log(`print bridge up — branch ${TENANT}, watching ${URL_} every ${POLL_MS / 1000}s`);
 console.log(`printers: ${Object.entries(printers).map(([k, v]) => `${k}=${v.host}`).join(", ")}`);
 
 // eslint-disable-next-line no-constant-condition
