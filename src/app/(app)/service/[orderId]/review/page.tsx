@@ -68,6 +68,7 @@ import { VietQrCode } from "@/components/VietQrCode";
 import { changeDueVnd, cashSuggestionsVnd, orderCode, clampPartialPayment } from "@/lib/repo/orderRules";
 import { uploadCardSlip, cardSlipUrl } from "@/lib/payments/slips";
 import { printKitchenTicket, printReceipt, printVoidTicket, bridgeSeenAt, bridgeLooksDown } from "@/lib/print/jobs";
+import { maybeQueueEInvoice } from "@/lib/einvoice/queue";
 import { getPrinterSettings } from "@/lib/repo/printerSettings";
 import { getActiveTenant } from "@/lib/storage";
 import type { Order, MenuItem, Payment, PaymentMethod, Promotion } from "@/lib/types";
@@ -278,6 +279,8 @@ function ReviewContent() {
       // The receipt goes to paper as the table closes — the guest is standing
       // up. Enqueued before navigating so the payload still has the order.
       if (getPrinterSettings().autoPrintReceiptOnClose) void printReceipt(order);
+      // E-invoice, if this branch issues them — a no-op while disabled.
+      void maybeQueueEInvoice(order);
       router.push("/service");
       return;
     }

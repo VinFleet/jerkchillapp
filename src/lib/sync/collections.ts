@@ -44,6 +44,7 @@ export type SyncedCollection =
   | "table_tokens"
   | "receipt_settings"
   | "printer_settings"
+  | "einvoice_settings"
   | "payment_settings"
   // food safety — append-only
   | "fs_temp_readings"
@@ -316,6 +317,15 @@ export const SYNCED_COLLECTIONS: Record<SyncedCollection, CollectionConfig> = {
   // edited at the till, read by the print bridge from the shared store.
   printer_settings: {
     storageKey: "printer_settings",
+    idOf: idField,
+    updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
+    mutable: true,
+  },
+  // Whether this branch issues e-invoices, through whom, at what VAT rate —
+  // per branch for the same reason as the letterhead. Credentials are NOT in
+  // here: a synced row is readable by every member.
+  einvoice_settings: {
+    storageKey: "einvoice_settings",
     idOf: idField,
     updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
     mutable: true,
