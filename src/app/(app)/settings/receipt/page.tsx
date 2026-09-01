@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ShieldAlert, Printer } from "lucide-react";
+import Image from "next/image";
+import { ShieldAlert, Printer, Camera, Loader2 } from "lucide-react";
+import { uploadBrandLogo } from "@/lib/menu/photos";
+import { getActiveTenant } from "@/lib/storage";
 import { PageHeader } from "@/components/PageHeader";
 import { BackLink } from "@/components/BackLink";
 import { useSession } from "@/lib/auth/RoleContext";
@@ -81,6 +84,9 @@ function ReceiptContent() {
   const { session } = useSession();
   const [form, setForm] = useState<ReceiptSettings | null>(null);
   const [saved, setSaved] = useState(false);
+  const logoInput = useRef<HTMLInputElement>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoProblem, setLogoProblem] = useState<string | null>(null);
 
   useEffect(() => {
     setForm(getReceiptSettings());
@@ -155,6 +161,56 @@ function ReceiptContent() {
             onChange={(v) => set({ footer: { ...form.footer, vi: v } })}
             placeholder={DEFAULT_RECEIPT.footer.vi}
           />
+        </div>
+
+        {/* The logo itself. Uploaded once, worn everywhere the name is —
+            chrome, guest page, bill. */}
+        <div className="rounded-xl border border-border bg-surface p-4 flex items-center gap-4">
+          <input
+            ref={logoInput}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setLogoBusy(true);
+              setLogoProblem(null);
+              void uploadBrandLogo(getActiveTenant(), file).then((result) => {
+                setLogoBusy(false);
+                if (result.ok) set({ logoUrl: result.url });
+                else setLogoProblem("Upload failed — check the connection · Tải lên thất bại");
+                if (logoInput.current) logoInput.current.value = "";
+              });
+            }}
+          />
+          <button
+            onClick={() => logoInput.current?.click()}
+            disabled={logoBusy}
+            className="w-20 h-20 rounded-xl border border-border bg-brand-light grid place-items-center overflow-hidden shrink-0"
+            aria-label="Upload the logo"
+          >
+            {logoBusy ? (
+              <Loader2 size={20} className="animate-spin text-muted" />
+            ) : form.logoUrl ? (
+              <Image src={form.logoUrl} alt="" width={80} height={80} unoptimized className="object-contain w-full h-full" />
+            ) : (
+              <Camera size={22} className="text-brand/60" />
+            )}
+          </button>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Logo · Logo</span>
+            <span className="block text-xs text-muted">
+              Shown in the app, on the guest menu and the bill. Tap to change.
+              · Hiện trong app, menu khách và hoá đơn.
+            </span>
+            {form.logoUrl && (
+              <button onClick={() => set({ logoUrl: undefined })} className="text-xs text-danger font-semibold mt-1">
+                Remove · Xoá
+              </button>
+            )}
+            {logoProblem && <span className="block text-xs text-warning mt-1">{logoProblem}</span>}
+          </span>
         </div>
 
         <Toggle

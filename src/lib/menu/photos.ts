@@ -63,3 +63,26 @@ export async function deleteMenuPhoto(url: string): Promise<void> {
   const path = url.slice(at + marker.length).split("?")[0];
   await supabase.storage.from(BUCKET).remove([path]);
 }
+
+/**
+ * The branch's logo — same public bucket as the dish photos, because it has
+ * the same audience: the app chrome, the guest page, the printed bill.
+ * Scoped under the tenant so two restaurants' logos can never collide.
+ */
+export async function uploadBrandLogo(
+  tenantId: string,
+  file: File
+): Promise<PhotoUploadResult> {
+  if (!supabase) return { ok: false, reason: "not_configured" };
+  if (!file.type.startsWith("image/")) return { ok: false, reason: "not_an_image" };
+  if (file.size > MAX_SOURCE_BYTES) return { ok: false, reason: "too_large" };
+
+  const body = await downscaleImage(file, 600, 0.9);
+  const path = `branding/${tenantId}/${Date.now()}.jpg`;
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, body, { contentType: "image/jpeg", upsert: false });
+  if (error) return { ok: false, reason: "failed", detail: error.message };
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  return { ok: true, url: data.publicUrl, path };
+}

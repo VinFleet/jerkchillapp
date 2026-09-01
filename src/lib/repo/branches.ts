@@ -65,3 +65,31 @@ export function switchBranch(branchId: string) {
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.href = "/home";
 }
+
+/**
+ * Today's till total per branch, straight off the shared store.
+ *
+ * The owner's RLS membership already reaches every branch of their org, so
+ * this is one query, not an API. Derived from paid payments minus refunds —
+ * the same arithmetic cash-up uses, applied across the room instead of
+ * within it.
+ */
+export async function todaysTakingsByBranch(
+  date: string
+): Promise<Record<string, number>> {
+  if (!supabase) return {};
+  const { data } = await supabase
+    .from("synced_records")
+    .select("tenant_id, data")
+    .eq("collection", "order_payments")
+    .eq("deleted", false);
+
+  const totals: Record<string, number> = {};
+  for (const row of (data ?? []) as { tenant_id: string; data: { status?: string; amountVnd?: number; createdAt?: string } }[]) {
+    const p = row.data;
+    if (!p.createdAt?.startsWith(date)) continue;
+    if (p.status === "paid") totals[row.tenant_id] = (totals[row.tenant_id] ?? 0) + (p.amountVnd ?? 0);
+    if (p.status === "refunded") totals[row.tenant_id] = (totals[row.tenant_id] ?? 0) - (p.amountVnd ?? 0);
+  }
+  return totals;
+}

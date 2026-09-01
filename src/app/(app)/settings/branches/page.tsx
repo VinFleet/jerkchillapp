@@ -11,9 +11,11 @@ import {
   getMyBranches,
   createBranch,
   switchBranch,
+  todaysTakingsByBranch,
   type Branch,
   type Organization,
 } from "@/lib/repo/branches";
+import { todayIso } from "@/lib/storage";
 
 /**
  * Where a multi-location owner stands.
@@ -32,10 +34,12 @@ function BranchesContent() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const active = getActiveTenant();
+  const [takings, setTakings] = useState<Record<string, number>>({});
 
   const load = useCallback(() => {
     void getMyOrganization().then(setOrg);
     void getMyBranches().then(setBranches);
+    void todaysTakingsByBranch(todayIso()).then(setTakings);
   }, []);
 
   useEffect(() => load(), [load]);
@@ -84,6 +88,11 @@ function BranchesContent() {
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold text-sm">{branch.name}</span>
                 <span className="block text-xs text-muted font-mono truncate">{branch.id}</span>
+                {takings[branch.id] !== undefined && (
+                  <span className="block text-xs font-bold tabular-nums mt-0.5">
+                    Today · Hôm nay: {takings[branch.id].toLocaleString("vi-VN")}₫
+                  </span>
+                )}
               </span>
               {current ? (
                 <span className="text-xs font-bold text-brand flex items-center gap-1 shrink-0">
