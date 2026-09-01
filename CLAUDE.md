@@ -384,7 +384,16 @@ The app never talks to a printer. A browser cannot: there are no raw sockets,
 Chrome blacklists port 9100 outright, and an HTTPS page may not call
 `http://192.168.x.x`. Printers are configured
 in-app (Settings → Printing, the synced `printer_settings` record); the bridge
-re-reads them every ~15s, with `printers.json` only as a fallback. Devices
+re-reads them every ~15s, with `printers.json` only as a fallback. Three
+stations: kitchen, receipt, and an optional bar printer — when the bar is
+enabled, drink categories (the same `DRINK_CATEGORIES` rule the kitchen
+board's station filter uses) route there and one send becomes two tickets.
+Cancelling a sent line prints a HUY/VOID ticket to the station that got the
+original. The bridge heartbeats `print_bridge_status` every 15s; the review
+screen checks it on open and warns BEFORE Send, and never-seen stays silent.
+Per-printer `encoding`: default ASCII transliteration, or CP1258 for real
+Vietnamese (tones as combining bytes; the ESC t page number is a setting
+because firmware vendors disagree — 94, 30, 21 are all in the wild). Devices
 (and the guest API, service-role side)
 insert rows into `print_jobs` in Postgres, and `tools/print-bridge/bridge.mjs`
 — a dependency-free Node process on any always-on machine inside the
