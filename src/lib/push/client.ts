@@ -1,4 +1,5 @@
 import { DEFAULT_PUSH_CATEGORIES, type PushCategory } from "./categories";
+import { getActiveTenant } from "@/lib/storage";
 
 /**
  * Registering this device for alerts, and remembering what its owner chose.
@@ -147,6 +148,7 @@ export async function enablePush(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        tenantId: getActiveTenant(),
         subscription: subscription.toJSON(),
         staffId: staff.id,
         staffName: staff.name,
@@ -175,6 +177,7 @@ export async function updateCategories(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        tenantId: getActiveTenant(),
         subscription: subscription.toJSON(),
         staffId: staff.id,
         staffName: staff.name,
@@ -208,7 +211,8 @@ export async function disablePush(): Promise<boolean> {
     await fetch("/api/push/subscribe", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint }),
+      body: JSON.stringify({
+        tenantId: getActiveTenant(), endpoint }),
     });
     return true;
   } catch {
@@ -224,7 +228,8 @@ export async function sendTestPush(): Promise<boolean> {
     const res = await fetch("/api/push/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: subscription.endpoint }),
+      body: JSON.stringify({
+        tenantId: getActiveTenant(), endpoint: subscription.endpoint }),
     });
     return res.ok;
   } catch {

@@ -14,7 +14,7 @@ export async function getTables(): Promise<RestaurantTable[]> {
   const { data, error } = await requireClient()
     .from("restaurant_tables")
     .select("*")
-    .eq("tenant_id", TENANT_ID)
+    .eq("tenant_id", TENANT_ID())
     .eq("active", true)
     .order("table_number");
   if (error) throw error;
@@ -24,7 +24,7 @@ export async function getTables(): Promise<RestaurantTable[]> {
 export async function addTable(tableNumber: string, seats: number, posX: number, posY: number, shape: TableShape): Promise<RestaurantTable> {
   const { data, error } = await requireClient()
     .from("restaurant_tables")
-    .insert({ tenant_id: TENANT_ID, table_number: tableNumber, seats, pos_x: posX, pos_y: posY, shape })
+    .insert({ tenant_id: TENANT_ID(), table_number: tableNumber, seats, pos_x: posX, pos_y: posY, shape })
     .select()
     .single();
   if (error) throw error;
@@ -96,7 +96,7 @@ export async function createStarterFloorPlan(): Promise<RestaurantTable[]> {
   if (existing.length > 0) return existing;
   const { data, error } = await requireClient()
     .from("restaurant_tables")
-    .insert(STARTER_FLOOR_PLAN.map((t) => ({ ...t, tenant_id: TENANT_ID })))
+    .insert(STARTER_FLOOR_PLAN.map((t) => ({ ...t, tenant_id: TENANT_ID() })))
     .select();
   if (error) throw error;
   return data as RestaurantTable[];
@@ -108,7 +108,7 @@ export async function getBookingsForDate(date: string): Promise<Booking[]> {
   const { data, error } = await requireClient()
     .from("bookings")
     .select("*")
-    .eq("tenant_id", TENANT_ID)
+    .eq("tenant_id", TENANT_ID())
     .eq("booking_date", date)
     .neq("status", "cancelled")
     .order("booking_time");
@@ -140,7 +140,7 @@ export type NewBookingInput = {
 export async function createStaffBooking(input: NewBookingInput): Promise<Booking> {
   const { data, error } = await requireClient()
     .from("bookings")
-    .insert({ ...input, tenant_id: TENANT_ID, source: "staff", duration_minutes: input.duration_minutes ?? 90 })
+    .insert({ ...input, tenant_id: TENANT_ID(), source: "staff", duration_minutes: input.duration_minutes ?? 90 })
     .select()
     .single();
   if (error) throw error;
@@ -188,7 +188,7 @@ export async function getPublicTables(): Promise<RestaurantTable[]> {
   const { data, error } = await requireClient()
     .from("restaurant_tables")
     .select("*")
-    .eq("tenant_id", TENANT_ID)
+    .eq("tenant_id", TENANT_ID())
     .eq("active", true);
   if (error) throw error;
   return data as RestaurantTable[];
@@ -208,7 +208,7 @@ export async function getPublicAvailability(date: string): Promise<AvailabilityR
   const { data, error } = await requireClient()
     .from("booking_availability")
     .select("*")
-    .eq("tenant_id", TENANT_ID)
+    .eq("tenant_id", TENANT_ID())
     .eq("booking_date", date);
   if (error) throw error;
   return data as AvailabilityRow[];
@@ -217,7 +217,7 @@ export async function getPublicAvailability(date: string): Promise<AvailabilityR
 export async function createPublicBooking(input: NewBookingInput): Promise<void> {
   const { data, error } = await requireClient()
     .from("bookings")
-    .insert({ ...input, tenant_id: TENANT_ID, source: "online", duration_minutes: input.duration_minutes ?? 90 })
+    .insert({ ...input, tenant_id: TENANT_ID(), source: "online", duration_minutes: input.duration_minutes ?? 90 })
     .select("id")
     .single();
   if (error) throw error;

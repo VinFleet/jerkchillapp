@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Jerk & Chill Ops",
-    short_name: "J&C Ops",
+    name: "VINPOS",
+    short_name: "VINPOS",
     description:
-      "Jerk & Chill restaurant operations — recipes, stock, checklists, planner and notices.",
+      "VINPOS — restaurant point of sale and operations: till, kitchen, stock, checklists, compliance.",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",

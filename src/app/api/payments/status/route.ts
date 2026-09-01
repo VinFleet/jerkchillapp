@@ -16,6 +16,10 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
+// Deliberately still one branch: the webhook secret and the bank account are
+// this restaurant's. Multi-tenant payments means per-branch bank config and
+// per-branch webhook credentials — its own piece of work, tracked, not
+// something to half-do by guessing a tenant from an unauthenticated callback.
 const TENANT_ID = "jerk-and-chill-thao-dien";
 
 export async function GET(request: Request) {

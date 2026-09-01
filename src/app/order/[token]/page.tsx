@@ -69,6 +69,7 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
   const { token } = usePromise(params);
   const [state, setState] = useState<LoadState>("loading");
   const [items, setItems] = useState<GuestMenuItem[]>([]);
+  const [restaurantName, setRestaurantName] = useState<string | null>(null);
   const [cart, setCart] = useState<CartEntry[]>([]);
   const [asking, setAsking] = useState<GuestMenuItem | null>(null);
   const [picked, setPicked] = useState<Record<string, string>>({});
@@ -90,7 +91,8 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
           setState("unavailable");
           return;
         }
-        const body = (await res.json()) as { menu?: GuestMenuItem[] };
+        const body = (await res.json()) as { menu?: GuestMenuItem[]; restaurantName?: string | null };
+        setRestaurantName(body.restaurantName ?? null);
         setItems(body.menu ?? []);
         setState("ready");
       })
@@ -195,7 +197,7 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
 
   if (state === "loading") {
     return (
-      <Shell>
+      <Shell name={restaurantName}>
         <div className="text-center py-10 text-muted">
           <p className="text-sm">Loading the menu…</p>
           <p className="text-sm">Đang tải thực đơn…</p>
@@ -206,7 +208,7 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
 
   if (state === "unavailable") {
     return (
-      <Shell>
+      <Shell name={restaurantName}>
         <div className="text-center py-10">
           <AlertTriangle size={40} className="text-warning mx-auto mb-3" />
           <p className="font-bold">We can&apos;t load the menu right now</p>
@@ -225,7 +227,7 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
   // from outside should learn nothing about which ones exist.
   if (state === "unknown_table") {
     return (
-      <Shell>
+      <Shell name={restaurantName}>
         <div className="text-center py-10">
           <AlertTriangle size={40} className="text-warning mx-auto mb-3" />
           <p className="font-bold">This code isn&apos;t active</p>
@@ -242,7 +244,7 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
 
   if (placed) {
     return (
-      <Shell>
+      <Shell name={restaurantName}>
         <div className="text-center py-10">
           <CheckCircle2 size={44} className="text-success mx-auto mb-3" />
           <p className="font-bold text-lg">Order sent to the kitchen</p>
@@ -441,12 +443,16 @@ export default function OrderPage({ params }: { params: Promise<{ token: string 
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, name }: { children: React.ReactNode; name?: string | null }) {
   return (
     <div className="min-h-dvh bg-background safe-top">
       <div className="max-w-md mx-auto px-5 py-6">
         <div className="flex justify-center mb-4">
-          <Image src="/brand/logo-600.png" alt="Jerk & Chill" width={120} height={85} priority />
+          {/* The restaurant's name, from its own settings — this page belongs
+              to whichever branch the sticker's token resolves to. */}
+          <span className="text-2xl font-black tracking-tight text-brand text-center">
+            {name ?? "…"}
+          </span>
         </div>
         {children}
       </div>

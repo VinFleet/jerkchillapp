@@ -12,7 +12,7 @@ import { isPushCategory, DEFAULT_PUSH_CATEGORIES } from "@/lib/push/categories";
 
 export const runtime = "nodejs";
 
-const TENANT_ID = "jerk-and-chill-thao-dien";
+const LEGACY_TENANT = "jerk-and-chill-thao-dien";
 
 function db() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -26,6 +26,8 @@ type SubscribeBody = {
   staffId?: string | null;
   staffName?: string | null;
   categories?: string[];
+  /** Which branch this device belongs to. Older clients omit it. */
+  tenantId?: string;
   renewedFrom?: string;
 };
 
@@ -71,7 +73,7 @@ export async function POST(request: Request) {
   const { error } = await client.from("push_subscriptions").upsert(
     {
       endpoint,
-      tenant_id: TENANT_ID,
+      tenant_id: (body.tenantId?.trim() || LEGACY_TENANT),
       staff_id: body.staffId ?? null,
       staff_name: body.staffName ?? null,
       p256dh,

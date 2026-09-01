@@ -9,7 +9,8 @@ import type { PushCategory } from "./categories";
  * it could send notifications that appear to come from the restaurant.
  */
 
-const TENANT_ID = "jerk-and-chill-thao-dien";
+/** Devices that never said which branch they belong to predate branches. */
+const LEGACY_TENANT = "jerk-and-chill-thao-dien";
 
 export type PushMessage = {
   category: PushCategory;
@@ -60,7 +61,10 @@ type SubscriptionRow = {
  * booking, logging a complaint — and a notification that fails to send must
  * not roll back the thing that happened.
  */
-export async function sendPush(message: PushMessage): Promise<PushSendSummary> {
+export async function sendPush(
+  message: PushMessage,
+  tenantId: string = LEGACY_TENANT
+): Promise<PushSendSummary> {
   if (!vapidConfigured()) return { sent: 0, failed: 0, removed: 0, skipped: "not_configured" };
   const db = serviceClient();
   if (!db) return { sent: 0, failed: 0, removed: 0, skipped: "not_configured" };
@@ -74,7 +78,7 @@ export async function sendPush(message: PushMessage): Promise<PushSendSummary> {
   const { data, error } = await db
     .from("push_subscriptions")
     .select("endpoint, p256dh, auth")
-    .eq("tenant_id", TENANT_ID)
+    .eq("tenant_id", tenantId)
     .contains("categories", [message.category]);
 
   if (error || !data) return { sent: 0, failed: 0, removed: 0 };

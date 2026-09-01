@@ -94,13 +94,15 @@ function BillContent() {
       {/* 80mm at 203dpi is ~640px; this stays inside that and still reads on A4. */}
       <div className="mx-auto max-w-[420px] px-5 py-6 print:max-w-none print:px-0">
         <header className="text-center mb-5">
-          {receipt.showLogo && (
+          {receipt.showLogo && receipt.logoUrl && (
             <Image
-              src="/brand/logo-600.png"
+              src={receipt.logoUrl}
               alt=""
               width={110}
               height={78}
-              className="mx-auto mb-2"
+              className="mx-auto mb-2 w-auto"
+              style={{ maxHeight: 78 }}
+              unoptimized
               priority
             />
           )}

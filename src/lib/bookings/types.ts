@@ -56,4 +56,7 @@ export type Booking = {
   updated_at: string;
 };
 
-export const TENANT_ID = "jerk-and-chill-thao-dien";
+import { getActiveTenant } from "@/lib/storage";
+
+/** The branch this device is signed into. A function, because the device can switch branches. */
+export const TENANT_ID = () => getActiveTenant();

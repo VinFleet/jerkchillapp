@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
+import { getActiveTenant } from "@/lib/storage";
 import {
   isAcceptedDocument,
   MAX_DOCUMENT_BYTES,
@@ -19,7 +20,9 @@ import {
  * mid-service — and every other part of the app keeps working offline.
  */
 
-const TENANT_ID = "jerk-and-chill-thao-dien";
+// The branch this device is signed into — documents are per-branch like
+// everything else.
+const TENANT_ID = () => getActiveTenant();
 const BUCKET = "documents";
 
 /** Signed URLs are short-lived by design; long enough to open, not to share. */
@@ -71,7 +74,7 @@ export async function listDocuments(
   const { data, error } = await supabase
     .from("documents")
     .select("*")
-    .eq("tenant_id", TENANT_ID)
+    .eq("tenant_id", TENANT_ID())
     .eq("entity_type", entityType)
     .eq("entity_id", entityId)
     .order("uploaded_at", { ascending: false });
@@ -127,7 +130,7 @@ export async function uploadDocument(input: {
   const { data, error } = await supabase
     .from("documents")
     .insert({
-      tenant_id: TENANT_ID,
+      tenant_id: TENANT_ID(),
       entity_type: input.entityType,
       entity_id: input.entityId,
       file_name: input.file.name,
@@ -191,7 +194,7 @@ export async function getExpiringDocuments(withinDays = 30): Promise<StoredDocum
   const { data, error } = await supabase
     .from("documents")
     .select("*")
-    .eq("tenant_id", TENANT_ID)
+    .eq("tenant_id", TENANT_ID())
     .not("expires_on", "is", null)
     .lte("expires_on", cutoff.toISOString().slice(0, 10))
     .order("expires_on", { ascending: true });

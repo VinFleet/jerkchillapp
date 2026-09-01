@@ -4,8 +4,8 @@ import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import { RoleProvider } from "@/lib/auth/RoleContext";
 
 export const metadata: Metadata = {
-  title: "Jerk & Chill Ops",
-  description: "Jerk & Chill restaurant operations app — recipes, stock, checklists, planner, notices.",
+  title: "VINPOS",
+  description: "VINPOS — restaurant point of sale and operations.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [

@@ -200,6 +200,27 @@ Don't build all 16 modules at once — build shallow-and-wide and nothing will a
 
 ---
 
+# VINPOS
+
+The app is now a product: **VINPOS**, a restaurant POS-and-operations SaaS.
+Jerk & Chill is customer number one and keeps its branding as branch data.
+
+- **Org → branches.** `organizations` / `branches` / `org_members` in
+  Postgres (`supabase/saas-schema.sql`); a branch id IS the tenant id. The
+  legacy tenant `jerk-and-chill-thao-dien` was adopted as the first branch.
+- **Isolation is RLS, not politeness.** Every tenant-scoped table's policies
+  go through `auth_tenants()` — a member touches exactly the branches of
+  their organizations. The permissive "any authenticated" policies are gone.
+- **The client is tenant-blind.** Repos and sync key everything off
+  `getActiveTenant()` (device-local); switching branch = set + full reload,
+  and a fresh branch seeds itself like a new install. Server routes derive
+  the tenant from data (a table token knows its restaurant) — never from a
+  constant. The two payment routes are still single-tenant on purpose until
+  per-branch bank config exists.
+- **Branding is branch data.** Chrome, guest page and bill wear
+  `receipt_settings` (name/logo); the legacy branch defaults to the J&C
+  logo; new branches start neutral and show the VINPOS wordmark until named.
+
 # Architectural invariants
 
 *Everything above is the original brief. Everything below is how the code

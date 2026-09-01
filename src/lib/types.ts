@@ -971,6 +971,8 @@ export type ReceiptSettings = {
   wifiNote: string;
   footer: Bi;
   showLogo: boolean;
+  /** The restaurant's own logo, shown in the app chrome, guest page and bill. */
+  logoUrl?: string;
   /** Print a scan-to-pay VietQR for the outstanding amount on the bill. */
   showPaymentQr: boolean;
   updatedAt: string;

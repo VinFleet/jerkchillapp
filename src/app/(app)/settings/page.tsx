@@ -88,6 +88,18 @@ function SettingsContent() {
           <ChevronRight size={18} className="text-muted shrink-0" />
         </Link>
         <Link
+          href="/settings/branches"
+          className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light mb-3"
+        >
+          <span>
+            <span className="block font-semibold text-sm">Branches</span>
+            <span className="block text-xs text-muted">
+              Chi nhánh — locations, switch this device
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-muted shrink-0" />
+        </Link>
+        <Link
           href="/settings/printing"
           className="w-full min-h-16 bg-surface border border-border rounded-2xl px-4 flex items-center justify-between active:bg-brand-light mb-3"
         >

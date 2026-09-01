@@ -11,6 +11,19 @@ export function getActiveTenant(): string {
   return window.localStorage.getItem(TENANT_KEY) || DEFAULT_TENANT;
 }
 
+/**
+ * Point this device at a different branch.
+ *
+ * Everything tenant-scoped — every repo read, every sync push and pull —
+ * flows through getActiveTenant, so switching is one write and a reload. A
+ * branch this device has never seen starts empty and seeds itself on load,
+ * exactly like a brand-new install, then pulls that branch's shared data.
+ */
+export function setActiveTenant(slug: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(TENANT_KEY, slug.trim());
+}
+
 function nsKey(key: string): string {
   return `jc:${getActiveTenant()}:${key}`;
 }

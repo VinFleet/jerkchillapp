@@ -25,7 +25,15 @@ import { sendPush } from "@/lib/push/server";
 
 export const runtime = "nodejs";
 
-const TENANT_ID = "jerk-and-chill-thao-dien";
+/**
+ * Which restaurant a token belongs to is the token's own business.
+ *
+ * Tokens are globally unique (ten random characters), so the row is found
+ * first without a tenant filter, and its tenant_id scopes everything after —
+ * the menu read, the order write, the ticket, the push. One deployment
+ * serves every restaurant, and a sticker on any table anywhere routes to the
+ * kitchen that owns that table.
+ */
 
 /** A guest cannot order fifty of anything by accident, or on purpose. */
 const MAX_QTY_PER_LINE = 20;
@@ -39,11 +47,15 @@ function db(): SupabaseClient | null {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-async function readCollection<T>(client: SupabaseClient, collection: string): Promise<T[]> {
+async function readCollection<T>(
+  client: SupabaseClient,
+  tenantId: string,
+  collection: string
+): Promise<T[]> {
   const { data, error } = await client
     .from("synced_records")
     .select("data")
-    .eq("tenant_id", TENANT_ID)
+    .eq("tenant_id", tenantId)
     .eq("collection", collection)
     .eq("deleted", false);
   if (error) throw new Error(error.message);
@@ -57,10 +69,21 @@ async function readCollection<T>(client: SupabaseClient, collection: string): Pr
  * must stop working — that is the whole point of rotating it — and the caller
  * tells a guest the same vague thing either way.
  */
-async function resolveTable(client: SupabaseClient, token: string): Promise<string | null> {
-  const tokens = await readCollection<TableToken>(client, "table_tokens");
-  const match = tokens.find((t) => t.token === token && !t.revokedAt);
-  return match?.tableId ?? null;
+async function resolveTable(
+  client: SupabaseClient,
+  token: string
+): Promise<{ tenantId: string; tableId: string } | null> {
+  const { data, error } = await client
+    .from("synced_records")
+    .select("tenant_id, data")
+    .eq("collection", "table_tokens")
+    .eq("record_id", token)
+    .eq("deleted", false)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as { tenant_id: string; data: TableToken };
+  if (row.data.revokedAt) return null;
+  return { tenantId: row.tenant_id, tableId: row.data.tableId };
 }
 
 /** GET — what this table can order. */
@@ -81,11 +104,19 @@ export async function GET(
   if (!client) return NextResponse.json({ error: "unavailable" }, { status: 503 });
 
   try {
-    const tableId = await resolveTable(client, token);
-    if (!tableId) return NextResponse.json({ error: "unknown_table" }, { status: 404 });
+    const resolved = await resolveTable(client, token);
+    if (!resolved) return NextResponse.json({ error: "unknown_table" }, { status: 404 });
 
-    const menu = await readCollection<MenuItem>(client, "menu_items");
+    const menu = await readCollection<MenuItem>(client, resolved.tenantId, "menu_items");
+    // The restaurant's own name, so the guest page wears the right identity —
+    // this is a product serving many restaurants, not one.
+    const receiptRows = await readCollection<{ id: string; headerName?: string }>(
+      client,
+      resolved.tenantId,
+      "receipt_settings"
+    );
     return NextResponse.json({
+      restaurantName: receiptRows.find((r) => r.id === "receipt")?.headerName ?? null,
       // Only what the page renders. Cost, margin and the delivery price list
       // are none of a guest's business.
       menu: menu
@@ -148,10 +179,11 @@ export async function POST(
   }
 
   try {
-    const tableId = await resolveTable(client, token);
-    if (!tableId) return NextResponse.json({ error: "unknown_table" }, { status: 404 });
+    const resolved = await resolveTable(client, token);
+    if (!resolved) return NextResponse.json({ error: "unknown_table" }, { status: 404 });
+    const { tenantId, tableId } = resolved;
 
-    const menu = await readCollection<MenuItem>(client, "menu_items");
+    const menu = await readCollection<MenuItem>(client, tenantId, "menu_items");
 
     // Price from the menu, never from the request. A posted price is a guest
     // naming their own — the client sends an id and a quantity, nothing more.
@@ -228,7 +260,7 @@ export async function POST(
 
     const { error } = await client.from("synced_records").upsert(
       {
-        tenant_id: TENANT_ID,
+        tenant_id: tenantId,
         collection: "orders",
         record_id: order.id,
         data: order,
@@ -246,7 +278,7 @@ export async function POST(
     const { data: printerPrefs } = await client
       .from("synced_records")
       .select("data")
-      .eq("tenant_id", TENANT_ID)
+      .eq("tenant_id", tenantId)
       .eq("collection", "printer_settings")
       .eq("record_id", "printers")
       .maybeSingle();
@@ -271,7 +303,7 @@ export async function POST(
     void client
       .from("print_jobs")
       .insert({
-        tenant_id: TENANT_ID,
+        tenant_id: tenantId,
         printer: "kitchen",
         payload: {
           table: (tableRow as { table_number?: string } | null)?.table_number ?? "QR TABLE",
@@ -300,7 +332,8 @@ export async function POST(
     // at this point, and a push failure must not turn a placed order into an
     // error the guest sees. The alert rides on the action that produced it,
     // which is the rule that keeps this app free of cron jobs.
-    void sendPush({
+    void sendPush(
+      {
       category: "orders",
       title: "New table order · Đơn mới tại bàn",
       body: `${lines.length} item${lines.length === 1 ? "" : "s"}${
@@ -310,8 +343,10 @@ export async function POST(
       // One notification per order rather than a stack: a guest adding a
       // second round should not bury the first.
       tag: `order-${order.id}`,
-      urgent: true,
-    }).catch(() => undefined);
+        urgent: true,
+      },
+      tenantId
+    ).catch(() => undefined);
 
     return NextResponse.json({ status: "placed", orderId: order.id, lines: lines.length });
   } catch {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
+import { VinposWordmark } from "@/components/VinposWordmark";
 import { useRouter } from "next/navigation";
 import { ChefHat, Wine, ShieldCheck, ChevronLeft, CheckCircle2 } from "lucide-react";
 import { useSession, STATION_LABEL } from "@/lib/auth/RoleContext";
@@ -108,7 +108,7 @@ export default function LoginPage() {
     >
       <div className="w-full max-w-sm bg-surface rounded-3xl p-6 shadow-xl">
         <div className="flex justify-center mb-5">
-          <Image src="/brand/logo-600.png" alt="Jerk & Chill" width={150} height={106} priority />
+          <span className="flex flex-col items-center gap-1"><VinposWordmark size="lg" /><span className="text-xs text-muted">Restaurant point of sale · Máy tính tiền nhà hàng</span></span>
         </div>
 
         {!chosen ? (

@@ -20,12 +20,12 @@ import type { Order } from "@/lib/types";
  * menu: the bridge should never need the app's data model, only a ticket.
  */
 
-const TENANT_ID = "jerk-and-chill-thao-dien";
+import { getActiveTenant } from "@/lib/storage";
 
 async function enqueue(printer: "kitchen" | "receipt", payload: unknown): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase.from("print_jobs").insert({
-    tenant_id: TENANT_ID,
+    tenant_id: getActiveTenant(),
     printer,
     payload,
   });
