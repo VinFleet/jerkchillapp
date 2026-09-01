@@ -255,9 +255,10 @@ export default function AdminPage() {
                   className={`min-h-[40px] px-3 rounded-lg border text-xs font-bold flex items-center gap-1 ${
                     org.active ? "border-danger text-danger" : "border-success text-success"
                   }`}
+                  title="Emergency only — abuse or legal compulsion. NEVER for an unpaid plan: a lapsed plan removes support, not the software."
                 >
                   {org.active ? <Ban size={13} /> : <Check size={13} />}
-                  {org.active ? "Suspend" : "Restore"}
+                  {org.active ? "Emergency suspend" : "Restore"}
                 </button>
               </div>
 

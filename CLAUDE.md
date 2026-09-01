@@ -224,6 +224,17 @@ Jerk & Chill is customer number one and keeps its branding as branch data.
   `receipt_settings` (name/logo); the legacy branch defaults to the J&C
   logo; new branches start neutral and show the VINPOS wordmark until named.
 
+## The commercial rule that cannot be broken
+
+The software is free forever. Revenue is setup engagements and monthly
+support plans. **A lapsed or unpaid plan removes SUPPORT, never the
+software** — the till never degrades, never goes read-only, never nags
+mid-service. The admin console's suspend switch exists for abuse and legal
+compulsion only; if a billing state ever gates an app feature, that change
+is wrong regardless of who asked for it. Cost data and wages live in local
+collections (not Postgres), so DB-level role policies for them do not apply
+yet — revisit when any cost-bearing collection starts syncing.
+
 # Architectural invariants
 
 *Everything above is the original brief. Everything below is how the code
