@@ -24,6 +24,7 @@ import {
   orderCode,
   canSplitOrder,
   canMergeOrders,
+  clampPartialPayment,
   type Line,
   type PaymentRecord,
 } from "./orderRules.ts";
@@ -397,4 +398,25 @@ test("bills with money on them cannot merge", () => {
 test("a closed bill cannot merge", () => {
   assert.equal(canMergeOrders("o1", "o2", "closed", "placed", []).ok, false);
   assert.equal(canMergeOrders("o1", "o2", "placed", "cancelled", []).ok, false);
+});
+
+// ---------- partial payments ----------
+
+test("a partial payment takes what was asked", () => {
+  assert.equal(clampPartialPayment(500_000, 760_000), 500_000);
+});
+
+test("a payment never exceeds the bill", () => {
+  assert.equal(clampPartialPayment(900_000, 760_000), 760_000);
+});
+
+test("an empty or nonsense amount means all of it", () => {
+  // A cleared field is "the full amount", never a zero-dong payment.
+  assert.equal(clampPartialPayment(0, 760_000), 760_000);
+  assert.equal(clampPartialPayment(NaN, 760_000), 760_000);
+  assert.equal(clampPartialPayment(-5, 760_000), 760_000);
+});
+
+test("a settled bill takes nothing more", () => {
+  assert.equal(clampPartialPayment(100_000, 0), 0);
 });

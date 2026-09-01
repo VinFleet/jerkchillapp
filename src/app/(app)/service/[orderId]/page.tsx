@@ -30,7 +30,7 @@ import {
   setLineStatus,
   unsentLines,
 } from "@/lib/repo/orders";
-import { getMenuItems } from "@/lib/repo/menu";
+import { getMenuItems, isSoldOut } from "@/lib/repo/menu";
 import { getCachedTables } from "@/lib/repo/tableCache";
 import { linePriceVnd } from "@/lib/repo/orderRules";
 import type {
@@ -388,12 +388,24 @@ function OrderContent() {
                 <span className="flex-1 border-t border-dashed border-border" />
               </div>
               <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-                {items.map((item) => (
+                {items.map((item) => {
+                  const out = isSoldOut(item);
+                  return (
                   <button
                     key={item.id}
                     onClick={() => add(item)}
-                    className="rounded-2xl overflow-hidden border border-border text-left active:scale-[0.98] flex flex-col"
+                    disabled={out}
+                    className={`rounded-2xl overflow-hidden border border-border text-left active:scale-[0.98] flex flex-col relative ${
+                      out ? "opacity-45 grayscale" : ""
+                    }`}
                   >
+                    {out && (
+                      <span className="absolute inset-0 z-10 grid place-items-center">
+                        <span className="bg-danger text-white text-xs font-black px-3 py-1 rounded-full -rotate-6">
+                          SOLD OUT · HẾT MÓN
+                        </span>
+                      </span>
+                    )}
                     {/* The photo, when one has been added on Menu & Pricing.
                         Initials otherwise — never an empty grey box. */}
                     {item.imageUrl ? (
@@ -421,7 +433,8 @@ function OrderContent() {
                       ) : null}
                     </span>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </section>
           ))}

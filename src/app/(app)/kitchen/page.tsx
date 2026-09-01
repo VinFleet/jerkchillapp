@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChefHat, Clock } from "lucide-react";
+import { ChefHat, Clock, Ban, LayoutList } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { useSession } from "@/lib/auth/RoleContext";
 import { onSyncedDataChanged, syncNow } from "@/lib/sync/engine";
 import { getKitchenQueue, setLineStatus, setOrderStatus } from "@/lib/repo/orders";
-import { getMenuItems } from "@/lib/repo/menu";
+import { getMenuItems, isSoldOut, setMenuItemSoldOut } from "@/lib/repo/menu";
 import { getCachedTables } from "@/lib/repo/tableCache";
+import { Bi } from "@/components/Bi";
 import type { Order, MenuItem } from "@/lib/types";
 
 /**
@@ -30,6 +31,28 @@ function minutesSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
 }
 
+/**
+ * Everything still to make, added up across tables.
+ *
+ * The bar reads this instead of ticket-by-ticket: "4x Ginger Fizz, two of
+ * them mocktails" is one shake, not four glances. Grouped by item plus its
+ * choices, because a spicy and a non-spicy jerk chicken are different jobs.
+ */
+function makeList(orders: Order[], nameOf: (id: string) => string) {
+  const rows = new Map<string, { key: string; name: string; detail: string; qty: number }>();
+  for (const order of orders) {
+    for (const line of order.lines) {
+      if (!line.sentAt || line.status === "cancelled" || line.status === "ready" || line.status === "served") continue;
+      const detail = (line.choices ?? []).map((c) => c.label.en).join(", ");
+      const key = `${line.menuItemId}|${detail}`;
+      const existing = rows.get(key);
+      if (existing) existing.qty += line.qty;
+      else rows.set(key, { key, name: nameOf(line.menuItemId), detail, qty: line.qty });
+    }
+  }
+  return Array.from(rows.values()).sort((a, b) => b.qty - a.qty);
+}
+
 function KitchenContent() {
   const { session } = useSession();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -37,6 +60,7 @@ function KitchenContent() {
   // Table id -> the number painted on the table. A chef reading a ticket needs
   // "I4", not a UUID; the id is the join key, never the label.
   const [tableNumbers, setTableNumbers] = useState<Record<string, string>>({});
+  const [view, setView] = useState<"tickets" | "items" | "soldout">("tickets");
   // Re-render on a timer so ticket ages climb without anyone touching the
   // screen — a stale "2 min" on a ticket that has been sitting ten is worse
   // than no age at all.
@@ -74,8 +98,84 @@ function KitchenContent() {
 
   return (
     <div className="pb-6">
-      <PageHeader title="Kitchen · Bếp" subtitle="Oldest first · Cũ nhất trước" />
+      <PageHeader
+        title="Kitchen · Bếp"
+        subtitle="Oldest first · Cũ nhất trước"
+        action={
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => setView(view === "items" ? "tickets" : "items")}
+              className={`min-h-[44px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 ${
+                view === "items" ? "border-brand text-brand bg-brand-light" : "border-border"
+              }`}
+            >
+              <LayoutList size={15} /> By item
+            </button>
+            <button
+              onClick={() => setView(view === "soldout" ? "tickets" : "soldout")}
+              className={`min-h-[44px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 ${
+                view === "soldout" ? "border-danger text-danger bg-danger-tint" : "border-border"
+              }`}
+            >
+              <Ban size={15} /> 86 · Hết
+            </button>
+          </div>
+        }
+      />
 
+      {view === "soldout" && (
+        <div className="px-4 md:px-8 pb-8 space-y-2">
+          <p className="text-sm text-muted">
+            Tap what the kitchen has run out of — it leaves the guest menu and greys on the pad at
+            once, and comes back by itself tomorrow. · Chạm món đã hết; tự trở lại vào ngày mai.
+          </p>
+          {menu
+            .filter((m) => m.active)
+            .map((item) => {
+              const out = isSoldOut(item);
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setMenuItemSoldOut(item.id, !out);
+                    load();
+                  }}
+                  className={`w-full min-h-[56px] rounded-xl border-2 px-4 flex items-center justify-between text-left ${
+                    out ? "border-danger bg-danger-tint" : "border-border"
+                  }`}
+                >
+                  <Bi value={item.name} mode="inline" className="text-sm font-medium min-w-0" />
+                  <span className={`text-xs font-bold shrink-0 ${out ? "text-danger" : "text-muted"}`}>
+                    {out ? "SOLD OUT · HẾT" : "Available · Còn"}
+                  </span>
+                </button>
+              );
+            })}
+        </div>
+      )}
+
+      {view === "items" && (
+        <div className="px-4 md:px-8 pb-8 space-y-2">
+          <p className="text-sm text-muted">
+            Everything still to make, added up across tables. Read-only — tick dishes off on their
+            tickets. · Tổng món cần làm; đánh dấu trên từng phiếu.
+          </p>
+          {makeList(orders, (id) => nameFor(id)?.en ?? id.replace("adhoc:", "")).map((row) => (
+            <div key={row.key} className="rounded-xl border border-border px-4 py-2.5 flex items-center gap-3">
+              <span className="text-2xl font-black tabular-nums w-10 shrink-0">{row.qty}×</span>
+              <span className="min-w-0">
+                <span className="block font-semibold text-sm">{row.name}</span>
+                {row.detail && <span className="block text-xs font-bold text-brand">{row.detail}</span>}
+              </span>
+            </div>
+          ))}
+          {makeList(orders, (id) => id).length === 0 && (
+            <p className="text-center text-muted py-8 text-sm">Nothing waiting · Không còn món chờ</p>
+          )}
+        </div>
+      )}
+
+      {view === "tickets" && (
       <div className="px-4 md:px-8">
         {orders.length === 0 ? (
           <div className="text-center py-16">
@@ -202,6 +302,7 @@ function KitchenContent() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { MenuItem, MenuChannel, PrintedMaterial, Bi } from "@/lib/types";
-import { readList, writeList, readValue, writeValue, isSeeded, markSeeded, newId } from "@/lib/storage";
+import { readList, writeList, readValue, writeValue, isSeeded, markSeeded, newId, todayIso } from "@/lib/storage";
 import { SEED_MENU_ITEMS, SEED_PRINTED_MATERIALS } from "@/lib/seed/menu";
 
 const MENU_KEY = "menu_items";
@@ -155,6 +155,30 @@ export function updateMenuItem(id: string, patch: { name?: Bi; category?: MenuIt
  * and every screen that shows a dish — including a guest's phone, which has
  * no Supabase client of its own — can then just render it.
  */
+/** Sold out tonight? Compares against today so it expires overnight by itself. */
+export function isSoldOut(item: MenuItem): boolean {
+  return item.soldOutOn === todayIso();
+}
+
+/**
+ * 86 a dish, or bring it back.
+ *
+ * One tap from the pass, because the moment the last portion leaves the
+ * kitchen is the moment orders for it have to stop — on the waiter's pad and
+ * the guest QR menu at once, which syncing menu_items already handles.
+ */
+export function setMenuItemSoldOut(id: string, soldOut: boolean) {
+  const all = readList<MenuItem>(MENU_KEY);
+  const idx = all.findIndex((m) => m.id === id);
+  if (idx < 0) return;
+  all[idx] = {
+    ...all[idx],
+    soldOutOn: soldOut ? todayIso() : undefined,
+    updatedAt: new Date().toISOString(),
+  };
+  writeList(MENU_KEY, all);
+}
+
 export function setMenuItemImage(id: string, imageUrl: string | null) {
   const all = readList<MenuItem>(MENU_KEY);
   const idx = all.findIndex((m) => m.id === id);

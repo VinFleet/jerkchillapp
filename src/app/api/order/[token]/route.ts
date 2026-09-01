@@ -90,6 +90,9 @@ export async function GET(
       // are none of a guest's business.
       menu: menu
         .filter((m) => m.active && m.pricesVnd?.dine_in != null)
+        // 86'd tonight: not shown at all. A greyed row a guest cannot order
+        // from is just an advert for disappointment.
+        .filter((m) => m.soldOutOn !== new Date().toISOString().slice(0, 10))
         .map((m) => ({
           id: m.id,
           name: m.name,
@@ -157,6 +160,9 @@ export async function POST(
       const item = menu.find((m) => m.id === line.menuItemId && m.active);
       const price = item?.pricesVnd?.dine_in;
       if (!item || price == null) continue;
+      // Sold out between opening the menu and ordering — refuse the line
+      // rather than sending the kitchen a ticket for food that is gone.
+      if (item.soldOutOn === new Date().toISOString().slice(0, 10)) continue;
 
       // Resolve the guest's answers against the menu's own options. The
       // client sends ids; the label and the price delta come from here, so a

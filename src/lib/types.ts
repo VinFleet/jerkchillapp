@@ -667,6 +667,14 @@ export type MenuItem = {
   /** Asked when the item is added. Absent means the item has no variants. */
   options?: MenuOption[];
   /**
+   * The date this item was 86'd, or absent.
+   *
+   * A date rather than a boolean so it expires by itself: sold out is a fact
+   * about tonight's kitchen, and a dish nobody un-marked at close must not
+   * still read sold out at tomorrow's lunch.
+   */
+  soldOutOn?: string;
+  /**
    * Public URL of the dish photo.
    *
    * Public rather than signed, because a guest's phone loads it with no

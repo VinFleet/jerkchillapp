@@ -65,7 +65,7 @@ import { getCachedTables } from "@/lib/repo/tableCache";
 import { getPaymentSettings, vietQrConfigured } from "@/lib/repo/paymentSettings";
 import { buildVietQrPayload } from "@/lib/payments/vietqr";
 import { VietQrCode } from "@/components/VietQrCode";
-import { changeDueVnd, cashSuggestionsVnd, orderCode } from "@/lib/repo/orderRules";
+import { changeDueVnd, cashSuggestionsVnd, orderCode, clampPartialPayment } from "@/lib/repo/orderRules";
 import { uploadCardSlip, cardSlipUrl } from "@/lib/payments/slips";
 import type { Order, MenuItem, Payment, PaymentMethod, Promotion } from "@/lib/types";
 
@@ -110,6 +110,7 @@ function ReviewContent() {
   const [orderNoteDraft, setOrderNoteDraft] = useState<string | null>(null);
   const [cashOpen, setCashOpen] = useState(false);
   const [received, setReceived] = useState("");
+  const [payAmount, setPayAmount] = useState("");
   const [manualKind, setManualKind] = useState<"percent" | "amount">("percent");
   const [manualValue, setManualValue] = useState("");
   const [cardOpen, setCardOpen] = useState(false);
@@ -207,13 +208,17 @@ function ReviewContent() {
     // kitchen must never learn about a round only after it is paid for.
     if (unsentLines(order).length > 0) sendToKitchen(order.id);
 
+    // Half the table pays cash, the rest goes on a QR: each payment takes
+    // what the amount field says, capped at what is owed. An empty field
+    // means all of it, so the common case costs no taps.
     const payment = takePayment({
       orderId: order.id,
       method,
-      amountVnd: bill.outstandingVnd,
+      amountVnd: clampPartialPayment(Number(payAmount || 0), bill.outstandingVnd),
       takenBy: session?.name ?? null,
       providerRef,
     });
+    setPayAmount("");
 
     if (method === "vietqr") {
       const s = getPaymentSettings();
@@ -945,13 +950,26 @@ function ReviewContent() {
 
         {mayTakeMoney && bill && bill.outstandingVnd > 0 && (
           <div className="px-4 pt-2 flex gap-2">
+            {/* The split field. Blank means the whole bill — the common case
+                costs no taps; a split costs typing the first share. */}
+            <label className="flex-1 flex items-center gap-2 min-h-[44px] rounded-xl border border-border px-3">
+              <span className="text-xs text-muted shrink-0">Paying · Trả</span>
+              <input
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value.replace(/[^\d]/g, ""))}
+                inputMode="numeric"
+                placeholder={`${bill.outstandingVnd.toLocaleString("vi-VN")} (all · hết)`}
+                className="w-full min-w-0 text-right tabular-nums font-semibold bg-transparent outline-none"
+              />
+            </label>
             <button
               onClick={() => setPanel(panel === "promotions" ? "none" : "promotions")}
-              className={`flex-1 min-h-[44px] rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 ${
+              aria-label="Promotions and discounts · Khuyến mãi"
+              className={`min-h-[44px] w-12 rounded-xl border grid place-items-center shrink-0 ${
                 panel === "promotions" || order.discount ? "border-brand text-brand" : "border-border"
               }`}
             >
-              <Tag size={15} /> Promotions · Khuyến mãi
+              <Tag size={15} />
             </button>
           </div>
         )}
@@ -1009,7 +1027,7 @@ function ReviewContent() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {cashSuggestionsVnd(bill.outstandingVnd).map((amount) => (
+              {cashSuggestionsVnd(clampPartialPayment(Number(payAmount || 0), bill.outstandingVnd)).map((amount) => (
                 <button
                   key={amount}
                   onClick={() => setReceived(String(amount))}
@@ -1025,7 +1043,7 @@ function ReviewContent() {
             <div className="flex items-center justify-between pt-1">
               <span className="text-sm text-muted">Change · Tiền thừa</span>
               <span className="text-2xl font-black tabular-nums">
-                {vnd(changeDueVnd(Number(received || 0), bill.outstandingVnd))}
+                {vnd(changeDueVnd(Number(received || 0), clampPartialPayment(Number(payAmount || 0), bill.outstandingVnd)))}
               </span>
             </div>
 
@@ -1037,7 +1055,7 @@ function ReviewContent() {
               }}
               className="w-full min-h-[52px] rounded-xl bg-success text-white font-semibold"
             >
-              Take {vnd(bill.outstandingVnd)} · Nhận tiền
+              Take {vnd(clampPartialPayment(Number(payAmount || 0), bill.outstandingVnd))} · Nhận tiền
             </button>
           </div>
         )}
@@ -1088,10 +1106,11 @@ function ReviewContent() {
                 const payment = takePayment({
                   orderId: order.id,
                   method: "card",
-                  amountVnd: bill.outstandingVnd,
+                  amountVnd: clampPartialPayment(Number(payAmount || 0), bill.outstandingVnd),
                   takenBy: session?.name ?? null,
                   providerRef: cardRef,
                 });
+                setPayAmount("");
                 if (unsentLines(order).length > 0) sendToKitchen(order.id);
 
                 // The payment is recorded first. A failed upload must never
@@ -1116,7 +1135,7 @@ function ReviewContent() {
               className="w-full min-h-[52px] rounded-xl bg-success text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {slipBusy ? <Loader2 size={17} className="animate-spin" /> : null}
-              Take {vnd(bill.outstandingVnd)} on card · Nhận thẻ
+              Take {vnd(clampPartialPayment(Number(payAmount || 0), bill.outstandingVnd))} on card · Nhận thẻ
             </button>
 
             {slipProblem && <p className="text-xs text-warning">{slipProblem}</p>}

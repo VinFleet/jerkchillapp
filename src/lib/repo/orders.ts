@@ -594,6 +594,37 @@ export function setPaymentSlip(paymentId: string, path: string) {
   writeList(PAYMENTS_KEY, all);
 }
 
+/**
+ * The day's finished orders, newest first — reprints, questions, refunds.
+ */
+export function getClosedOrdersForDate(date = todayIso()): Order[] {
+  return getOrdersForDate(date)
+    .filter((o) => o.status === "closed" || (o.status === "cancelled" && o.lines.length > 0))
+    .sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
+}
+
+/**
+ * Give the money back.
+ *
+ * Only a paid payment can be refunded, and the record flips rather than
+ * vanishes: cash-up subtracts refunds, and a payment that disappeared would
+ * leave the drawer count unexplainable. takenBy keeps who took the money;
+ * the detail line records who gave it back and when — both halves of the
+ * story are needed when the takings are counted.
+ */
+export function refundPayment(paymentId: string, by: string | null): boolean {
+  const all = readList<Payment>(PAYMENTS_KEY);
+  const idx = all.findIndex((p) => p.id === paymentId && p.status === "paid");
+  if (idx < 0) return false;
+  all[idx] = {
+    ...all[idx],
+    status: "refunded",
+    failureDetail: `refunded by ${by ?? "unknown"} at ${new Date().toISOString()}`,
+  };
+  writeList(PAYMENTS_KEY, all);
+  return true;
+}
+
 export function failPayment(paymentId: string, detail: string) {
   const all = readList<Payment>(PAYMENTS_KEY);
   const idx = all.findIndex((p) => p.id === paymentId);

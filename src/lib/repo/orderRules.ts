@@ -354,3 +354,18 @@ export function canMergeOrders(
   }
   return { ok: true };
 }
+
+/**
+ * How much of the bill one payment may take.
+ *
+ * A partial payment is normal — half the table pays cash, the rest goes on a
+ * QR — but a single payment must never exceed what is owed, or outstanding
+ * goes negative and the till thinks it owes the guest. Zero and nonsense
+ * collapse to the full amount, because the common case is "all of it" and a
+ * cleared field should mean that, not a zero-dong payment.
+ */
+export function clampPartialPayment(requestedVnd: number, outstandingVnd: number): number {
+  const owed = Math.max(0, Math.round(outstandingVnd));
+  if (!Number.isFinite(requestedVnd) || requestedVnd <= 0) return owed;
+  return Math.min(owed, Math.round(requestedVnd));
+}

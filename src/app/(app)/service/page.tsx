@@ -2,13 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Receipt, Plus, WifiOff, Clock } from "lucide-react";
+import { Receipt, Plus, WifiOff, Clock, History } from "lucide-react";
+import Link from "next/link";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { WhoIsWorking } from "@/components/WhoIsWorking";
 import { useSession } from "@/lib/auth/RoleContext";
 import { onSyncedDataChanged } from "@/lib/sync/engine";
-import { getOrders, getOpenOrderForTable, createOrder, getBill } from "@/lib/repo/orders";
+import {
+  getOrders,
+  getOpenOrderForTable,
+  createOrder,
+  getBill,
+  setOrderCustomer,
+} from "@/lib/repo/orders";
 import { getCachedTables, cacheTables, tablesAreCached, type CachedTable } from "@/lib/repo/tableCache";
 import { getTables } from "@/lib/bookings/repo";
 import type { Order } from "@/lib/types";
@@ -52,6 +59,8 @@ function ServiceContent() {
   const [counterOrders, setCounterOrders] = useState<Order[]>([]);
   const [live, setLive] = useState(true);
   const [, setTick] = useState(0);
+  const [startingChannel, setStartingChannel] = useState<null | "counter" | "takeaway" | "grab" | "shopee">(null);
+  const [channelName, setChannelName] = useState("");
 
   const build = useCallback((list: CachedTable[]) => {
     setCards(
@@ -134,13 +143,27 @@ function ServiceContent() {
     router.push(`/service/${created.id}`);
   };
 
-  const startCounterOrder = () => {
+  /**
+   * Orders that do not sit at a table.
+   *
+   * Counter and takeaway price as dine-in; Grab and ShopeeFood price from the
+   * delivery list, because that is the menu those guests were shown. A name or
+   * platform code travels on the order so the pass can call it out — "Grab
+   * GF-1234" beats "Counter" when three drivers are waiting at the door.
+   */
+  const startChannelOrder = (kind: "counter" | "takeaway" | "grab" | "shopee", name: string) => {
+    const platform = kind === "grab" || kind === "shopee";
     const created = createOrder({
       tableId: null,
-      source: "counter",
-      channel: "dine_in",
+      source: platform ? "delivery" : "counter",
+      channel: platform ? "delivery" : "dine_in",
       placedBy: session?.name ?? null,
     });
+    const label =
+      kind === "grab" ? `Grab ${name}`.trim() : kind === "shopee" ? `ShopeeFood ${name}`.trim() : name.trim();
+    if (label) setOrderCustomer(created.id, label);
+    setStartingChannel(null);
+    setChannelName("");
     router.push(`/service/${created.id}`);
   };
 
@@ -233,24 +256,79 @@ function ServiceContent() {
                 onClick={() => router.push(`/service/${o.id}`)}
                 className="w-full min-h-[60px] rounded-xl border border-border px-4 py-3 flex items-center justify-between gap-3 text-left active:scale-[0.99]"
               >
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-2 min-w-0">
                   <Receipt size={18} className="text-muted shrink-0" />
-                  <span>
-                    <span className="font-medium">{o.lines.length} items</span>
-                    <span className="text-muted text-sm"> · {minutesSince(o.placedAt)}m</span>
+                  <span className="min-w-0">
+                    <span className="font-medium block truncate">
+                      {o.customerName || (o.source === "delivery" ? "Delivery · Giao đi" : "Counter · Quầy")}
+                    </span>
+                    <span className="text-muted text-sm">
+                      {o.lines.length} items · {minutesSince(o.placedAt)}m
+                    </span>
                   </span>
                 </span>
                 <span className="font-semibold tabular-nums">{vnd(bill?.totalVnd ?? 0)}</span>
               </button>
             );
           })}
-          <button
-            onClick={startCounterOrder}
-            className="w-full min-h-[60px] rounded-xl border border-dashed border-border px-4 py-3 flex items-center justify-center gap-2 text-muted active:scale-[0.99]"
+          {startingChannel === null ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(
+                [
+                  ["counter", "Counter", "Tại quầy"],
+                  ["takeaway", "Take away", "Mang đi"],
+                  ["grab", "Grab", "GrabFood"],
+                  ["shopee", "Shopee", "ShopeeFood"],
+                ] as const
+              ).map(([kind, en, vi]) => (
+                <button
+                  key={kind}
+                  onClick={() =>
+                    kind === "counter" ? startChannelOrder("counter", "") : setStartingChannel(kind)
+                  }
+                  className="min-h-[56px] rounded-xl border border-dashed border-border flex flex-col items-center justify-center text-muted active:scale-[0.99]"
+                >
+                  <span className="flex items-center gap-1 text-sm font-medium">
+                    <Plus size={14} /> {en}
+                  </span>
+                  <span className="text-xs opacity-70">{vi}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                value={channelName}
+                onChange={(e) => setChannelName(e.target.value)}
+                autoFocus
+                placeholder={
+                  startingChannel === "takeaway"
+                    ? "Guest name · Tên khách"
+                    : "Order code · Mã đơn (GF-1234)"
+                }
+                className="flex-1 min-w-0 min-h-[52px] rounded-xl border border-border px-3"
+              />
+              <button
+                onClick={() => startChannelOrder(startingChannel, channelName)}
+                className="min-h-[52px] px-4 rounded-xl bg-brand text-white font-semibold shrink-0"
+              >
+                Start · Bắt đầu
+              </button>
+              <button
+                onClick={() => setStartingChannel(null)}
+                className="min-h-[52px] px-3 rounded-xl border border-border shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          <Link
+            href="/service/history"
+            className="flex items-center justify-center gap-1.5 text-sm text-brand font-semibold min-h-[44px]"
           >
-            <Plus size={18} />
-            New counter order <span className="opacity-70">· Đơn tại quầy</span>
-          </button>
+            <History size={15} /> Today&apos;s closed orders · Đơn đã đóng
+          </Link>
         </div>
       </div>
     </>
