@@ -1,9 +1,10 @@
 import { supabase } from "@/lib/supabase/client";
+import { getActiveTenant } from "@/lib/storage";
 
 /**
  * Station sign-in is a *device* setup step, not a shift routine.
  *
- * Every synced table is behind `auth.role() = 'authenticated'`, so a tablet
+ * Every synced table is behind per-branch RLS, so a tablet
  * with no Supabase session syncs nothing — it would look like it was working
  * while quietly keeping every checklist tick and temperature reading to
  * itself. So the kitchen and bar tablets do hold a real login; it is just
@@ -49,6 +50,28 @@ export async function checkManagerAccess(): Promise<ManagerCheck> {
   const { data: sessionData } = await supabase.auth.getSession();
   const userId = sessionData.session?.user.id;
   if (!userId) return { ok: false, reason: "not-signed-in" };
+
+  // The role comes from the organization that owns this device's active
+  // branch — that is what makes a NEW restaurant's owner able to open the
+  // manager station at all. The legacy staff_roles lookup below remains as
+  // the fallback for the first restaurant's pre-branches logins.
+  const { data: branchRow } = await supabase
+    .from("branches")
+    .select("org_id")
+    .eq("id", getActiveTenant())
+    .maybeSingle();
+  if (branchRow) {
+    const { data: membership } = await supabase
+      .from("org_members")
+      .select("role")
+      .eq("org_id", (branchRow as { org_id: string }).org_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    const orgRole = (membership as { role?: string } | null)?.role;
+    if (orgRole === "owner" || orgRole === "manager") return { ok: true };
+    if (orgRole === "staff") return { ok: false, reason: "not-a-manager" };
+    // No membership row: fall through to the legacy table.
+  }
 
   const { data, error } = await supabase
     .from("staff_roles")
