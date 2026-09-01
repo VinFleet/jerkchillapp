@@ -98,14 +98,28 @@ export async function todaysTakingsByBranch(
 export async function getMyBilling(): Promise<{
   setupPaidAt: string | null;
   supportUntil: string | null;
+  packageName: string | null;
 } | null> {
   if (!supabase) return null;
   const { data } = await supabase
     .from("org_billing")
-    .select("setup_paid_at, support_until")
+    .select("setup_paid_at, support_until, package_id")
     .limit(1)
     .maybeSingle();
   if (!data) return null;
-  const row = data as { setup_paid_at: string | null; support_until: string | null };
-  return { setupPaidAt: row.setup_paid_at, supportUntil: row.support_until };
+  const row = data as {
+    setup_paid_at: string | null;
+    support_until: string | null;
+    package_id: string | null;
+  };
+  let packageName: string | null = null;
+  if (row.package_id) {
+    const { data: pkg } = await supabase
+      .from("support_packages")
+      .select("name")
+      .eq("id", row.package_id)
+      .maybeSingle();
+    packageName = (pkg as { name?: string } | null)?.name ?? null;
+  }
+  return { setupPaidAt: row.setup_paid_at, supportUntil: row.support_until, packageName };
 }

@@ -36,7 +36,7 @@ function BranchesContent() {
   const [problem, setProblem] = useState<string | null>(null);
   const active = getActiveTenant();
   const [takings, setTakings] = useState<Record<string, number>>({});
-  const [billing, setBilling] = useState<{ setupPaidAt: string | null; supportUntil: string | null } | null>(null);
+  const [billing, setBilling] = useState<{ setupPaidAt: string | null; supportUntil: string | null; packageName: string | null } | null>(null);
 
   const load = useCallback(() => {
     void getMyOrganization().then(setOrg);
@@ -80,7 +80,7 @@ function BranchesContent() {
               }
             >
               {billing.supportUntil
-                ? `VINPOS support until · Hỗ trợ đến ${billing.supportUntil}`
+                ? `${billing.packageName ?? "VINPOS"} support until · Hỗ trợ đến ${billing.supportUntil}`
                 : "No support plan · Chưa có gói hỗ trợ"}
             </span>
           </p>

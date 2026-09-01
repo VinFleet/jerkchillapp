@@ -21,13 +21,18 @@ export async function GET(request: Request) {
     .select("org_id, user_id, role");
   const { data: billing } = await gate.client
     .from("org_billing")
-    .select("org_id, setup_paid_at, support_until");
+    .select("org_id, setup_paid_at, support_until, package_id");
+  const { data: packages } = await gate.client
+    .from("support_packages")
+    .select("id, name, price_per_branch_vnd, sort")
+    .order("sort");
 
   return NextResponse.json({
     orgs: orgs ?? [],
     branches: branches ?? [],
     members: members ?? [],
     billing: billing ?? [],
+    packages: packages ?? [],
   });
 }
 

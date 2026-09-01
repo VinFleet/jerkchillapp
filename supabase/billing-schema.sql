@@ -40,3 +40,36 @@ create policy "members see their billing status" on org_billing
   using (org_id in (select my_org_ids()));
 
 -- The ledger is the platform's book: service-role only, no policies.
+
+-- ---------- support packages ----------
+--
+-- Three tiers, priced per restaurant per month: the charge for an
+-- organization is tier price x branch count x months. Prices live here and
+-- are edited in the admin console, not in code — a price change is a
+-- business decision, not a deploy. The placeholder amounts below are
+-- deliberately obviously-placeholder; set the real ones in /admin.
+
+create table if not exists support_packages (
+  id                   text   primary key,
+  name                 text   not null,
+  price_per_branch_vnd bigint not null check (price_per_branch_vnd >= 0),
+  sort                 int    not null default 0
+);
+
+insert into support_packages (id, name, price_per_branch_vnd, sort) values
+  ('basic',    'Basic',    500000,  1),
+  ('standard', 'Standard', 1000000, 2),
+  ('premium',  'Premium',  2000000, 3)
+on conflict (id) do nothing;
+
+alter table support_packages enable row level security;
+
+-- A price list is for reading: customers see what the tiers cost.
+drop policy if exists "anyone signed in can read the price list" on support_packages;
+create policy "anyone signed in can read the price list" on support_packages
+  for select to authenticated using (true);
+
+-- Which tier an org is on, and what each payment was for.
+alter table org_billing add column if not exists package_id text references support_packages (id);
+alter table platform_billing_payments add column if not exists package_id text;
+alter table platform_billing_payments add column if not exists branches_count int;

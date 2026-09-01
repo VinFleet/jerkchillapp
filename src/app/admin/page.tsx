@@ -20,7 +20,13 @@ type Overview = {
   orgs: { id: string; name: string; active: boolean }[];
   branches: { id: string; org_id: string; name: string }[];
   members: { org_id: string; user_id: string; role: string }[];
-  billing: { org_id: string; setup_paid_at: string | null; support_until: string | null }[];
+  billing: {
+    org_id: string;
+    setup_paid_at: string | null;
+    support_until: string | null;
+    package_id: string | null;
+  }[];
+  packages: { id: string; name: string; price_per_branch_vnd: number; sort: number }[];
 };
 
 /**
@@ -56,7 +62,8 @@ export default function AdminPage() {
   const [form, setForm] = useState({ name: "", branchName: "", ownerEmail: "", ownerPassword: "" });
   const [userForm, setUserForm] = useState({ orgId: "", email: "", password: "", role: "manager" });
   const [branchForm, setBranchForm] = useState({ orgId: "", name: "" });
-  const [billingForm, setBillingForm] = useState({ orgId: "", kind: "support", amountVnd: "", months: "1", reference: "" });
+  const [billingForm, setBillingForm] = useState({ orgId: "", kind: "support", packageId: "standard", amountVnd: "", months: "1", reference: "" });
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
   const [chargeQr, setChargeQr] = useState<{ orgId: string; payload: string; amount: number } | null>(null);
 
   const load = useCallback(async () => {
@@ -174,6 +181,52 @@ export default function AdminPage() {
           </button>
         </section>
 
+        {/* The price list. Three tiers, per restaurant per month; totals are
+            tier x branches x months. Prices change here, never in code. */}
+        {overview && (
+          <section className="rounded-2xl border border-border bg-surface p-4 space-y-2">
+            <h2 className="font-bold text-sm">Support packages · price per restaurant / month</h2>
+            {overview.packages.map((pkg) => (
+              <div key={pkg.id} className="flex items-center gap-2">
+                <span className="w-24 text-sm font-semibold">{pkg.name}</span>
+                <input
+                  value={priceDrafts[pkg.id] ?? String(pkg.price_per_branch_vnd)}
+                  onChange={(e) =>
+                    setPriceDrafts({ ...priceDrafts, [pkg.id]: e.target.value.replace(/[^\d]/g, "") })
+                  }
+                  inputMode="numeric"
+                  className="min-h-[40px] w-36 rounded-lg border border-border px-3 text-sm tabular-nums text-right"
+                />
+                <span className="text-xs text-muted">₫ / restaurant / month</span>
+                {priceDrafts[pkg.id] !== undefined &&
+                  priceDrafts[pkg.id] !== String(pkg.price_per_branch_vnd) && (
+                    <button
+                      onClick={async () => {
+                        const res = await adminFetch("/api/admin/packages", {
+                          method: "PATCH",
+                          body: JSON.stringify({
+                            id: pkg.id,
+                            pricePerBranchVnd: Number(priceDrafts[pkg.id] || 0),
+                          }),
+                        });
+                        flash(res.ok ? `${pkg.name} repriced` : "Reprice failed");
+                        setPriceDrafts((d) => {
+                          const next = { ...d };
+                          delete next[pkg.id];
+                          return next;
+                        });
+                        void load();
+                      }}
+                      className="min-h-[40px] px-3 rounded-lg bg-brand text-white text-xs font-bold"
+                    >
+                      Save
+                    </button>
+                  )}
+              </div>
+            ))}
+          </section>
+        )}
+
         {/* Existing orgs */}
         {overview?.orgs.map((org) => {
           const branches = overview.branches.filter((b) => b.org_id === org.id);
@@ -233,7 +286,9 @@ export default function AdminPage() {
                     </span>
                     <span className={supported ? "text-success font-semibold" : "text-danger font-semibold"}>
                       {bill?.support_until
-                        ? `Support until ${bill.support_until}${supported ? "" : " — LAPSED"}`
+                        ? `${
+                            overview.packages.find((pkg) => pkg.id === bill.package_id)?.name ?? "Support"
+                          } until ${bill.support_until}${supported ? "" : " — LAPSED"}`
                         : "No support plan"}
                     </span>
                   </p>
@@ -263,17 +318,46 @@ export default function AdminPage() {
                     <option value="support">support</option>
                     <option value="setup">setup</option>
                   </select>
-                  <input
-                    value={billingForm.amountVnd}
-                    onChange={(e) => setBillingForm({ ...billingForm, amountVnd: e.target.value.replace(/[^\d]/g, "") })}
-                    placeholder="Amount ₫"
-                    inputMode="numeric"
-                    className="min-h-[40px] w-32 rounded-lg border border-border px-3 text-sm tabular-nums"
-                  />
+                  {billingForm.kind === "support" && (
+                    <select
+                      value={billingForm.packageId}
+                      onChange={(e) => setBillingForm({ ...billingForm, packageId: e.target.value, amountVnd: "" })}
+                      className="min-h-[40px] rounded-lg border border-border px-2 text-sm"
+                    >
+                      {overview.packages.map((pkg) => (
+                        <option key={pkg.id} value={pkg.id}>
+                          {pkg.name} — {pkg.price_per_branch_vnd.toLocaleString("vi-VN")}₫
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {(() => {
+                    const pkg = overview.packages.find((x) => x.id === billingForm.packageId);
+                    const nBranches = branches.length || 1;
+                    const listPrice =
+                      billingForm.kind === "support" && pkg
+                        ? pkg.price_per_branch_vnd * nBranches * Math.max(1, Number(billingForm.months || 1))
+                        : 0;
+                    return (
+                      <input
+                        value={billingForm.amountVnd}
+                        onChange={(e) =>
+                          setBillingForm({ ...billingForm, amountVnd: e.target.value.replace(/[^\d]/g, "") })
+                        }
+                        placeholder={
+                          listPrice
+                            ? `${listPrice.toLocaleString("vi-VN")} (${nBranches} × list)`
+                            : "Amount ₫"
+                        }
+                        inputMode="numeric"
+                        className="min-h-[40px] w-44 rounded-lg border border-border px-3 text-sm tabular-nums"
+                      />
+                    );
+                  })()}
                   {billingForm.kind === "support" && (
                     <input
                       value={billingForm.months}
-                      onChange={(e) => setBillingForm({ ...billingForm, months: e.target.value.replace(/[^\d]/g, "") })}
+                      onChange={(e) => setBillingForm({ ...billingForm, months: e.target.value.replace(/[^\d]/g, ""), amountVnd: "" })}
                       placeholder="Months"
                       inputMode="numeric"
                       className="min-h-[40px] w-20 rounded-lg border border-border px-3 text-sm tabular-nums"
@@ -282,7 +366,12 @@ export default function AdminPage() {
                   {PLATFORM_BANK.bin && PLATFORM_BANK.account && (
                     <button
                       onClick={() => {
-                        const amount = Number(billingForm.amountVnd || 0);
+                        const pkg = overview.packages.find((x) => x.id === billingForm.packageId);
+                        const listPrice =
+                          billingForm.kind === "support" && pkg
+                            ? pkg.price_per_branch_vnd * (branches.length || 1) * Math.max(1, Number(billingForm.months || 1))
+                            : 0;
+                        const amount = Number(billingForm.amountVnd || 0) || listPrice;
                         if (!amount) return;
                         try {
                           setChargeQr({
@@ -311,6 +400,7 @@ export default function AdminPage() {
                         body: JSON.stringify({
                           orgId: org.id,
                           kind: billingForm.kind,
+                          packageId: billingForm.packageId,
                           amountVnd: Number(billingForm.amountVnd || 0),
                           months: Number(billingForm.months || 0),
                           reference: billingForm.reference || `VINPOS ${org.id}`,
@@ -318,7 +408,7 @@ export default function AdminPage() {
                       });
                       const body = await res.json();
                       flash(res.ok ? "Payment recorded" : `Failed: ${body.error}`);
-                      setBillingForm({ orgId: "", kind: "support", amountVnd: "", months: "1", reference: "" });
+                      setBillingForm({ orgId: "", kind: "support", packageId: "standard", amountVnd: "", months: "1", reference: "" });
                       setChargeQr(null);
                       void load();
                     }}
