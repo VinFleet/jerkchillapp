@@ -25,6 +25,7 @@ import {
 import { getRecipe, getRecipes } from "@/lib/repo/recipes";
 import { getSettings } from "@/lib/repo/settings";
 import { MENU_CHANNEL_LABEL, MENU_CHANNEL_ORDER, MENU_CATEGORY_LABEL, PRINTED_MATERIAL_FIELD_LABEL } from "@/lib/menuLabels";
+import { getAllPlatformStats } from "@/lib/repo/deliveryPerformance";
 import type { MenuItem, MenuChannel, RecipeCategory, PrintedMaterial, Recipe } from "@/lib/types";
 
 type Tab = "pricing" | "materials";
@@ -179,6 +180,26 @@ function MenuItemCard({
   const dineInPrice = item.pricesVnd.dine_in;
   const margin = showMargin && cost !== undefined && dineInPrice !== null ? dineInPrice - cost : null;
 
+  // What the delivery price is actually worth. A 25% commission turns a
+  // healthy-looking listed price into a loss more often than anyone expects,
+  // and the platform's cut lives three screens away — so it is said here,
+  // next to the price, at the worst commission currently on file.
+  const deliveryPrice = item.pricesVnd.delivery;
+  const worstCommission = showMargin
+    ? getAllPlatformStats().reduce<number | null>(
+        (worst, s) =>
+          s.commissionPct !== null && (worst === null || s.commissionPct > worst)
+            ? s.commissionPct
+            : worst,
+        null
+      )
+    : null;
+  const deliveryKeep =
+    showMargin && deliveryPrice !== null && worstCommission !== null
+      ? Math.round(deliveryPrice * (1 - worstCommission / 100))
+      : null;
+  const deliveryMargin = deliveryKeep !== null && cost !== undefined ? deliveryKeep - cost : null;
+
   return (
     <Card>
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -217,6 +238,18 @@ function MenuItemCard({
           {margin !== null && (
             <span className={margin >= 0 ? "text-success font-semibold" : "text-danger font-semibold"}>
               Margin · Lợi nhuận {vnd(margin)}
+            </span>
+          )}
+        </div>
+      )}
+      {deliveryKeep !== null && (
+        <div className="mt-1 flex items-center justify-between text-xs">
+          <span className="text-muted">
+            Delivery after {worstCommission}% · Sau chiết khấu {vnd(deliveryKeep)}
+          </span>
+          {deliveryMargin !== null && (
+            <span className={deliveryMargin >= 0 ? "text-success font-semibold" : "text-danger font-semibold"}>
+              {vnd(deliveryMargin)}
             </span>
           )}
         </div>
