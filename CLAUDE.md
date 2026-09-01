@@ -331,9 +331,25 @@ into a repo from a test:
 | `lib/payments/webhookAuth.ts` | whether a payment callback is genuinely from the provider |
 | `lib/sync/collections.ts` (reconcilers) | how two devices' copies of one record merge — tested for convergence |
 
-Tests: `npm run test:all` runs all seven suites (125 assertions); individually
+Tests: `npm run test:all` runs all nine suites; individually
 `npm run test:zalo`, `test:due`, `test:portions`, `test:orders`, `test:vietqr`,
-`test:webhook`, `test:sync`.
+`test:webhook`, `test:sync`, `test:escpos`.
+
+## Printing
+
+The app never talks to a printer. A browser cannot: there are no raw sockets,
+Chrome blacklists port 9100 outright, and an HTTPS page may not call
+`http://192.168.x.x`. Instead devices (and the guest API, service-role side)
+insert rows into `print_jobs` in Postgres, and `tools/print-bridge/bridge.mjs`
+— a dependency-free Node process on any always-on machine inside the
+restaurant — claims jobs by compare-and-swap and speaks ESC/POS to the LAN
+printers on port 9100. `tools/print-bridge/escpos.mjs` is the pure renderer
+(`npm run test:escpos`); text is transliterated to ASCII because cheap thermal
+printers disagree about Vietnamese codepages, and readable-plain beats
+mojibake. Jobs older than 15 minutes are failed, not printed — a bridge
+started after lunch must not replay the morning. On-screen print pages remain
+the no-bridge fallback. `print_jobs` is a server-side queue, not a synced or
+local collection.
 
 ## Zalo, briefly
 

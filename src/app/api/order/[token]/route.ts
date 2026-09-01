@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { MenuItem, Order, OrderLine, OrderLineChoice } from "@/lib/types";
 import type { TableToken } from "@/lib/repo/tableTokens";
 import { newId } from "@/lib/storage";
-import { linePriceVnd } from "@/lib/repo/orderRules";
+import { linePriceVnd, orderCode } from "@/lib/repo/orderRules";
 import { sendPush } from "@/lib/push/server";
 
 /**
@@ -241,6 +241,43 @@ export async function POST(
       // The guest must not be told the order is on its way when it is not.
       return NextResponse.json({ error: "not_saved" }, { status: 503 });
     }
+
+    // The kitchen ticket, straight to the printer. Same fire-and-forget rule
+    // as the push alert: the order is already saved, and a print failure must
+    // not become an error the guest sees — the ticket also reaches the pass
+    // screen through sync either way.
+    //
+    // The table NUMBER, not its id — a chef reads "I4" off paper, and the
+    // floor plan is the only thing that knows the mapping.
+    const { data: tableRow } = await client
+      .from("restaurant_tables")
+      .select("table_number")
+      .eq("id", tableId)
+      .maybeSingle();
+
+    void client
+      .from("print_jobs")
+      .insert({
+        tenant_id: TENANT_ID,
+        printer: "kitchen",
+        payload: {
+          table: (tableRow as { table_number?: string } | null)?.table_number ?? "QR TABLE",
+          code: orderCode(order.id),
+          time: new Date().toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Asia/Ho_Chi_Minh",
+          }),
+          placedBy: "QR — guest ordered",
+          notes: order.guestNote ? [order.guestNote] : [],
+          lines: lines.map((l) => ({
+            qty: l.qty,
+            name: menu.find((m) => m.id === l.menuItemId)?.name.en ?? l.menuItemId,
+            detail: (l.choices ?? []).map((c) => c.label.en).join(", ") || undefined,
+          })),
+        },
+      })
+      .then(undefined, () => undefined);
 
     // Tell the kitchen. A guest orders by QR and then simply waits — nobody is
     // standing at the pass announcing it, and sync only pulls once a minute, so

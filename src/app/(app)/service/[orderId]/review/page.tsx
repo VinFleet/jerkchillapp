@@ -67,6 +67,7 @@ import { buildVietQrPayload } from "@/lib/payments/vietqr";
 import { VietQrCode } from "@/components/VietQrCode";
 import { changeDueVnd, cashSuggestionsVnd, orderCode, clampPartialPayment } from "@/lib/repo/orderRules";
 import { uploadCardSlip, cardSlipUrl } from "@/lib/payments/slips";
+import { printKitchenTicket, printReceipt } from "@/lib/print/jobs";
 import type { Order, MenuItem, Payment, PaymentMethod, Promotion } from "@/lib/types";
 
 /**
@@ -193,8 +194,18 @@ function ReviewContent() {
   };
 
   const send = () => {
+    // Capture which lines this round is BEFORE stamping them, so the printed
+    // ticket is this round only — a second round is a second piece of paper.
+    const roundIds = unsentLines(order).map((l) => l.id);
     const count = sendToKitchen(order.id);
     load();
+    if (count > 0 && roundIds.length > 0) {
+      const fresh = getOrder(order.id);
+      if (fresh)
+        void printKitchenTicket(fresh, roundIds).then((queued) => {
+          if (!queued) flash("Sent — printer offline, use the ticket screen · Máy in chưa kết nối");
+        });
+    }
     flash(
       count > 0
         ? `Sent ${count} to the kitchen · Đã gửi ${count} món`
@@ -206,7 +217,12 @@ function ReviewContent() {
     if (!bill || bill.outstandingVnd <= 0) return;
     // Sending on payment covers the waiter who takes the money first — the
     // kitchen must never learn about a round only after it is paid for.
-    if (unsentLines(order).length > 0) sendToKitchen(order.id);
+    const unsentIds = unsentLines(order).map((l) => l.id);
+    if (unsentIds.length > 0) {
+      sendToKitchen(order.id);
+      const fresh = getOrder(order.id);
+      if (fresh) void printKitchenTicket(fresh, unsentIds);
+    }
 
     // Half the table pays cash, the rest goes on a QR: each payment takes
     // what the amount field says, capped at what is owed. An empty field
@@ -310,12 +326,28 @@ function ReviewContent() {
             <Send size={18} className="text-muted shrink-0" />
             Send to kitchen <span className="text-muted">· Gửi bếp</span>
           </button>
+          <button
+            onClick={() => {
+              void printReceipt(order).then((queued) =>
+                flash(
+                  queued
+                    ? "Bill sent to the printer · Đã gửi máy in"
+                    : "Printer offline — opening the on-screen bill · Máy in chưa kết nối"
+                )
+              );
+              setPanel("none");
+            }}
+            className="w-full min-h-[56px] px-4 flex items-center gap-3 text-left"
+          >
+            <Printer size={18} className="text-muted shrink-0" />
+            Print the bill <span className="text-muted">· In hoá đơn</span>
+          </button>
           <Link
             href={`/service/${order.id}/bill`}
             className="w-full min-h-[56px] px-4 flex items-center gap-3"
           >
             <Printer size={18} className="text-muted shrink-0" />
-            Print the bill <span className="text-muted">· In hoá đơn</span>
+            Bill on screen <span className="text-muted">· Xem hoá đơn</span>
           </Link>
           <button
             onClick={() => setPanel("tables")}
