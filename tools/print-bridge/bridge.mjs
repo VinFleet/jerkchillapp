@@ -25,7 +25,7 @@ import { readFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { renderKitchenTicket, renderReceipt } from "./escpos.mjs";
+import { renderKitchenTicket, renderReceipt } from "../../src/lib/print/escpos.mjs";
 
 const URL_ = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
