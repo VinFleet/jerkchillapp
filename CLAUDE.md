@@ -380,9 +380,15 @@ Tests: `npm run test:all` runs all nine suites; individually
 
 ## Printing
 
-The app never talks to a printer. A browser cannot: there are no raw sockets,
-Chrome blacklists port 9100 outright, and an HTTPS page may not call
-`http://192.168.x.x`. Printers are configured
+A browser cannot talk to a printer: no raw sockets, Chrome blacklists port
+9100 outright, and an HTTPS page may not call `http://192.168.x.x`. The
+NATIVE till app can — a Capacitor shell (`capacitor.config.ts`, android/,
+ios/) around the deployed web app whose one plugin, TcpPrint, writes raw
+bytes to a LAN socket. On the till, `deliver()` in `src/lib/print/jobs.ts`
+prints direct (instant, internet-free) and `tillWorker.ts` claims queued
+jobs from everyone else with the same CAS the bridge uses, so till + bridge
+side by side never double-print. The web build still cannot, and never
+pretends to: it queues. Docs: `docs/TILL-APP.md`. Printers are configured
 in-app (Settings → Printing, the synced `printer_settings` record); the bridge
 re-reads them every ~15s, with `printers.json` only as a fallback. Three
 stations: kitchen, receipt, and an optional bar printer — when the bar is
@@ -395,10 +401,10 @@ Per-printer `encoding`: default ASCII transliteration, or CP1258 for real
 Vietnamese (tones as combining bytes; the ESC t page number is a setting
 because firmware vendors disagree — 94, 30, 21 are all in the wild). Devices
 (and the guest API, service-role side)
-insert rows into `print_jobs` in Postgres, and `tools/print-bridge/bridge.mjs`
-— a dependency-free Node process on any always-on machine inside the
-restaurant — claims jobs by compare-and-swap and speaks ESC/POS to the LAN
-printers on port 9100. `tools/print-bridge/escpos.mjs` is the pure renderer
+insert rows into `print_jobs` in Postgres; the native till's worker — or
+`tools/print-bridge/bridge.mjs`, now optional, for setups that want a
+dedicated print machine — claims jobs by compare-and-swap and speaks ESC/POS
+to the LAN printers on port 9100. `src/lib/print/escpos.mjs` is the pure renderer, shared by app and bridge
 (`npm run test:escpos`); text is transliterated to ASCII because cheap thermal
 printers disagree about Vietnamese codepages, and readable-plain beats
 mojibake. Jobs older than 15 minutes are failed, not printed — a bridge
