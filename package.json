@@ -23,6 +23,9 @@
     "test:einvoice": "node --experimental-strip-types --test src/lib/einvoice/einvoice.test.ts"
   },
   "dependencies": {
+    "@capacitor/android": "8.5.1",
+    "@capacitor/core": "8.5.1",
+    "@capacitor/ios": "8.5.1",
     "@supabase/supabase-js": "^2.112.3",
     "lucide-react": "^1.32.0",
     "next": "16.3.1",
@@ -32,6 +35,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.6",

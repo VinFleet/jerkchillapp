@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VINPOS</string>
+    <string name="title_activity_main">VINPOS</string>
+    <string name="package_name">vn.vinpos.till</string>
+    <string name="custom_url_scheme">vn.vinpos.till</string>
+</resources>
