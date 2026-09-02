@@ -11,6 +11,7 @@ import {
   looksLikeHost,
 } from "@/lib/repo/printerSettings";
 import { printTest, recentPrintJobs, bridgeSeenAt, bridgeLooksDown, type PrintJobRow } from "@/lib/print/jobs";
+import { nativePrintAvailable } from "@/lib/print/native";
 import type { PrinterSettings } from "@/lib/types";
 
 /**
@@ -93,6 +94,12 @@ function PrintingContent() {
       />
 
       <div className="px-4 md:px-8 max-w-xl space-y-4">
+        {nativePrintAvailable() && (
+          <p className="flex items-center gap-2 text-sm rounded-xl border border-success bg-success-tint text-success px-3 py-2.5 font-semibold">
+            <CheckCircle2 size={16} className="shrink-0" />
+            This till prints directly — no bridge needed · Máy này in trực tiếp, không cần bridge
+          </p>
+        )}
         {/* Bridge health, from the queue itself */}
         {stuckQueued > 0 || heartbeatDown ? (
           <p className="flex items-start gap-2 text-sm rounded-xl border border-warning bg-warning-tint text-warning px-3 py-2.5">

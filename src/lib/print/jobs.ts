@@ -1,4 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
+import { nativePrintAvailable, nativePrintRaw } from "./native";
+import { renderKitchenTicket, renderReceipt } from "./escpos.mjs";
 import { getBill, getPayments } from "@/lib/repo/orders";
 import { getMenuItems } from "@/lib/repo/menu";
 import { getCachedTables } from "@/lib/repo/tableCache";
@@ -10,20 +12,53 @@ import { orderCode, isDrinkCategory } from "@/lib/repo/orderRules";
 import type { Order, OrderLine } from "@/lib/types";
 
 /**
- * Handing a ticket to the print bridge.
+ * Getting tickets onto paper.
  *
- * Fire-and-forget by design: the job goes into the queue and the bridge does
- * the rest. A failure returns false and the caller says so, because the
- * fallback — the on-screen print button — only helps someone who knows the
+ * Two paths, one caller-visible behaviour. The native till app prints
+ * straight to the printer's port (see native.ts); the web build — and any
+ * failed direct write — hands the job to the cloud queue, drained by
+ * whichever brain is claiming: the till app's worker or a bridge process.
+ * Fire-and-forget by design; a failure returns false and the caller says
+ * so, because the on-screen fallback only helps someone who knows the
  * auto-print did not happen.
  *
  * Everything is resolved to plain text here, on the device that knows the
- * menu: the bridge should never need the app's data model, only a ticket.
+ * menu: whatever prints the ticket never needs the app's data model.
  */
 
 import { getActiveTenant } from "@/lib/storage";
 
-async function enqueue(printer: "kitchen" | "receipt" | "bar", payload: unknown): Promise<boolean> {
+export type PrinterStation = "kitchen" | "receipt" | "bar";
+
+/**
+ * Render a job's bytes the same way the bridge would — one renderer, two
+ * callers, so a ticket looks identical whichever brain printed it.
+ */
+export function renderJobBytes(printer: PrinterStation, payload: unknown): Uint8Array {
+  const config = printerFor(getPrinterSettings(), printer);
+  const opts = {
+    width: config?.width ?? 42,
+    encoding: config?.encoding,
+    codepageByte: config?.codepageByte,
+  };
+  return printer === "receipt" ? renderReceipt(payload, opts) : renderKitchenTicket(payload, opts);
+}
+
+/**
+ * Get a ticket onto paper, best path first.
+ *
+ * On the native till the bytes go straight to the printer's port — instant,
+ * and working with no internet at all. Everywhere else (and when the direct
+ * write fails: wrong IP, printer off) the job goes to the cloud queue for
+ * whichever brain is claiming: the till app, or a bridge process where one
+ * still runs.
+ */
+async function deliver(printer: PrinterStation, payload: unknown): Promise<boolean> {
+  const config = printerFor(getPrinterSettings(), printer);
+  if (nativePrintAvailable() && config?.enabled && config.host) {
+    const printed = await nativePrintRaw(config.host, renderJobBytes(printer, payload));
+    if (printed) return true;
+  }
   if (!supabase) return false;
   const { error } = await supabase.from("print_jobs").insert({
     tenant_id: getActiveTenant(),
@@ -91,7 +126,7 @@ async function enqueueByStation(order: Order, lines: OrderLine[], voided: boolea
   }
   const results = await Promise.all(
     [...byStation.entries()].map(([station, stationLines]) =>
-      enqueue(station, kitchenTicketPayload(order, stationLines, voided))
+      deliver(station, kitchenTicketPayload(order, stationLines, voided))
     )
   );
   return results.every(Boolean);
@@ -136,7 +171,7 @@ export async function printReceipt(order: Order): Promise<boolean> {
     }
   }
 
-  return enqueue("receipt", {
+  return deliver("receipt", {
     headerName: receipt.headerName,
     addressLine: receipt.addressLine,
     metaLine:
@@ -171,7 +206,7 @@ export async function printReceipt(order: Order): Promise<boolean> {
 export async function printTest(printer: "kitchen" | "receipt" | "bar"): Promise<boolean> {
   const now = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   if (printer === "kitchen" || printer === "bar") {
-    return enqueue(printer, {
+    return deliver(printer, {
       table: "TEST",
       code: "APP",
       time: now,
@@ -186,7 +221,7 @@ export async function printTest(printer: "kitchen" | "receipt" | "bar"): Promise
     });
   }
   const receipt = getReceiptSettings();
-  return enqueue("receipt", {
+  return deliver("receipt", {
     headerName: receipt.headerName,
     addressLine: receipt.addressLine,
     table: "TEST",

@@ -69,6 +69,7 @@ import { changeDueVnd, cashSuggestionsVnd, orderCode, clampPartialPayment } from
 import { uploadCardSlip, cardSlipUrl } from "@/lib/payments/slips";
 import { printKitchenTicket, printReceipt, printVoidTicket, bridgeSeenAt, bridgeLooksDown } from "@/lib/print/jobs";
 import { maybeQueueEInvoice } from "@/lib/einvoice/queue";
+import { nativePrintAvailable } from "@/lib/print/native";
 import { getPrinterSettings } from "@/lib/repo/printerSettings";
 import { getActiveTenant } from "@/lib/storage";
 import type { Order, MenuItem, Payment, PaymentMethod, Promotion } from "@/lib/types";
@@ -176,6 +177,8 @@ function ReviewContent() {
   const [bridgeDown, setBridgeDown] = useState(false);
   useEffect(() => {
     if (!getPrinterSettings().autoPrintKitchen) return;
+    // The native till prints its own sends — a dead bridge is not its problem.
+    if (nativePrintAvailable()) return;
     let alive = true;
     void bridgeSeenAt().then((seen) => {
       if (alive) setBridgeDown(bridgeLooksDown(seen));

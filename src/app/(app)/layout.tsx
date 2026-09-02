@@ -6,6 +6,7 @@ import { useSession } from "@/lib/auth/RoleContext";
 import { AppShell } from "@/components/AppShell";
 import { SyncProvider } from "@/lib/sync/SyncProvider";
 import { ensureAllSeeded } from "@/lib/seed/bootstrap";
+import { startTillPrintWorker } from "@/lib/print/tillWorker";
 
 export default function AppGroupLayout({ children }: { children: React.ReactNode }) {
   const { session, ready } = useSession();
@@ -18,6 +19,14 @@ export default function AppGroupLayout({ children }: { children: React.ReactNode
   useEffect(() => {
     ensureAllSeeded();
   }, []);
+
+  // On the native till this starts the queue claimer (guest-QR orders, other
+  // devices' sends); on the web it is a no-op. Gated on session so a signed-
+  // out webview never polls.
+  useEffect(() => {
+    if (!session) return;
+    return startTillPrintWorker();
+  }, [session]);
 
   if (!ready || !session) {
     // A skeleton rather than a bare word: this is the first thing anyone sees
