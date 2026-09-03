@@ -372,11 +372,14 @@ into a repo from a test:
 | `lib/repo/orderRules.ts` | what a bill totals, and whether a table may be closed |
 | `lib/payments/vietqr.ts` | the EMVCo payload and its CRC — a wrong byte means a QR that will not scan |
 | `lib/payments/webhookAuth.ts` | whether a payment callback is genuinely from the provider |
+| `lib/payments/ninepay.ts` | the 9Pay card-terminal signature, and whether an IPN is genuine |
+| `lib/repo/orderRules.ts` (`initialPaymentStatus`) | which payments settle at once and which wait for a callback |
 | `lib/sync/collections.ts` (reconcilers) | how two devices' copies of one record merge — tested for convergence |
 
-Tests: `npm run test:all` runs all nine suites; individually
+Tests: `npm run test:all` runs all eleven suites; individually
 `npm run test:zalo`, `test:due`, `test:portions`, `test:orders`, `test:vietqr`,
-`test:webhook`, `test:sync`, `test:escpos`.
+`test:webhook`, `test:sync`, `test:escpos`, `test:pin`, `test:einvoice`,
+`test:ninepay`.
 
 ## Printing
 
