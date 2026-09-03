@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Home, LogOut, MoreHorizontal, Settings } from "lucide-react";
 import { NAV_ITEMS, mobilePrimaryModules, ordersHref, LAUNCH_GROUPS, launchOrder } from "@/lib/nav";
-import { getReceiptSettings } from "@/lib/repo/receiptSettings";
-import { VinposWordmark } from "@/components/VinposWordmark";
+import { TenantBrandmark } from "@/components/TenantBrandmark";
 import { canAccessModule } from "@/lib/auth/permissions";
 import { useSession } from "@/lib/auth/RoleContext";
 import { useSync } from "@/lib/sync/SyncProvider";
@@ -19,40 +17,6 @@ import { SyncIndicator } from "@/components/SyncIndicator";
 import { UrgentNoticeBanner } from "@/components/UrgentNoticeBanner";
 import { WhoIsWorking } from "@/components/WhoIsWorking";
 
-
-/**
- * The chrome wears the restaurant's identity, not ours.
- *
- * Jerk & Chill is customer number one and sees its own logo exactly as
- * before; a new branch shows its own name the moment the owner types it, and
- * the product mark only until then. VINPOS is the platform, not the sign
- * over anyone's door.
- */
-function TenantBrand({ compact = false }: { compact?: boolean }) {
-  const [brand, setBrand] = useState<{ name: string; logoUrl?: string } | null>(null);
-  useEffect(() => {
-    const r = getReceiptSettings();
-    setBrand({ name: r.headerName, logoUrl: r.logoUrl });
-  }, []);
-  if (!brand) return <VinposWordmark />;
-  if (brand.logoUrl) {
-    return (
-      <Image
-        src={brand.logoUrl}
-        alt={brand.name || "logo"}
-        width={compact ? 100 : 140}
-        height={compact ? 71 : 99}
-        priority
-        className="shrink-0 w-auto"
-        style={{ maxHeight: compact ? 44 : 64 }}
-      />
-    );
-  }
-  if (brand.name) {
-    return <span className="font-black text-lg tracking-tight truncate">{brand.name}</span>;
-  }
-  return <VinposWordmark />;
-}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -93,7 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:w-64 md:flex-col md:border-r md:border-border md:bg-surface print:hidden">
         <div className="p-5 flex items-center gap-3">
-          <TenantBrand />
+          <TenantBrandmark />
         </div>
         {/* Grouped like a back office rather than a flat module list — the
             same section headings the launcher uses, so the phone and the
@@ -172,7 +136,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Mobile header */}
       <header className="md:hidden print:hidden safe-top sticky top-0 z-20 bg-surface border-b border-border flex items-center justify-between px-4 py-2">
-        <TenantBrand compact />
+        <TenantBrandmark compact />
         <div className="flex items-center gap-2 min-w-0">
           <WhoIsWorking compact />
           <SyncIndicator className="shrink-0 whitespace-nowrap" />

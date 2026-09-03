@@ -26,9 +26,11 @@ import type {
  *    logging different fridge checks would silently destroy one of them.
  *    These merge by union, and a record can only ever move forward.
  *
- * Reference data (recipes, suppliers, contacts, the fridge unit and cleaning
- * task lists) is deliberately excluded — it seeds identically on every device
- * and syncing it would add risk for no benefit.
+ * Reference data (suppliers, contacts, the cleaning task list) is deliberately
+ * excluded — it seeds identically on every device and syncing it would add
+ * risk for no benefit. Recipes and fridge units are the exceptions: both are
+ * things a VINPOS branch actively builds and grows over time, on whatever
+ * device is in hand, rather than a fixed seed tweaked in place.
  */
 export type SyncedCollection =
   // operational — last-write-wins
@@ -47,6 +49,7 @@ export type SyncedCollection =
   | "einvoice_settings"
   | "payment_settings"
   | "fs_fridge_units_v2"
+  | "recipes_v3"
   // food safety — append-only
   | "fs_temp_readings"
   | "fs_cook_logs"
@@ -346,9 +349,20 @@ export const SYNCED_COLLECTIONS: Record<SyncedCollection, CollectionConfig> = {
   // Unlike most reference data, fridges and freezers change over a
   // restaurant's life — a branch buys a second freezer next year — so they
   // must reach every device the day they're added, the same reasoning as
-  // the menu, not the reasoning that keeps recipes local-only.
+  // the menu.
   fs_fridge_units_v2: {
     storageKey: "fs_fridge_units_v2",
+    idOf: idField,
+    updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
+    mutable: true,
+  },
+  // Recipes used to be fixed at setup, tweaked in place — one restaurant's
+  // menu, seeded once. VINPOS branches write their own from nothing, on
+  // whichever device is in hand, and a recipe an owner types up on the
+  // office laptop has to reach the kitchen tablet before the chef needs it,
+  // not the next time someone happens to reinstall.
+  recipes_v3: {
+    storageKey: "recipes_v3",
     idOf: idField,
     updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
     mutable: true,

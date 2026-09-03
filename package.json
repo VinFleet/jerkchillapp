@@ -15,14 +15,15 @@
     "test:orders": "node --experimental-strip-types --test src/lib/repo/orderRules.test.ts",
     "test:vietqr": "node --experimental-strip-types --test src/lib/payments/vietqr.test.ts",
     "postinstall": "node scripts/icloud-unsync.mjs",
-    "test:all": "npm run test:zalo && npm run test:due && npm run test:portions && npm run test:orders && npm run test:vietqr && npm run test:webhook && npm run test:sync && npm run test:escpos && npm run test:pin && npm run test:einvoice && npm run test:ninepay && npm run test:equipment",
+    "test:all": "npm run test:zalo && npm run test:due && npm run test:portions && npm run test:orders && npm run test:vietqr && npm run test:webhook && npm run test:sync && npm run test:escpos && npm run test:pin && npm run test:einvoice && npm run test:ninepay && npm run test:equipment && npm run test:recipes",
     "test:webhook": "node --experimental-strip-types --test src/lib/payments/webhookAuth.test.ts",
     "test:sync": "node --experimental-strip-types --test src/lib/sync/collections.test.ts",
     "test:escpos": "node --test src/lib/print/escpos.test.mjs",
     "test:pin": "node --experimental-strip-types --test src/lib/auth/pin.test.ts",
     "test:einvoice": "node --experimental-strip-types --test src/lib/einvoice/einvoice.test.ts",
     "test:ninepay": "node --experimental-strip-types --test src/lib/payments/ninepay.test.ts",
-    "test:equipment": "node --experimental-strip-types --test src/lib/repo/equipmentRules.test.ts"
+    "test:equipment": "node --experimental-strip-types --test src/lib/repo/equipmentRules.test.ts",
+    "test:recipes": "node --experimental-strip-types --test src/lib/repo/recipeDraft.test.ts"
   },
   "dependencies": {
     "@capacitor/android": "8.5.1",

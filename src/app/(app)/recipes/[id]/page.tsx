@@ -2,19 +2,20 @@
 
 import { useEffect, useState, use as usePromise } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Minus, Plus, Flag, CheckCircle2, Pencil } from "lucide-react";
+import { ChevronLeft, Minus, Plus, Flag, CheckCircle2, Pencil, Trash2 } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { Bi } from "@/components/Bi";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { BigCheckbox } from "@/components/ui/BigCheckbox";
+import { RecipeEditor } from "@/components/RecipeEditor";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canFlagRecipes, canEditRecipes, canSeeCostMargin } from "@/lib/auth/permissions";
-import { getRecipe, getOpenFlagsForRecipe, raiseFlag, resolveFlag, saveRecipe } from "@/lib/repo/recipes";
+import { getRecipe, getOpenFlagsForRecipe, raiseFlag, resolveFlag, saveRecipe, deleteRecipe } from "@/lib/repo/recipes";
 import { getSettings } from "@/lib/repo/settings";
 import { CATEGORY_LABEL } from "@/lib/recipeLabels";
 import { scaleQty, formatQty } from "@/lib/scale";
-import type { Recipe, RecipeFlag, Ingredient } from "@/lib/types";
+import type { Recipe, RecipeFlag } from "@/lib/types";
 
 function RecipeDetailContent({ id }: { id: string }) {
   const router = useRouter();
@@ -27,10 +28,6 @@ function RecipeDetailContent({ id }: { id: string }) {
   const [flagNote, setFlagNote] = useState("");
   const [flagSent, setFlagSent] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [draftBase, setDraftBase] = useState("");
-  const [draftIngredients, setDraftIngredients] = useState<Ingredient[]>([]);
-  const [draftNoteEn, setDraftNoteEn] = useState("");
-  const [draftNoteVi, setDraftNoteVi] = useState("");
 
   useEffect(() => {
     const r = getRecipe(id);
@@ -74,32 +71,18 @@ function RecipeDetailContent({ id }: { id: string }) {
     setFlags(getOpenFlagsForRecipe(recipe.id));
   };
 
-  const startEditing = () => {
-    setDraftBase(String(recipe.basePortions));
-    setDraftIngredients(recipe.ingredients.map((i) => ({ ...i })));
-    setDraftNoteEn(recipe.notes?.en ?? "");
-    setDraftNoteVi(recipe.notes?.vi ?? "");
-    setEditing(true);
-  };
-
-  const updateDraftQty = (index: number, value: string) => {
-    setDraftIngredients((prev) => prev.map((ing, i) => (i === index ? { ...ing, qty: Number(value) || 0 } : ing)));
-  };
-
   /** Closes the loop a chef's flag opens — without this, a flag could be raised and marked resolved but the recipe never actually changed. */
-  const saveEdits = () => {
-    const base = Number(draftBase) || recipe.basePortions;
-    const updated: Recipe = {
-      ...recipe,
-      basePortions: Math.max(1, base),
-      ingredients: draftIngredients,
-      notes: draftNoteEn.trim() || draftNoteVi.trim() ? { en: draftNoteEn.trim(), vi: draftNoteVi.trim() } : undefined,
-      updatedAt: new Date().toISOString(),
-    };
+  const saveEdits = (updated: Recipe) => {
     saveRecipe(updated);
     setRecipe(updated);
     setPortions(updated.basePortions);
     setEditing(false);
+  };
+
+  const removeRecipe = () => {
+    if (!window.confirm(`Delete ${recipe.name.en || recipe.name.vi}? This cannot be undone.`)) return;
+    deleteRecipe(recipe.id);
+    router.replace("/recipes");
   };
 
   return (
@@ -149,6 +132,7 @@ function RecipeDetailContent({ id }: { id: string }) {
       )}
 
       {/* Portion scaler */}
+      {!editing && (
       <Card className="mx-4 md:mx-8 mt-4">
         <div className="flex items-center justify-between">
           <div>
@@ -192,117 +176,88 @@ function RecipeDetailContent({ id }: { id: string }) {
           })}
         </div>
       </Card>
+      )}
 
-      {/* Ingredients */}
-      <div className="px-4 md:px-8 mt-5">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="font-bold text-sm text-muted uppercase tracking-wide">
-            Ingredients · Nguyên liệu
-          </h2>
-          {canEditRecipes(session.role) && !editing && (
-            <button onClick={startEditing} className="flex items-center gap-1 text-xs text-brand font-semibold">
-              <Pencil size={12} /> Edit recipe · Sửa công thức
-            </button>
-          )}
+      {editing ? (
+        <div className="px-4 md:px-8 mt-5">
+          <RecipeEditor
+            initial={recipe}
+            onSave={saveEdits}
+            onCancel={() => setEditing(false)}
+            saveLabel={{ en: "Save changes", vi: "Lưu thay đổi" }}
+          />
+          <button
+            onClick={removeRecipe}
+            className="w-full min-h-[48px] mt-3 rounded-xl text-sm font-semibold text-danger flex items-center justify-center gap-1.5"
+          >
+            <Trash2 size={15} /> Delete this recipe · Xoá công thức này
+          </button>
         </div>
-
-        {editing ? (
-          <Card className="space-y-3">
-            <div>
-              <label className="text-xs text-muted">Base portions · Khẩu phần gốc</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                value={draftBase}
-                onChange={(e) => setDraftBase(e.target.value)}
-                className="w-full min-h-12 rounded-xl border-2 border-border px-3 mt-1 text-sm focus:outline-none focus:border-brand"
-              />
+      ) : (
+        <>
+          {/* Ingredients */}
+          <div className="px-4 md:px-8 mt-5">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-bold text-sm text-muted uppercase tracking-wide">
+                Ingredients · Nguyên liệu
+              </h2>
+              {canEditRecipes(session.role) && (
+                <button onClick={() => setEditing(true)} className="flex items-center gap-1 text-xs text-brand font-semibold">
+                  <Pencil size={12} /> Edit recipe · Sửa công thức
+                </button>
+              )}
             </div>
-            <div className="space-y-2">
-              {draftIngredients.map((ing, i) => (
-                <div key={ing.id} className="flex items-center gap-2">
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-sm truncate">{ing.name.en}</span>
-                    <span className="block text-xs text-muted truncate">{ing.name.vi}</span>
+            <Card className="divide-y divide-border p-0">
+              {recipe.ingredients.map((ing) => (
+                <div key={ing.id} className="flex items-center justify-between px-4 py-3">
+                  <Bi value={ing.name} className="text-sm" mode="inline" />
+                  <span className="font-semibold tabular-nums text-sm shrink-0 ml-3">
+                    {formatQty(scaleQty(ing.qty, recipe.basePortions, portions))} {ing.unit}
                   </span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={ing.qty}
-                    onChange={(e) => updateDraftQty(i, e.target.value)}
-                    className="w-24 min-h-11 rounded-xl border-2 border-border px-2 text-sm text-center focus:outline-none focus:border-brand"
-                    aria-label={`Quantity for ${ing.name.en}`}
-                  />
-                  <span className="text-xs text-muted w-24 shrink-0">{ing.unit}</span>
                 </div>
               ))}
-            </div>
-            <div>
-              <label className="text-xs text-muted">Notes · Ghi chú</label>
-              <textarea
-                value={draftNoteEn}
-                onChange={(e) => setDraftNoteEn(e.target.value)}
-                rows={2}
-                placeholder="Notes (English)"
-                className="w-full rounded-xl border-2 border-border px-3 py-2 mt-1 text-sm focus:outline-none focus:border-brand"
-              />
-              <textarea
-                value={draftNoteVi}
-                onChange={(e) => setDraftNoteVi(e.target.value)}
-                rows={2}
-                placeholder="Ghi chú (Tiếng Việt)"
-                className="w-full rounded-xl border-2 border-border px-3 py-2 mt-2 text-sm focus:outline-none focus:border-brand"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button variant="ghost" className="flex-1 min-h-11 text-sm" onClick={() => setEditing(false)}>
-                Cancel · Hủy
-              </Button>
-              <Button className="flex-1 min-h-11 text-sm" onClick={saveEdits}>
-                Save · Lưu
-              </Button>
-            </div>
-          </Card>
-        ) : (
-          <Card className="divide-y divide-border p-0">
-            {recipe.ingredients.map((ing) => (
-              <div key={ing.id} className="flex items-center justify-between px-4 py-3">
-                <Bi value={ing.name} className="text-sm" mode="inline" />
-                <span className="font-semibold tabular-nums text-sm shrink-0 ml-3">
-                  {formatQty(scaleQty(ing.qty, recipe.basePortions, portions))} {ing.unit}
-                </span>
+              {recipe.ingredients.length === 0 && (
+                <p className="px-4 py-6 text-sm text-muted text-center">
+                  No ingredients yet · Chưa có nguyên liệu
+                </p>
+              )}
+            </Card>
+          </div>
+
+          {/* Method as checklist */}
+          <div className="px-4 md:px-8 mt-5">
+            <h2 className="font-bold text-sm text-muted uppercase tracking-wide mb-2">
+              Method · Cách làm
+            </h2>
+            {recipe.steps.length > 0 ? (
+              <div className="space-y-2">
+                {recipe.steps.map((step, i) => (
+                  <BigCheckbox
+                    key={step.id}
+                    label={{ en: `${i + 1}. ${step.text.en}`, vi: `${i + 1}. ${step.text.vi}` }}
+                    checked={checkedSteps.has(step.id)}
+                    onToggle={() => toggleStep(step.id)}
+                  />
+                ))}
               </div>
-            ))}
-          </Card>
-        )}
-      </div>
+            ) : (
+              <Card>
+                <p className="text-sm text-muted text-center">No method written up yet · Chưa viết cách làm</p>
+              </Card>
+            )}
+          </div>
 
-      {/* Method as checklist */}
-      <div className="px-4 md:px-8 mt-5">
-        <h2 className="font-bold text-sm text-muted uppercase tracking-wide mb-2">
-          Method · Cách làm
-        </h2>
-        <div className="space-y-2">
-          {recipe.steps.map((step, i) => (
-            <BigCheckbox
-              key={step.id}
-              label={{ en: `${i + 1}. ${step.text.en}`, vi: `${i + 1}. ${step.text.vi}` }}
-              checked={checkedSteps.has(step.id)}
-              onToggle={() => toggleStep(step.id)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {typeof recipe.costPerPortionVnd === "number" && canSeeCostMargin(session.role, getSettings()) && (
-        <div className="px-4 md:px-8 mt-5">
-          <Card>
-            <p className="text-sm text-muted">Cost per portion · Chi phí mỗi khẩu phần</p>
-            <p className="text-lg font-bold text-brand">
-              {recipe.costPerPortionVnd.toLocaleString("vi-VN")}₫
-            </p>
-          </Card>
-        </div>
+          {typeof recipe.costPerPortionVnd === "number" && canSeeCostMargin(session.role, getSettings()) && (
+            <div className="px-4 md:px-8 mt-5">
+              <Card>
+                <p className="text-sm text-muted">Cost per portion · Chi phí mỗi khẩu phần</p>
+                <p className="text-lg font-bold text-brand">
+                  {recipe.costPerPortionVnd.toLocaleString("vi-VN")}₫
+                </p>
+              </Card>
+            </div>
+          )}
+        </>
       )}
 
       {/* Flag for review */}

@@ -304,12 +304,12 @@ kitchen tablet away from closing a bill.
 `jc:{tenant}:{key}`. That count excludes ten `isSeeded()` migration guards
 and four device-local meta keys, which are storage but not collections.
 
-**24 sync**, in the two families:
+**25 sync**, in the two families:
 
 - *Last-write-wins:* `checklist_items`, `checklist_ticks`, `notices`,
   `notice_acks`, `stock_entries`, `orders`, `order_payments`, `menu_items`,
   `table_tokens`, `receipt_settings`, `printer_settings`, `payment_settings`,
-  `einvoice_settings`, `fs_fridge_units_v2`
+  `einvoice_settings`, `fs_fridge_units_v2`, `recipes_v3`
 - *Append-only:* `order_lines`, `fs_temp_readings`, `fs_cook_logs`, `fs_delivery_logs`,
   `fs_cleaning_signoffs`, `fs_inspections`, `fs_samples`,
   `fs_sample_destruction_checks`, `fs_pest`, `fs_complaints`

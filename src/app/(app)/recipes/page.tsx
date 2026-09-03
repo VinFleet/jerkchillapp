@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Flag } from "lucide-react";
+import { Search, Flag, Plus, Printer } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { PageHeader } from "@/components/PageHeader";
 import { Bi } from "@/components/Bi";
@@ -10,8 +10,11 @@ import { getRecipes } from "@/lib/repo/recipes";
 import { CATEGORY_LABEL, CATEGORY_ORDER } from "@/lib/recipeLabels";
 import type { Recipe, RecipeCategory } from "@/lib/types";
 import { getFlags } from "@/lib/repo/recipes";
+import { useSession } from "@/lib/auth/RoleContext";
+import { canEditRecipes } from "@/lib/auth/permissions";
 
 function RecipesPageContent() {
+  const { session } = useSession();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<RecipeCategory | "all">("all");
@@ -45,6 +48,23 @@ function RecipesPageContent() {
   return (
     <div>
       <PageHeader title="Recipe Book · Sổ Công Thức" subtitle="Tap a dish to view and scale · Chạm để xem và nhân khẩu phần" />
+
+      {session && canEditRecipes(session.role) && (
+        <div className="px-4 md:px-8 flex gap-2 mb-1">
+          <Link
+            href="/recipes/new"
+            className="flex-1 min-h-[48px] rounded-xl bg-brand text-white font-semibold text-sm flex items-center justify-center gap-1.5"
+          >
+            <Plus size={16} /> New recipe · Công thức mới
+          </Link>
+          <Link
+            href="/recipes/export"
+            className="min-h-[48px] px-4 rounded-xl border border-border font-semibold text-sm flex items-center justify-center gap-1.5"
+          >
+            <Printer size={16} /> Print book
+          </Link>
+        </div>
+      )}
 
       <div className="px-4 md:px-8 space-y-3">
         <div className="relative">
@@ -81,7 +101,17 @@ function RecipesPageContent() {
       </div>
 
       <div className="px-4 md:px-8 mt-4 space-y-6 pb-6">
-        {grouped.length === 0 && (
+        {grouped.length === 0 && recipes.length === 0 && (
+          <div className="text-center py-10">
+            <p className="font-semibold mb-1">Your recipe book is empty · Sổ công thức còn trống</p>
+            <p className="text-muted text-sm">
+              {session && canEditRecipes(session.role)
+                ? "Add your first recipe above · Thêm công thức đầu tiên ở trên"
+                : "Ask a manager to add the first recipe · Nhờ quản lý thêm công thức đầu tiên"}
+            </p>
+          </div>
+        )}
+        {grouped.length === 0 && recipes.length > 0 && (
           <p className="text-muted text-center py-10">No recipes found · Không tìm thấy công thức</p>
         )}
         {grouped.map(([cat, items]) => (
