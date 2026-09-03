@@ -14,7 +14,7 @@ import type {
   ComplaintCategory,
   ComplaintSeverity,
 } from "@/lib/types";
-import { readList, writeList, isSeeded, markSeeded, newId } from "@/lib/storage";
+import { readList, writeList, isSeeded, markSeeded, newId, isLegacyTenant } from "@/lib/storage";
 import { SEED_FRIDGE_UNITS, SEED_CLEANING_TASKS } from "@/lib/seed/foodSafety";
 import { raiseAlert } from "@/lib/push/alert";
 
@@ -60,6 +60,16 @@ function atSameTimeOn(date: string, at: Date): Date {
 }
 
 export function ensureFoodSafetySeeded() {
+  // SEED_FRIDGE_UNITS and SEED_CLEANING_TASKS are Jerk & Chill's actual
+  // kitchen — their exact fridge count, a cleaning grid written around
+  // having no walk-in. A new branch starts with neither: fridges are now
+  // something an owner adds from the real equipment catalog (see
+  // lib/repo/equipmentCatalog.ts), not something the app should guess at.
+  if (!isLegacyTenant()) {
+    markSeeded(UNITS_KEY);
+    markSeeded(CLEANING_TASKS_KEY);
+    return;
+  }
   if (!isSeeded(UNITS_KEY)) {
     writeList(UNITS_KEY, SEED_FRIDGE_UNITS);
     markSeeded(UNITS_KEY);
@@ -74,6 +84,46 @@ export function ensureFoodSafetySeeded() {
 
 export function getFridgeUnits(): FridgeUnit[] {
   return readList<FridgeUnit>(UNITS_KEY).filter((u) => u.active);
+}
+
+/**
+ * Add a fridge or freezer — from the catalog, or typed in by hand.
+ *
+ * A synced, mutable record (unlike most reference data): an owner adding a
+ * new fridge from the office laptop must show up on the kitchen tablet the
+ * same day, because that is where readings get logged against it.
+ */
+export function addFridgeUnit(input: {
+  name: { en: string; vi: string };
+  kind: FridgeUnit["kind"];
+  targetMinC: number;
+  targetMaxC: number;
+  catalogId?: string;
+  brand?: string;
+  model?: string;
+  capacityLiters?: number;
+}): FridgeUnit {
+  const unit: FridgeUnit = {
+    id: newId("fu"),
+    active: true,
+    updatedAt: new Date().toISOString(),
+    ...input,
+  };
+  writeList(UNITS_KEY, [...readList<FridgeUnit>(UNITS_KEY), unit]);
+  return unit;
+}
+
+export function updateFridgeUnit(id: string, patch: Partial<Omit<FridgeUnit, "id">>) {
+  const all = readList<FridgeUnit>(UNITS_KEY);
+  writeList(
+    UNITS_KEY,
+    all.map((u) => (u.id === id ? { ...u, ...patch, updatedAt: new Date().toISOString() } : u))
+  );
+}
+
+/** Retired rather than deleted — its logged readings must keep meaning something. */
+export function deactivateFridgeUnit(id: string) {
+  updateFridgeUnit(id, { active: false });
 }
 
 function getAllReadings(): TempReading[] {

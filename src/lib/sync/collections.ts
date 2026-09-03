@@ -46,6 +46,7 @@ export type SyncedCollection =
   | "printer_settings"
   | "einvoice_settings"
   | "payment_settings"
+  | "fs_fridge_units_v2"
   // food safety — append-only
   | "fs_temp_readings"
   | "fs_cook_logs"
@@ -338,6 +339,16 @@ export const SYNCED_COLLECTIONS: Record<SyncedCollection, CollectionConfig> = {
   // lives in branch_secrets, service-role only.
   payment_settings: {
     storageKey: "payment_settings",
+    idOf: idField,
+    updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
+    mutable: true,
+  },
+  // Unlike most reference data, fridges and freezers change over a
+  // restaurant's life — a branch buys a second freezer next year — so they
+  // must reach every device the day they're added, the same reasoning as
+  // the menu, not the reasoning that keeps recipes local-only.
+  fs_fridge_units_v2: {
+    storageKey: "fs_fridge_units_v2",
     idOf: idField,
     updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
     mutable: true,

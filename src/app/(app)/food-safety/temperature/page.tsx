@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Pencil, ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Pencil, ChevronLeft, ChevronRight, CalendarClock, Settings2 } from "lucide-react";
+import Link from "next/link";
 import { RoleGate } from "@/components/RoleGate";
 import { FoodSafetyLogGate } from "@/components/FoodSafetyLogGate";
 import { BackLink } from "@/components/BackLink";
@@ -11,7 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
-import { canEnterFoodSafetyLog } from "@/lib/auth/permissions";
+import { canEnterFoodSafetyLog, canEditSuppliers } from "@/lib/auth/permissions";
 import { getFridgeUnits, getTempReadingsForDate, logTempReading, correctTempReading } from "@/lib/repo/foodSafety";
 import { todayIso, addDaysIso } from "@/lib/storage";
 import type { FridgeUnit, TempReading } from "@/lib/types";
@@ -234,6 +235,23 @@ function TemperatureContent() {
         subtitle="Check twice daily · Kiểm tra hai lần mỗi ngày"
       />
       <div className="px-4 md:px-8 space-y-3">
+        {canEditSuppliers(session.role) && (
+          <Link
+            href="/food-safety/equipment"
+            className="flex items-center justify-between gap-2 min-h-[48px] px-4 rounded-xl border border-border text-sm font-semibold"
+          >
+            <span className="flex items-center gap-2">
+              <Settings2 size={16} className="text-muted" />
+              Manage fridges & freezers · Quản lý tủ mát & tủ đông
+            </span>
+            <span className="text-muted">{units.length}</span>
+          </Link>
+        )}
+        {units.length === 0 && (
+          <p className="text-sm text-center text-muted py-6">
+            No fridges or freezers added yet · Chưa thêm tủ mát hoặc tủ đông
+          </p>
+        )}
         <LogDateBar date={date} onChange={setDate} />
         {units.map((unit) => (
           <UnitCard

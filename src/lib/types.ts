@@ -174,10 +174,61 @@ export type FoodSafetyLogType =
 export type FridgeUnit = {
   id: string;
   name: Bi;
-  kind: "fridge" | "freezer";
+  /** "combo" is a single unit with both a chilled and a frozen side. */
+  kind: "fridge" | "freezer" | "combo";
   targetMinC: number;
   targetMaxC: number;
   active: boolean;
+  /** Set when this unit was picked from the shared equipment catalog. */
+  catalogId?: string;
+  /** Set either way — from the catalog entry, or typed by hand. */
+  brand?: string;
+  model?: string;
+  capacityLiters?: number;
+  /**
+   * Equipment now grows over a restaurant's life (they buy a second fridge)
+   * rather than being fixed at setup like a recipe, so unlike most reference
+   * data it is a synced, mutable collection — see lib/sync/collections.ts.
+   */
+  updatedAt: string;
+};
+
+// ---------- Equipment catalog ----------
+
+export type EquipmentCategory = "fridge" | "freezer" | "combo";
+
+/**
+ * One entry in the shared, platform-wide catalog of real fridge/freezer
+ * models — not tenant data. Every branch reads the same list; only a
+ * platform admin adds to it (see equipment_catalog in Postgres).
+ */
+export type EquipmentCatalogEntry = {
+  id: string;
+  category: EquipmentCategory;
+  brand: string;
+  model: string;
+  capacityLiters: number | null;
+  targetMinC: number;
+  targetMaxC: number;
+  notes?: string;
+};
+
+/**
+ * A customer's own fridge, typed in because it was not in the catalog.
+ * Visible to the platform so a genuinely common model can be added for
+ * everyone — see docs on equipment_suggestions.
+ */
+export type EquipmentSuggestion = {
+  id: string;
+  tenantId: string;
+  category: EquipmentCategory;
+  brand: string;
+  model: string;
+  capacityLiters: number | null;
+  note?: string;
+  submittedBy?: string;
+  status: "new" | "added" | "dismissed";
+  createdAt: string;
 };
 
 export type TempReading = {

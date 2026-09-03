@@ -9,10 +9,10 @@ import type { FridgeUnit, CleaningTask } from "@/lib/types";
 // The real units on site — no walk-in, no generic placeholders.
 
 export const SEED_FRIDGE_UNITS: FridgeUnit[] = [
-  { id: "fu_drinks_fridge", name: { en: "Drinks Fridge", vi: "Tủ Lạnh Đồ Uống" }, kind: "fridge", targetMinC: 0, targetMaxC: 5, active: true },
-  { id: "fu_under_counter_freezer", name: { en: "Under Counter Freezer", vi: "Tủ Đông Dưới Quầy" }, kind: "freezer", targetMinC: -25, targetMaxC: -18, active: true },
-  { id: "fu_fridge_1_kitchen", name: { en: "Fridge 1 (Kitchen)", vi: "Tủ Lạnh 1 (Bếp)" }, kind: "fridge", targetMinC: 0, targetMaxC: 5, active: true },
-  { id: "fu_fridge_2_kitchen", name: { en: "Fridge 2 (Kitchen)", vi: "Tủ Lạnh 2 (Bếp)" }, kind: "fridge", targetMinC: 0, targetMaxC: 5, active: true },
+  { id: "fu_drinks_fridge", name: { en: "Drinks Fridge", vi: "Tủ Lạnh Đồ Uống" }, kind: "fridge", targetMinC: 0, targetMaxC: 5, active: true, updatedAt: "2026-01-01T00:00:00.000Z" },
+  { id: "fu_under_counter_freezer", name: { en: "Under Counter Freezer", vi: "Tủ Đông Dưới Quầy" }, kind: "freezer", targetMinC: -25, targetMaxC: -18, active: true, updatedAt: "2026-01-01T00:00:00.000Z" },
+  { id: "fu_fridge_1_kitchen", name: { en: "Fridge 1 (Kitchen)", vi: "Tủ Lạnh 1 (Bếp)" }, kind: "fridge", targetMinC: 0, targetMaxC: 5, active: true, updatedAt: "2026-01-01T00:00:00.000Z" },
+  { id: "fu_fridge_2_kitchen", name: { en: "Fridge 2 (Kitchen)", vi: "Tủ Lạnh 2 (Bếp)" }, kind: "fridge", targetMinC: 0, targetMaxC: 5, active: true, updatedAt: "2026-01-01T00:00:00.000Z" },
 ];
 
 // Areas and frequencies from the real Food Safety Book — rendered as a

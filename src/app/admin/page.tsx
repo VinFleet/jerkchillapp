@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ShieldAlert, Building2, Plus, Loader2, MapPin, UserPlus, Ban, Check } from "lucide-react";
+import { ShieldAlert, Building2, Plus, Loader2, MapPin, UserPlus, Ban, Check, Refrigerator } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { VinposWordmark } from "@/components/VinposWordmark";
 import { VietQrCode } from "@/components/VietQrCode";
@@ -65,6 +65,21 @@ export default function AdminPage() {
   const [billingForm, setBillingForm] = useState({ orgId: "", kind: "support", packageId: "standard", amountVnd: "", months: "1", reference: "" });
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
   const [chargeQr, setChargeQr] = useState<{ orgId: string; payload: string; amount: number } | null>(null);
+  const [equipment, setEquipment] = useState<{
+    catalog: { id: string; brand: string; model: string }[];
+    suggestions: {
+      id: string;
+      tenant_id: string;
+      category: string;
+      brand: string;
+      model: string;
+      capacity_liters: number | null;
+      note: string | null;
+      submitted_by: string | null;
+      status: string;
+      created_at: string;
+    }[];
+  } | null>(null);
 
   const load = useCallback(async () => {
     const res = await adminFetch("/api/admin/orgs");
@@ -76,6 +91,8 @@ export default function AdminPage() {
       setOverview((await res.json()) as Overview);
       setState("ok");
     }
+    const eqRes = await adminFetch("/api/admin/equipment");
+    if (eqRes.ok) setEquipment(await eqRes.json());
   }, []);
 
   useEffect(() => {
@@ -517,6 +534,90 @@ export default function AdminPage() {
             </section>
           );
         })}
+
+        {/* A branch typed in a fridge we hadn't catalogued. Adding it here
+            makes it a dropdown option for every future customer; dismissing
+            it just means this one restaurant's fridge stays a one-off. */}
+        {equipment && equipment.suggestions.filter((s) => s.status === "new").length > 0 && (
+          <section className="rounded-2xl border border-border bg-surface p-4 space-y-3">
+            <h2 className="font-bold flex items-center gap-2">
+              <Refrigerator size={18} className="text-brand" /> Equipment suggestions
+            </h2>
+            <p className="text-xs text-muted">
+              A restaurant typed in a fridge/freezer model that isn&apos;t in the shared catalog
+              yet. Add it and it becomes a dropdown option for every future customer.
+            </p>
+            {equipment.suggestions
+              .filter((s) => s.status === "new")
+              .map((s) => {
+                const branch = overview?.branches.find((b) => b.id === s.tenant_id);
+                return (
+                  <div key={s.id} className="rounded-xl border border-border p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold">
+                          {s.brand} {s.model}
+                          <span className="text-muted font-normal">
+                            {" "}
+                            · {s.category}
+                            {s.capacity_liters ? ` · ${s.capacity_liters}L` : ""}
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted">
+                          {branch?.name ?? s.tenant_id}
+                          {s.submitted_by ? ` · ${s.submitted_by}` : ""} ·{" "}
+                          {new Date(s.created_at).toLocaleDateString()}
+                        </p>
+                        {s.note && <p className="text-xs text-muted mt-0.5">{s.note}</p>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          const res = await adminFetch("/api/admin/equipment", {
+                            method: "POST",
+                            body: JSON.stringify({
+                              category: s.category,
+                              brand: s.brand,
+                              model: s.model,
+                              capacityLiters: s.capacity_liters,
+                              // Sensible starting range; the admin can refine
+                              // later — the point here is not blocking the review.
+                              targetMinC: s.category === "freezer" ? -22 : 0,
+                              targetMaxC: s.category === "freezer" ? -18 : 5,
+                              fromSuggestionId: s.id,
+                            }),
+                          });
+                          if (res.ok) {
+                            flash(`Added ${s.brand} ${s.model} to the catalog`);
+                            void load();
+                          }
+                        }}
+                        className="min-h-[40px] px-3 rounded-lg bg-brand text-white text-xs font-bold"
+                      >
+                        Add to catalog
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const res = await adminFetch("/api/admin/equipment", {
+                            method: "PATCH",
+                            body: JSON.stringify({ id: s.id }),
+                          });
+                          if (res.ok) {
+                            flash("Dismissed");
+                            void load();
+                          }
+                        }}
+                        className="min-h-[40px] px-3 rounded-lg border border-border text-xs font-semibold"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </section>
+        )}
       </main>
     </div>
   );
