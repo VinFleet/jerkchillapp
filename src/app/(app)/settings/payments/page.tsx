@@ -200,6 +200,47 @@ function PaymentsContent() {
           </button>
         </div>
 
+        {/* The card terminal. Only the switch lives on the device — the
+            merchant key, signing secret and checksum key are server-side
+            per-branch secrets, because whoever holds the checksum key can
+            forge a paid confirmation. */}
+        <div className="rounded-2xl border border-border bg-surface p-4 space-y-2">
+          <button
+            onClick={() => set({ ninepayEnabled: !form.ninepayEnabled })}
+            className="w-full flex items-center justify-between gap-3 min-h-[48px] text-left"
+          >
+            <span>
+              <span className="block text-sm font-semibold">Card terminal (9Pay)</span>
+              <span className="block text-xs text-muted">Máy thẻ 9Pay</span>
+            </span>
+            <span
+              className={`w-12 h-7 rounded-full p-1 transition-colors shrink-0 ${
+                form.ninepayEnabled ? "bg-brand" : "bg-border"
+              }`}
+            >
+              <span
+                className={`block w-5 h-5 rounded-full bg-white transition-transform ${
+                  form.ninepayEnabled ? "translate-x-5" : ""
+                }`}
+              />
+            </span>
+          </button>
+          <p className="text-xs text-muted">
+            The till sends the amount to the terminal and the bill settles itself, instead of
+            ringing it up separately and typing the slip number back in.
+            <br />
+            Máy tính tiền gửi số tiền sang máy thẻ — hoá đơn tự khớp, không cần nhập tay.
+          </p>
+          {form.ninepayEnabled && (
+            <p className="text-xs text-warning">
+              Needs the branch&apos;s 9Pay keys installed on the server first — until then the
+              charge button will say the terminal is not set up.
+              <br />
+              Cần cài khoá 9Pay cho chi nhánh trước.
+            </p>
+          )}
+        </div>
+
         {/* Transfer self-confirmation: the branch's own webhook. The secret
             shows exactly once — a secret that can be re-read from a screen is
             a secret on every screenshot. */}
