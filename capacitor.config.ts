@@ -15,11 +15,6 @@ const config: CapacitorConfig = {
     url: "https://jerkchillapp.vercel.app",
     cleartext: false,
   },
-  ios: {
-    // App-local plugin classes (iOS discovers them from this list;
-    // Android registers in MainActivity).
-    packageClassList: ["TcpPrintPlugin"],
-  },
 };
 
 export default config;
