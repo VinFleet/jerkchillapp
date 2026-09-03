@@ -79,6 +79,7 @@ import { maybeQueueEInvoice } from "@/lib/einvoice/queue";
 import { nativePrintAvailable } from "@/lib/print/native";
 import { getPrinterSettings } from "@/lib/repo/printerSettings";
 import { getActiveTenant } from "@/lib/storage";
+import { supabase } from "@/lib/supabase/client";
 import type { Order, MenuItem, Payment, PaymentMethod, Promotion } from "@/lib/types";
 
 /**
@@ -1168,9 +1169,22 @@ function ReviewContent() {
                     const amountVnd = clampPartialPayment(Number(payAmount || 0), bill.outstandingVnd);
                     const reference = nextPaymentReference(order.id, payments.length + 1);
                     try {
+                      // The endpoint requires a real owner/manager login — the
+                      // one station type that actually has one (rule 8) — so
+                      // a bartender station with no session gets told plainly
+                      // rather than a confusing rejected-charge message.
+                      const { data: authData } = supabase ? await supabase.auth.getSession() : { data: { session: null } };
+                      const token = authData.session?.access_token;
+                      if (!token) {
+                        setSlipProblem(
+                          "Sign in as manager on this device to use the terminal · Đăng nhập quản lý để dùng máy thẻ"
+                        );
+                        setSlipBusy(false);
+                        return;
+                      }
                       const res = await fetch("/api/payments/ninepay/create", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                         body: JSON.stringify({
                           branch: getActiveTenant(),
                           reference,
@@ -1197,7 +1211,9 @@ function ReviewContent() {
                         setSlipProblem(
                           body.error === "ninepay_not_set_up"
                             ? "This branch has no card terminal keys yet · Chưa cài đặt máy thẻ"
-                            : "The terminal did not accept the charge — take it another way · Máy thẻ không nhận"
+                            : body.error === "unauthorized"
+                              ? "Sign in as manager on this device to use the terminal · Đăng nhập quản lý để dùng máy thẻ"
+                              : "The terminal did not accept the charge — take it another way · Máy thẻ không nhận"
                         );
                       }
                     } catch {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { requireOrgRole } from "@/lib/admin/orgAuth";
 import { buildAuthorizationHeader, toRequestId, type NinePayMethod } from "@/lib/payments/ninepay";
 
 /**
@@ -9,10 +9,14 @@ import { buildAuthorizationHeader, toRequestId, type NinePayMethod } from "@/lib
  * create charges in the restaurant's name. It never reaches a device, never
  * syncs, and is read here with the service role.
  *
- * The amount comes from the till rather than being derived server-side, and
- * that is a considered difference from the guest ordering path: a guest is a
- * stranger's browser, while this caller is authenticated staff who can
- * already discount a bill to zero. What staff cannot do is reach the keys.
+ * requireOrgRole is the whole reason this is safe to expose: without it,
+ * `branch` came straight off the request body, and anyone on the internet
+ * who could name or guess a branch id could push a real charge to that
+ * restaurant's card terminal. Owner/manager only — the one station type
+ * that actually holds a Supabase login (rule 8: stations, not personal
+ * logins). A bartender station can still take a card payment the manual
+ * way (type the slip reference); it just cannot self-authorize the
+ * one-tap terminal push, the same way it cannot self-authorize a refund.
  *
  * Nothing is settled here. The terminal takes the card, 9Pay POSTs the IPN
  * to ../ipn, and the till's existing pending-payment poll — the one built
@@ -24,13 +28,6 @@ export const runtime = "nodejs";
 
 const CREATE_URI = "/pos/merchant/create-transaction";
 const DEFAULT_ENDPOINT = "https://sand-api.9pay.vn";
-
-function db() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
 
 type Body = {
   branch?: string;
@@ -57,8 +54,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "incomplete" }, { status: 400 });
   }
 
-  const client = db();
-  if (!client) return NextResponse.json({ error: "not_configured" }, { status: 503 });
+  const gate = await requireOrgRole(request, { branchId: tenantId }, ["owner", "manager"]);
+  if (!gate.ok) return NextResponse.json({ error: "unauthorized" }, { status: gate.status });
+  const client = gate.client;
 
   const { data } = await client
     .from("branch_secrets")
