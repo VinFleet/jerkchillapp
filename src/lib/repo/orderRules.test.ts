@@ -27,6 +27,7 @@ import {
   clampPartialPayment,
   type Line,
   type PaymentRecord,
+  initialPaymentStatus,
 } from "./orderRules.ts";
 
 const line = (over: Partial<Line> = {}): Line => ({
@@ -419,4 +420,28 @@ test("an empty or nonsense amount means all of it", () => {
 
 test("a settled bill takes nothing more", () => {
   assert.equal(clampPartialPayment(100_000, 0), 0);
+});
+
+// ---------- when a payment is settled ----------
+
+test("a card slip typed off a terminal is settled, not left pending", () => {
+  // The bank approved it before the waiter reached this screen. Leaving it
+  // pending stranded the table: nothing could confirm it, and canCloseOrder
+  // refuses while any payment is pending.
+  assert.equal(initialPaymentStatus("card"), "paid");
+  assert.equal(initialPaymentStatus("cash"), "paid");
+});
+
+test("a QR always waits, and a terminal charge waits until the card is tapped", () => {
+  assert.equal(initialPaymentStatus("vietqr"), "pending");
+  assert.equal(initialPaymentStatus("vietqr", true), "pending");
+  assert.equal(initialPaymentStatus("card", true), "pending");
+});
+
+test("a table paid by typed card slip can actually close", () => {
+  const lines = [{ id: "l1", unitPriceVnd: 210_000, qty: 1, status: "served" as const }];
+  const payments = [
+    { amountVnd: 210_000, status: initialPaymentStatus("card") as "paid" | "pending" },
+  ];
+  assert.deepEqual(canCloseOrder(lines, payments), { ok: true });
 });

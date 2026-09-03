@@ -58,6 +58,7 @@ import {
   setOrderCustomer,
   createOrder,
   getOrders,
+  failPayment,
 } from "@/lib/repo/orders";
 import { getMenuItems } from "@/lib/repo/menu";
 import { getPromotions } from "@/lib/repo/promotions";
@@ -65,7 +66,13 @@ import { getCachedTables } from "@/lib/repo/tableCache";
 import { getPaymentSettings, vietQrConfigured } from "@/lib/repo/paymentSettings";
 import { buildVietQrPayload } from "@/lib/payments/vietqr";
 import { VietQrCode } from "@/components/VietQrCode";
-import { changeDueVnd, cashSuggestionsVnd, orderCode, clampPartialPayment } from "@/lib/repo/orderRules";
+import {
+  changeDueVnd,
+  cashSuggestionsVnd,
+  orderCode,
+  clampPartialPayment,
+  paymentReference as nextPaymentReference,
+} from "@/lib/repo/orderRules";
 import { uploadCardSlip, cardSlipUrl } from "@/lib/payments/slips";
 import { printKitchenTicket, printReceipt, printVoidTicket, bridgeSeenAt, bridgeLooksDown } from "@/lib/print/jobs";
 import { maybeQueueEInvoice } from "@/lib/einvoice/queue";
@@ -141,7 +148,9 @@ function ReviewContent() {
   }, [load]);
 
   const pendingRefs = payments
-    .filter((p) => p.status === "pending" && p.method === "vietqr")
+    // Cards are here too, not just QRs: a charge pushed to a 9Pay terminal
+    // settles by the same IPN-then-poll path a transfer does.
+    .filter((p) => p.status === "pending" && (p.method === "vietqr" || p.method === "card"))
     .map((p) => p.reference)
     .join(",");
 
@@ -851,6 +860,20 @@ function ReviewContent() {
                   >
                     {p.status}
                   </span>
+                  {p.status === "pending" && (
+                    // The close screen has always said "wait for it, or mark
+                    // it failed" while offering no way to do the second
+                    // thing. This is that way.
+                    <button
+                      onClick={() => {
+                        failPayment(p.id, `abandoned by ${session?.name ?? "staff"}`);
+                        load();
+                      }}
+                      className="block ml-auto mt-0.5 text-xs text-danger font-semibold min-h-[32px]"
+                    >
+                      Never arrived · Không nhận được
+                    </button>
+                  )}
                 </span>
               </div>
             ))}
@@ -1132,6 +1155,68 @@ function ReviewContent() {
 
         {cardOpen && bill && bill.outstandingVnd > 0 && (
           <div className="px-4 py-3 border-t border-border space-y-2">
+            {getPaymentSettings().ninepayEnabled && (
+              <>
+                {/* Push the amount to the 9Pay terminal instead of ringing it
+                    up on a separate machine and typing the slip back in. The
+                    payment is only recorded once the terminal has accepted
+                    the charge, so a failure here leaves nothing half-done. */}
+                <button
+                  onClick={async () => {
+                    setSlipBusy(true);
+                    setSlipProblem(null);
+                    const amountVnd = clampPartialPayment(Number(payAmount || 0), bill.outstandingVnd);
+                    const reference = nextPaymentReference(order.id, payments.length + 1);
+                    try {
+                      const res = await fetch("/api/payments/ninepay/create", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          branch: getActiveTenant(),
+                          reference,
+                          amountVnd,
+                          method: "CARD",
+                          description: `${tableNumber ? `Ban ${tableNumber}` : "VINPOS"} ${orderCode(order.id)}`,
+                        }),
+                      });
+                      if (res.ok) {
+                        takePayment({
+                          orderId: order.id,
+                          method: "card",
+                          amountVnd,
+                          takenBy: session?.name ?? null,
+                          awaitConfirmation: true,
+                        });
+                        setPayAmount("");
+                        if (unsentLines(order).length > 0) sendToKitchen(order.id);
+                        setCardOpen(false);
+                        flash("Sent to the terminal — ask for the card · Đã gửi sang máy thẻ");
+                        load();
+                      } else {
+                        const body = (await res.json().catch(() => ({}))) as { error?: string };
+                        setSlipProblem(
+                          body.error === "ninepay_not_set_up"
+                            ? "This branch has no card terminal keys yet · Chưa cài đặt máy thẻ"
+                            : "The terminal did not accept the charge — take it another way · Máy thẻ không nhận"
+                        );
+                      }
+                    } catch {
+                      setSlipProblem("Could not reach the terminal · Không kết nối được máy thẻ");
+                    }
+                    setSlipBusy(false);
+                  }}
+                  disabled={slipBusy}
+                  className="w-full min-h-[52px] rounded-xl bg-brand text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {slipBusy ? <Loader2 size={17} className="animate-spin" /> : <CreditCard size={17} />}
+                  Charge {vnd(clampPartialPayment(Number(payAmount || 0), bill.outstandingVnd))} on the terminal
+                </button>
+                <p className="text-xs text-muted text-center">
+                  Máy thẻ sẽ hiện số tiền — đưa thẻ cho khách quẹt.
+                </p>
+                <p className="text-xs text-muted pt-1">Or record a slip by hand · Hoặc nhập tay:</p>
+              </>
+            )}
             <label htmlFor="card-ref" className="text-sm block">
               Card slip reference <span className="text-muted">· Mã trên hoá đơn thẻ</span>
             </label>

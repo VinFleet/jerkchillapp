@@ -4,6 +4,7 @@ import {
   billState,
   canCloseOrder,
   paymentReference,
+  initialPaymentStatus,
   resolveQtyChange,
   isVoided,
   linePriceVnd,
@@ -621,18 +622,25 @@ export function takePayment(input: {
    * Sunday.
    */
   providerRef?: string;
+  /**
+   * Wait for a provider callback rather than settling now. Set when a charge
+   * is pushed to a card terminal; a slip typed off a terminal that has
+   * already approved is not waiting for anything.
+   */
+  awaitConfirmation?: boolean;
 }): Payment {
   const existing = getPayments(input.orderId);
+  const status = initialPaymentStatus(input.method, input.awaitConfirmation);
   const payment: Payment = {
     id: newId("pay"),
     orderId: input.orderId,
     method: input.method,
     amountVnd: Math.round(input.amountVnd),
-    status: input.method === "cash" ? "paid" : "pending",
+    status,
     reference: paymentReference(input.orderId, existing.length + 1),
     takenBy: input.takenBy,
     createdAt: new Date().toISOString(),
-    confirmedAt: input.method === "cash" ? new Date().toISOString() : undefined,
+    confirmedAt: status === "paid" ? new Date().toISOString() : undefined,
     providerRef: input.providerRef?.trim() || undefined,
   };
   writeList(PAYMENTS_KEY, [...readList<Payment>(PAYMENTS_KEY), payment]);
@@ -707,10 +715,18 @@ export function refundPayment(paymentId: string, by: string | null): boolean {
   return true;
 }
 
+/**
+ * Give up on a payment that never arrived — a QR nobody scanned, a card
+ * cancelled at the terminal. Failed rather than deleted, because money that
+ * was asked for and did not come is part of what happened at that table.
+ */
 export function failPayment(paymentId: string, detail: string) {
   const all = readList<Payment>(PAYMENTS_KEY);
   const idx = all.findIndex((p) => p.id === paymentId);
   if (idx < 0) return;
+  // Only something still in flight may be abandoned. Failing a settled
+  // payment would erase money that is actually in the drawer.
+  if (all[idx].status !== "pending") return;
   all[idx] = { ...all[idx], status: "failed", failureDetail: detail.slice(0, 300) };
   writeList(PAYMENTS_KEY, all);
 }

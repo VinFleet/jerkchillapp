@@ -382,3 +382,24 @@ export const DRINK_CATEGORIES: ReadonlySet<string> = new Set(["beverage", "cockt
 export function isDrinkCategory(category: string | undefined): boolean {
   return category !== undefined && DRINK_CATEGORIES.has(category);
 }
+
+/**
+ * Whether a payment is settled the moment it is taken, or waits for a callback.
+ *
+ * The distinction is who has already approved the money. Cash is in the
+ * drawer. A card slip typed off a terminal was approved by the bank before
+ * the waiter touched this screen — there is nothing left to wait for, and
+ * leaving it pending strands the table: nothing can confirm it, and a bill
+ * with a pending payment refuses to close.
+ *
+ * Only two things genuinely wait: a VietQR the guest has not paid yet, and a
+ * charge pushed to a card terminal that is still asking for the card.
+ */
+export function initialPaymentStatus(
+  method: "cash" | "vietqr" | "card",
+  awaitConfirmation = false
+): "paid" | "pending" {
+  if (method === "vietqr") return "pending";
+  if (method === "card" && awaitConfirmation) return "pending";
+  return "paid";
+}

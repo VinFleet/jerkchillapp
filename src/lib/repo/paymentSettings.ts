@@ -26,6 +26,16 @@ export type PaymentSettings = {
   accountName: string;
   /** Whether the card rail is switched on at all. */
   cardEnabled: boolean;
+  /**
+   * Whether card payments are pushed to a 9Pay POS terminal instead of being
+   * rung up on a separate machine and typed back in.
+   *
+   * Only the switch lives here. The merchant key, signing secret and
+   * checksum key are per-branch server secrets (branch_secrets) — a synced
+   * row is readable by every member, and whoever holds the checksum key can
+   * forge a paid confirmation.
+   */
+  ninepayEnabled: boolean;
   updatedAt: string;
 };
 
@@ -35,6 +45,7 @@ const EMPTY: PaymentSettings = {
   accountNumber: "",
   accountName: "",
   cardEnabled: false,
+  ninepayEnabled: false,
   updatedAt: new Date(0).toISOString(),
 };
 
