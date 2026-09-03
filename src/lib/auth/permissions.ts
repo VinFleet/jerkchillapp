@@ -42,7 +42,11 @@ export const MODULE_ORDER: ModuleId[] = [
 ];
 
 const MODULE_ACCESS: Record<ModuleId, Role[]> = {
-  recipes: ["owner", "manager", "chef"],
+  // Bartender needs this too — cocktails and mocktails live in the same
+  // recipe book, and the spec calls out "bartender reference, cocktail
+  // recipes" as something FOH sees. canEditRecipes/canSeeCostMargin still
+  // separately gate editing and cost, so this only grants reading.
+  recipes: ["owner", "manager", "chef", "bartender"],
   stock: ["owner", "manager", "chef", "bartender"],
   checklists: ["owner", "manager", "chef", "bartender"],
   planner: ["owner", "manager", "chef"],

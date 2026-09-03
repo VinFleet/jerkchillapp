@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { MenuItem, Order, OrderLine, OrderLineChoice } from "@/lib/types";
 import type { TableToken } from "@/lib/repo/tableTokens";
 import { newId } from "@/lib/storage";
-import { linePriceVnd, orderCode } from "@/lib/repo/orderRules";
+import { linePriceVnd, orderCode, isDrinkCategory } from "@/lib/repo/orderRules";
 import { sendPush } from "@/lib/push/server";
 
 /**
@@ -288,7 +288,11 @@ export async function POST(
       return NextResponse.json({ error: "not_saved" }, { status: 503 });
     }
 
-    // Whether the till wants kitchen tickets on paper at all.
+    // Whether the till wants kitchen tickets on paper at all, and whether a
+    // bar printer exists — the waiter-originated path (lib/print/jobs.ts
+    // ticketStation) already splits drinks to the bar when one is enabled;
+    // this is that same routing, ported to the guest's own write path so a
+    // cocktail ordered by QR doesn't print mixed into the food ticket.
     const { data: printerPrefs } = await client
       .from("synced_records")
       .select("data")
@@ -296,14 +300,15 @@ export async function POST(
       .eq("collection", "printer_settings")
       .eq("record_id", "printers")
       .maybeSingle();
-    const autoPrintKitchen =
-      (printerPrefs as { data?: { autoPrintKitchen?: boolean } } | null)?.data
-        ?.autoPrintKitchen !== false;
+    const printerSettings = (printerPrefs as { data?: { autoPrintKitchen?: boolean; printers?: { key: string; enabled: boolean; host: string }[] } } | null)?.data;
+    const autoPrintKitchen = printerSettings?.autoPrintKitchen !== false;
+    const barPrinter = printerSettings?.printers?.find((p) => p.key === "bar");
+    const barEnabled = Boolean(barPrinter?.enabled && barPrinter.host);
 
-    // The kitchen ticket, straight to the printer. Same fire-and-forget rule
-    // as the push alert: the order is already saved, and a print failure must
-    // not become an error the guest sees — the ticket also reaches the pass
-    // screen through sync either way.
+    // The kitchen ticket(s), straight to the printer. Same fire-and-forget
+    // rule as the push alert: the order is already saved, and a print
+    // failure must not become an error the guest sees — the ticket also
+    // reaches the pass screen through sync either way.
     //
     // The table NUMBER, not its id — a chef reads "I4" off paper, and the
     // floor plan is the only thing that knows the mapping.
@@ -313,30 +318,42 @@ export async function POST(
       .eq("id", tableId)
       .maybeSingle();
 
-    if (autoPrintKitchen)
-    void client
-      .from("print_jobs")
-      .insert({
-        tenant_id: tenantId,
-        printer: "kitchen",
-        payload: {
-          table: (tableRow as { table_number?: string } | null)?.table_number ?? "QR TABLE",
-          code: orderCode(order.id),
-          time: new Date().toLocaleTimeString("en-GB", {
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: "Asia/Ho_Chi_Minh",
-          }),
-          placedBy: "QR — guest ordered",
-          notes: order.guestNote ? [order.guestNote] : [],
-          lines: lines.map((l) => ({
-            qty: l.qty,
-            name: menu.find((m) => m.id === l.menuItemId)?.name.en ?? l.menuItemId,
-            detail: (l.choices ?? []).map((c) => c.label.en).join(", ") || undefined,
-          })),
-        },
-      })
-      .then(undefined, () => undefined);
+    if (autoPrintKitchen) {
+      const table = (tableRow as { table_number?: string } | null)?.table_number ?? "QR TABLE";
+      const time = new Date().toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Ho_Chi_Minh",
+      });
+      const nameOf = (id: string) => menu.find((m) => m.id === id)?.name.en ?? id;
+      const ticketLine = (l: (typeof lines)[number]) => ({
+        qty: l.qty,
+        name: nameOf(l.menuItemId),
+        detail: (l.choices ?? []).map((c) => c.label.en).join(", ") || undefined,
+      });
+      const byStation = new Map<"kitchen" | "bar", typeof lines>();
+      for (const l of lines) {
+        const station = barEnabled && isDrinkCategory(menu.find((m) => m.id === l.menuItemId)?.category) ? "bar" : "kitchen";
+        byStation.set(station, [...(byStation.get(station) ?? []), l]);
+      }
+      for (const [station, stationLines] of byStation) {
+        void client
+          .from("print_jobs")
+          .insert({
+            tenant_id: tenantId,
+            printer: station,
+            payload: {
+              table,
+              code: orderCode(order.id),
+              time,
+              placedBy: "QR — guest ordered",
+              notes: order.guestNote ? [order.guestNote] : [],
+              lines: stationLines.map(ticketLine),
+            },
+          })
+          .then(undefined, () => undefined);
+      }
+    }
 
     // Tell the kitchen. A guest orders by QR and then simply waits — nobody is
     // standing at the pass announcing it, and sync only pulls once a minute, so

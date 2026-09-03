@@ -168,6 +168,16 @@ export function getWasteInRange(fromDate: string, toDate: string): WasteLogEntry
   return readList<WasteLogEntry>(WASTE_KEY).filter((w) => w.date >= fromDate && w.date <= toDate);
 }
 
-export function wasteTotalVnd(entries: WasteLogEntry[]): number {
-  return entries.reduce((sum, w) => sum + (w.costVnd ?? 0), 0);
+/**
+ * costVnd is null "never guessed" when an item has no cost data on file —
+ * summing with `?? 0` would silently understate real waste in money, the
+ * exact thing that field's own contract exists to prevent. So the sum comes
+ * back alongside whether anything was left out, and every caller must show
+ * that, not just the number.
+ */
+export function wasteTotalVnd(entries: WasteLogEntry[]): { vnd: number; uncosted: boolean } {
+  return {
+    vnd: entries.reduce((sum, w) => sum + (w.costVnd ?? 0), 0),
+    uncosted: entries.some((w) => w.costVnd === null),
+  };
 }

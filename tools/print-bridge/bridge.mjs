@@ -48,11 +48,19 @@ try {
  * role can see every tenant's queue, so the scoping has to happen here.
  * Without it, the first ticket another restaurant enqueues prints in this
  * kitchen.
+ *
+ * No default. An unconfigured bridge used to fall back to Jerk & Chill's
+ * real tenant slug — harmless for the one bridge that was ever actually
+ * J&C's, but a silent leak risk the day a second restaurant's bridge gets
+ * set up without its BRIDGE_TENANT set: it would claim and print J&C's real
+ * kitchen tickets instead of doing nothing. Refusing to start is safer than
+ * guessing whose restaurant this is.
  */
-const TENANT =
-  process.env.BRIDGE_TENANT ??
-  fallbackPrinters.tenant ??
-  "jerk-and-chill-thao-dien";
+const TENANT = process.env.BRIDGE_TENANT ?? fallbackPrinters.tenant;
+if (!TENANT) {
+  console.error("Set BRIDGE_TENANT (or \"tenant\" in printers.json) to this branch's id before starting.");
+  process.exit(1);
+}
 
 // The tenant key is bridge identity, not a printer.
 delete fallbackPrinters.tenant;

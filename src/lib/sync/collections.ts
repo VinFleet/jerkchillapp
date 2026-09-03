@@ -9,6 +9,9 @@ import type {
   ComplaintRevision,
   FoodSample,
   PestSighting,
+  Recipe,
+  Ingredient,
+  MethodStep,
 } from "@/lib/types";
 
 /**
@@ -259,6 +262,45 @@ function reconcileComplaint(localRaw: unknown, remoteRaw: unknown): unknown {
   return { ...winner, revisions: Array.from(merged.values()).sort((a, b) => (a.replacedAt < b.replacedAt ? -1 : 1)) };
 }
 
+/**
+ * A recipe, as edited by two devices at once.
+ *
+ * Whole-record last-write-wins is dangerous here in a way it isn't for
+ * printer_settings or receipt_settings: those are edited by one admin,
+ * rarely. A recipe is a shared document — an owner typing up notes on the
+ * office laptop while a chef adds an ingredient on the kitchen tablet is the
+ * exact scenario the multi-field editor built this session invites, and
+ * plain LWW would silently throw away whichever side synced first.
+ *
+ * Ingredients and steps both carry a stable `id` (minted once, at
+ * newId("ing")/newId("step")), so they union by id: an item unique to one
+ * side survives, and where both sides touched the SAME id, the version from
+ * whichever record is newer overall wins — the same tiebreak the rest of the
+ * record already uses. This does not solve every case (two devices editing
+ * the SAME ingredient's quantity differently still has to pick one, with no
+ * per-item timestamp to arbitrate more finely) but it fixes the common and
+ * costly one: add-on-one-side-plus-edit-on-the-other no longer loses data.
+ */
+function reconcileRecipe(localRaw: unknown, remoteRaw: unknown): unknown {
+  const local = localRaw as Recipe;
+  const remote = remoteRaw as Recipe;
+  const later = (local.updatedAt ?? "") >= (remote.updatedAt ?? "") ? local : remote;
+  const earlier = later === local ? remote : local;
+
+  function mergeById<T extends { id: string }>(earlierList: T[], laterList: T[]): T[] {
+    const byId = new Map<string, T>();
+    for (const item of earlierList) byId.set(item.id, item);
+    for (const item of laterList) byId.set(item.id, item); // later record wins on a shared id
+    return Array.from(byId.values());
+  }
+
+  return {
+    ...later,
+    ingredients: mergeById<Ingredient>(earlier.ingredients ?? [], later.ingredients ?? []),
+    steps: mergeById<MethodStep>(earlier.steps ?? [], later.steps ?? []),
+  };
+}
+
 export const SYNCED_COLLECTIONS: Record<SyncedCollection, CollectionConfig> = {
   // ---------- Operational: last-write-wins ----------
   orders: {
@@ -366,6 +408,7 @@ export const SYNCED_COLLECTIONS: Record<SyncedCollection, CollectionConfig> = {
     idOf: idField,
     updatedAtOf: (r) => (asRecord(r).updatedAt as string) ?? nowIso(),
     mutable: true,
+    reconcile: reconcileRecipe,
   },
   table_tokens: {
     storageKey: "table_tokens",

@@ -12,6 +12,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The one native ability the till needs: write raw bytes to a LAN socket.
@@ -46,18 +47,60 @@ public class TcpPrintPlugin extends Plugin {
             return;
         }
 
+        // Jobs are issued one at a time (this executor) so tickets for one
+        // printer come out in order. But Socket.setSoTimeout() only bounds
+        // READS in Java — a printer that accepts the connection and then
+        // stops draining can block write() forever, and with only one
+        // thread here that would wedge every job queued after it too. The
+        // actual socket work runs on its own short-lived thread; this call
+        // waits at most timeoutMs for it, and if it hasn't finished,
+        // force-closes the socket (which unblocks the stuck write with an
+        // exception) and moves on rather than waiting on a dead connection.
         executor.execute(() -> {
-            try (Socket socket = new Socket()) {
-                socket.connect(new InetSocketAddress(host, port), timeoutMs);
-                socket.setSoTimeout(timeoutMs);
-                OutputStream out = socket.getOutputStream();
-                out.write(bytes);
-                out.flush();
+            final AtomicReference<Socket> socketRef = new AtomicReference<>();
+            final AtomicReference<Exception> errorRef = new AtomicReference<>();
+            Thread worker = new Thread(() -> {
+                try (Socket socket = new Socket()) {
+                    socketRef.set(socket);
+                    socket.connect(new InetSocketAddress(host, port), timeoutMs);
+                    socket.setSoTimeout(timeoutMs);
+                    OutputStream out = socket.getOutputStream();
+                    out.write(bytes);
+                    out.flush();
+                } catch (Exception e) {
+                    errorRef.set(e);
+                }
+            }, "tcpprint-send");
+            worker.setDaemon(true);
+            worker.start();
+            try {
+                worker.join(timeoutMs);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+
+            if (worker.isAlive()) {
+                // Still stuck past the deadline — force the socket closed so
+                // the blocked write throws and the worker thread can exit on
+                // its own; we don't wait for it, this job is already failed.
+                Socket stuck = socketRef.get();
+                if (stuck != null) {
+                    try {
+                        stuck.close();
+                    } catch (Exception ignored) {
+                    }
+                }
+                call.resolve(fail("write timeout after " + timeoutMs + "ms"));
+                return;
+            }
+
+            Exception error = errorRef.get();
+            if (error != null) {
+                call.resolve(fail(error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName()));
+            } else {
                 JSObject ok = new JSObject();
                 ok.put("ok", true);
                 call.resolve(ok);
-            } catch (Exception e) {
-                call.resolve(fail(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
             }
         });
     }

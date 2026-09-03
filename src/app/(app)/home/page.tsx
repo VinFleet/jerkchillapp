@@ -19,6 +19,7 @@ import { getNotices, isAckedBy } from "@/lib/repo/notices";
 import { getReorderFlags } from "@/lib/repo/planner";
 import { getOutOfRangeCount, getOverdueSamples, getOpenPestCount } from "@/lib/repo/foodSafety";
 import { getLicensesNeedingAttention } from "@/lib/repo/licensing";
+import { getSuppliersCertNeedingAttention } from "@/lib/repo/suppliers";
 import { getReprintFlag } from "@/lib/repo/menu";
 import { getExpiringHealthCerts, getExpiringTraining } from "@/lib/repo/staff";
 import { getShoppingList } from "@/lib/repo/shopping";
@@ -46,6 +47,7 @@ export default function HomePage() {
   const [reorderCount, setReorderCount] = useState(0);
   const [foodSafetyIssues, setFoodSafetyIssues] = useState(0);
   const [licensesNeeding, setLicensesNeeding] = useState(0);
+  const [supplierCertsNeeding, setSupplierCertsNeeding] = useState(0);
   const [reprintNeeded, setReprintNeeded] = useState(false);
   const [healthCertsExpiring, setHealthCertsExpiring] = useState(0);
   const [trainingDue, setTrainingDue] = useState(0);
@@ -78,6 +80,7 @@ export default function HomePage() {
     if (session.role === "owner" || session.role === "manager") {
       setTill(cashUpForDate(todayIso()));
       setLicensesNeeding(getLicensesNeedingAttention().length);
+      setSupplierCertsNeeding(getSuppliersCertNeedingAttention().length);
       setReprintNeeded(getReprintFlag());
       setHealthCertsExpiring(getExpiringHealthCerts().length);
       setTrainingDue(getExpiringTraining().length);
@@ -354,6 +357,17 @@ export default function HomePage() {
             <Card className="border-warning/40 bg-warning-tint flex items-center justify-between">
               <p className="text-sm font-semibold text-warning">
                 {licensesNeeding} licence{licensesNeeding > 1 ? "s" : ""} need attention · cần chú ý
+              </p>
+              <ChevronRight size={18} className="text-warning shrink-0" />
+            </Card>
+          </Link>
+        )}
+
+        {supplierCertsNeeding > 0 && (
+          <Link href="/suppliers">
+            <Card className="border-warning/40 bg-warning-tint flex items-center justify-between">
+              <p className="text-sm font-semibold text-warning">
+                {supplierCertsNeeding} supplier cert{supplierCertsNeeding > 1 ? "s" : ""} need attention · cần chú ý
               </p>
               <ChevronRight size={18} className="text-warning shrink-0" />
             </Card>

@@ -22,6 +22,7 @@ import {
   getQuotes,
   addQuote,
   deleteQuote,
+  getSupplierCertStatus,
 } from "@/lib/repo/suppliers";
 import { SUPPLIER_CATEGORY_LABEL, SUPPLIER_STATUS_LABEL, SUPPLIER_STATUS_TONE, EVALUATION_DECISION_LABEL } from "@/lib/supplierLabels";
 import { todayIso } from "@/lib/storage";
@@ -118,7 +119,23 @@ function SuppliersTab({ canEdit }: { canEdit: boolean }) {
                     <Badge tone={SUPPLIER_STATUS_TONE[s.status]}>{SUPPLIER_STATUS_LABEL[s.status].en} · {SUPPLIER_STATUS_LABEL[s.status].vi}</Badge>
                   </div>
                   <Bi value={SUPPLIER_CATEGORY_LABEL[s.category]} mode="inline" className="text-xs text-muted" />
-                  {s.foodSafetyCertExpiry && <p className="text-xs text-muted mt-1">Food safety cert expires {s.foodSafetyCertExpiry}</p>}
+                  {s.foodSafetyCertExpiry && (() => {
+                    const certStatus = getSupplierCertStatus(s);
+                    return (
+                      <p
+                        className={`text-xs mt-1 ${
+                          certStatus === "expired"
+                            ? "text-danger font-semibold"
+                            : certStatus === "expiring"
+                              ? "text-warning font-semibold"
+                              : "text-muted"
+                        }`}
+                      >
+                        {certStatus === "expired" ? "Food safety cert EXPIRED " : certStatus === "expiring" ? "Food safety cert expiring " : "Food safety cert expires "}
+                        {s.foodSafetyCertExpiry}
+                      </p>
+                    );
+                  })()}
                   {s.lastReviewed && <p className="text-xs text-muted">Last reviewed {s.lastReviewed}</p>}
                 </div>
                 <ChevronRight size={18} className="text-muted shrink-0" />

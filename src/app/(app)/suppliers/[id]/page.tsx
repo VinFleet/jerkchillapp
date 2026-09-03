@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/lib/auth/RoleContext";
 import { canManageSuppliers } from "@/lib/auth/permissions";
-import { getSupplier, updateSupplier, getRejections, getEvaluations, toggleSupplierDocItem } from "@/lib/repo/suppliers";
+import { getSupplier, updateSupplier, getRejections, getEvaluations, toggleSupplierDocItem, getSupplierCertStatus } from "@/lib/repo/suppliers";
 import { getContactForSupplier, addContact, updateContact } from "@/lib/repo/contacts";
 import { SUPPLIER_CATEGORY_LABEL, SUPPLIER_STATUS_LABEL, SUPPLIER_STATUS_TONE, EVALUATION_DECISION_LABEL } from "@/lib/supplierLabels";
 import type { Supplier, Contact, RejectionRecord, SupplierEvaluation } from "@/lib/types";
@@ -223,9 +223,17 @@ function CertsSection({ supplier, canEdit, onChanged }: { supplier: Supplier; ca
           ? `Registration on file${supplier.businessRegNo ? ` — ${supplier.businessRegNo}` : ""}`
           : "Registration not yet on file · Chưa có ĐKKD trong hồ sơ"}
       </p>
-      <p className="text-sm mt-2">
+      <p
+        className={`text-sm mt-2 ${
+          supplier.foodSafetyCertExpiry && getSupplierCertStatus(supplier) === "expired"
+            ? "text-danger font-semibold"
+            : supplier.foodSafetyCertExpiry && getSupplierCertStatus(supplier) === "expiring"
+              ? "text-warning font-semibold"
+              : ""
+        }`}
+      >
         {supplier.foodSafetyCertExpiry
-          ? `Food safety cert expires ${supplier.foodSafetyCertExpiry}`
+          ? `${getSupplierCertStatus(supplier) === "expired" ? "Food safety cert EXPIRED " : getSupplierCertStatus(supplier) === "expiring" ? "Food safety cert expiring " : "Food safety cert expires "}${supplier.foodSafetyCertExpiry}`
           : "No food safety cert expiry on file · Chưa có ngày hết hạn ATTP"}
       </p>
       {supplier.otherCerts && <p className="text-sm text-muted mt-1">{supplier.otherCerts}</p>}

@@ -91,12 +91,13 @@ function WasteButton({
   useEffect(refresh, [item.id, date]);
 
   const totalQty = entries.reduce((sum, w) => sum + w.qty, 0);
-  const totalCost = wasteTotalVnd(entries);
+  const { vnd: totalCost, uncosted } = wasteTotalVnd(entries);
 
   const summary = totalQty > 0 && (
     <p className="text-xs text-danger">
       {totalQty} {item.unit} wasted today · Hao hụt hôm nay
-      {showCost && totalCost > 0 ? ` · ${vnd(totalCost)}` : ""}
+      {showCost && totalCost > 0 ? ` · ${vnd(totalCost)}${uncosted ? "+" : ""}` : ""}
+      {showCost && totalCost === 0 && uncosted ? " · cost unknown · chưa có giá vốn" : ""}
     </p>
   );
 
@@ -361,7 +362,7 @@ function WasteSummary({ items, date, showCost }: { items: StockItem[]; date: str
   }, [items, date]);
 
   if (entries.length === 0) return null;
-  const totalCost = wasteTotalVnd(entries);
+  const { vnd: totalCost, uncosted } = wasteTotalVnd(entries);
 
   return (
     <Card className="mb-4 border-danger/30 bg-danger/5">
@@ -370,8 +371,13 @@ function WasteSummary({ items, date, showCost }: { items: StockItem[]; date: str
       </p>
       <p className="text-sm">
         {entries.length} {entries.length === 1 ? "entry" : "entries"}
-        {showCost && totalCost > 0 ? ` · ${vnd(totalCost)}` : ""}
+        {showCost && totalCost > 0 ? ` · ${vnd(totalCost)}${uncosted ? "+" : ""}` : ""}
       </p>
+      {showCost && uncosted && (
+        <p className="text-xs text-muted mt-0.5">
+          Some items have no cost on file — real total is higher · Một số món chưa có giá vốn
+        </p>
+      )}
     </Card>
   );
 }

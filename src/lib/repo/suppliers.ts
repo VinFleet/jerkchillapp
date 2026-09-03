@@ -1,5 +1,6 @@
 import type { Supplier, RejectionRecord, SupplierEvaluation, SupplierCategory, SupplierQuote } from "@/lib/types";
 import { readList, writeList, isSeeded, markSeeded, newId, todayIso, isLegacyTenant } from "@/lib/storage";
+import { supplierCertStatus, type CertStatus } from "@/lib/repo/supplierRules";
 import { SEED_SUPPLIERS, STANDARD_SUPPLIER_DOC_CHECKLIST } from "@/lib/seed/suppliers";
 
 const SUPPLIERS_KEY = "suppliers";
@@ -55,6 +56,19 @@ export function getSuppliers(): Supplier[] {
 
 export function getSupplier(id: string): Supplier | undefined {
   return getSuppliers().find((s) => s.id === id);
+}
+
+export function getSupplierCertStatus(supplier: Supplier, today: string = todayIso()): CertStatus {
+  return supplierCertStatus(supplier.foodSafetyCertExpiry, today);
+}
+
+export type { CertStatus };
+
+export function getSuppliersCertNeedingAttention(today = todayIso()): Supplier[] {
+  return getSuppliers().filter((s) => {
+    const status = getSupplierCertStatus(s, today);
+    return status === "expiring" || status === "expired";
+  });
 }
 
 export function addSupplier(name: string, category: SupplierCategory): Supplier {

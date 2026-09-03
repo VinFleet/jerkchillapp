@@ -113,9 +113,25 @@ function PlatformComparison({ stats }: { stats: PlatformStats[] }) {
   );
 }
 
-function StatField({ label, value, suffix, onSave }: { label: string; value: number | null; suffix: string; onSave: (v: number | null) => void }) {
+function StatField({
+  label,
+  value,
+  suffix,
+  onSave,
+  min,
+  max,
+}: {
+  label: string;
+  value: number | null;
+  suffix: string;
+  onSave: (v: number | null) => void;
+  /** Garbage in here is not cosmetic — commissionPct alone feeds the menu's delivery-margin math directly. */
+  min?: number;
+  max?: number;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value !== null ? String(value) : "");
+  const [problem, setProblem] = useState(false);
 
   if (editing) {
     return (
@@ -125,13 +141,26 @@ function StatField({ label, value, suffix, onSave }: { label: string; value: num
           type="number"
           inputMode="decimal"
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          className="w-20 min-h-11 rounded-lg border-2 border-border px-2 text-sm font-bold text-center"
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setProblem(false);
+          }}
+          className={`w-20 min-h-11 rounded-lg border-2 px-2 text-sm font-bold text-center ${problem ? "border-danger" : "border-border"}`}
         />
         <button
           className="min-h-11 px-2 text-xs text-brand font-semibold"
           onClick={() => {
-            onSave(draft.trim() === "" ? null : Number(draft));
+            if (draft.trim() === "") {
+              onSave(null);
+              setEditing(false);
+              return;
+            }
+            const n = Number(draft);
+            if (!Number.isFinite(n) || (min !== undefined && n < min) || (max !== undefined && n > max)) {
+              setProblem(true);
+              return;
+            }
+            onSave(n);
             setEditing(false);
           }}
         >
@@ -178,11 +207,11 @@ function PlatformCard({ platform, stats, onChanged }: { platform: DeliveryPlatfo
       </p>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
-        <StatField label="Rating · Đánh giá" value={stats.rating} suffix="/5" onSave={(v) => save({ rating: v })} />
-        <StatField label="Cancellation · Hủy đơn" value={stats.cancellationRatePct} suffix="%" onSave={(v) => save({ cancellationRatePct: v })} />
+        <StatField label="Rating · Đánh giá" value={stats.rating} suffix="/5" min={0} max={5} onSave={(v) => save({ rating: v })} />
+        <StatField label="Cancellation · Hủy đơn" value={stats.cancellationRatePct} suffix="%" min={0} max={100} onSave={(v) => save({ cancellationRatePct: v })} />
         <StatField label="Confirm time · Thời gian xác nhận" value={stats.avgConfirmationTimeSec} suffix="s" onSave={(v) => save({ avgConfirmationTimeSec: v })} />
-        <StatField label="Photo coverage · Ảnh món" value={stats.photoCoveragePct} suffix="%" onSave={(v) => save({ photoCoveragePct: v })} />
-        <StatField label="Commission · Chiết khấu" value={stats.commissionPct} suffix="%" onSave={(v) => save({ commissionPct: v })} />
+        <StatField label="Photo coverage · Ảnh món" value={stats.photoCoveragePct} suffix="%" min={0} max={100} onSave={(v) => save({ photoCoveragePct: v })} />
+        <StatField label="Commission · Chiết khấu" value={stats.commissionPct} suffix="%" min={0} max={100} onSave={(v) => save({ commissionPct: v })} />
       </div>
 
       <div className="pt-3 border-t border-border space-y-2">
