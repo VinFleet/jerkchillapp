@@ -60,9 +60,12 @@ export async function GET(req: NextRequest) {
     .select("id, tenant_id");
   result.expiredJobs = expired?.length ?? 0;
 
-  // 2. Bridges that stopped beating at a branch that prints. Only branches
-  //    with a heartbeat row are checked — a branch that never set printing up
-  //    has nothing to be warned about.
+  // 2. Nobody claiming, and work waiting. A stale pulse ALONE is not a
+  //    problem: since the till app became the print brain, the pulse stops
+  //    every night when the tablet is switched off, and a "bridge is down"
+  //    push every morning is precisely the alert people learn to swipe away.
+  //    The symptom that matters is a ticket sitting unprinted with no
+  //    claimer alive, so both conditions must hold.
   const { data: bridges } = await db
     .from("print_bridge_status")
     .select("tenant_id, seen_at")
@@ -72,14 +75,17 @@ export async function GET(req: NextRequest) {
       .from("print_jobs")
       .select("id", { count: "exact", head: true })
       .eq("tenant_id", bridge.tenant_id)
-      .gt("created_at", iso(7 * 24 * 3600_000));
-    if ((count ?? 0) === 0) continue; // printing not actually in use
+      .eq("status", "queued")
+      // Older than a claim could plausibly take, and necessarily under a day
+      // old because step 1 just failed everything past that.
+      .lt("created_at", iso(15 * 60_000));
+    if ((count ?? 0) === 0) continue; // asleep with nothing waiting: fine
     result.deadBridges.push(bridge.tenant_id);
     const summary = await sendPush(
       {
         category: "issues",
-        title: "Print bridge is down",
-        body: "Máy chủ in đã dừng — kiểm tra máy chạy bridge. Tickets will queue, not print.",
+        title: "Tickets are not printing",
+        body: "Không in được phiếu — mở app trên máy tính tiền, hoặc kiểm tra máy in. Open the till app, or check the printer.",
         url: "/settings/printing",
         tag: "bridge-down",
         urgent: true,
